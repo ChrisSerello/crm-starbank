@@ -245,40 +245,60 @@ function useAuth(){
   const [profile,setProfile]=useState(null);
   const [authLoading,setAuthLoading]=useState(true);
   const [unauthorized,setUnauthorized]=useState(false);
+  const [configError,setConfigError]=useState(false);
+  const [isRecovery,setIsRecovery]=useState(false);
 
   const loadProfile=useCallback(async(uid,email)=>{
-    // Try to find existing profile
-    let {data}=await supabase.from('profiles').select('*').eq('id',uid).single();
-    if(data){ setProfile(data); setAuthLoading(false); return; }
-    // No profile yet — check allowed_users table
-    const {data:allowed}=await supabase.from('allowed_users').select('*').eq('email',email.toLowerCase()).single();
-    if(allowed){
-      // Auto-create profile on first login
-      const {data:created}=await supabase.from('profiles').insert({id:uid,email:email.toLowerCase(),nome:allowed.nome,role:allowed.role}).select().single();
-      setProfile(created);
-    } else {
-      setUnauthorized(true);
+    try {
+      let {data}=await supabase.from('profiles').select('*').eq('id',uid).single();
+      if(data){ setProfile(data); setAuthLoading(false); return; }
+      const {data:allowed}=await supabase.from('allowed_users').select('*').eq('email',email.toLowerCase()).single();
+      if(allowed){
+        const {data:created}=await supabase.from('profiles').insert({id:uid,email:email.toLowerCase(),nome:allowed.nome,role:allowed.role}).select().single();
+        setProfile(created);
+      } else {
+        setUnauthorized(true);
+      }
+    } catch(e) {
+      console.error('Erro ao carregar perfil:', e);
+      setConfigError(true);
     }
     setAuthLoading(false);
   },[]);
 
   useEffect(()=>{
-    supabase.auth.getSession().then(({data:{session}})=>{
-      setSession(session);
-      if(session) loadProfile(session.user.id, session.user.email);
-      else setAuthLoading(false);
-    });
-    const {data:{subscription}}=supabase.auth.onAuthStateChange((_,session)=>{
-      setSession(session);
-      if(session) loadProfile(session.user.id, session.user.email);
-      else { setProfile(null); setUnauthorized(false); setAuthLoading(false); }
-    });
-    return ()=>subscription.unsubscribe();
+    try {
+      supabase.auth.getSession().then(({data:{session}})=>{
+        setSession(session);
+        if(session) loadProfile(session.user.id, session.user.email);
+        else setAuthLoading(false);
+      }).catch(e=>{
+        console.error('Erro de conexão Supabase:', e);
+        setConfigError(true);
+        setAuthLoading(false);
+      });
+      const {data:{subscription}}=supabase.auth.onAuthStateChange((event,session)=>{
+        if(event==='PASSWORD_RECOVERY'||event==='SIGNED_IN'&&window.location.hash.includes('type=recovery')){
+          setIsRecovery(true);
+          setSession(session);
+          setAuthLoading(false);
+          return;
+        }
+        setSession(session);
+        if(session) loadProfile(session.user.id, session.user.email);
+        else { setProfile(null); setUnauthorized(false); setAuthLoading(false); }
+      });
+      return ()=>subscription.unsubscribe();
+    } catch(e) {
+      console.error('Erro fatal Supabase:', e);
+      setConfigError(true);
+      setAuthLoading(false);
+    }
   },[loadProfile]);
 
-  const signOut=async()=>{ await supabase.auth.signOut(); };
+  const signOut=async()=>{ try { await supabase.auth.signOut(); } catch(e){} };
 
-  return {session,profile,authLoading,unauthorized,signOut};
+  return {session,profile,authLoading,unauthorized,signOut,configError,isRecovery};
 }
 
 // ─── ATOMS ────────────────────────────────────────────────────────────────────
@@ -837,7 +857,77 @@ function Login(){
   );
 }
 
-// ─── NÃO AUTORIZADO ───────────────────────────────────────────────────────────
+// ─── RESET DE SENHA ───────────────────────────────────────────────────────────
+
+function ResetPassword(){
+  const [pass,setPass]=useState('');
+  const [confirm,setConfirm]=useState('');
+  const [showPass,setShowPass]=useState(false);
+  const [loading,setLoading]=useState(false);
+  const [error,setError]=useState('');
+  const [done,setDone]=useState(false);
+
+  const submit=async()=>{
+    if(!pass||pass.length<6){setError('A senha deve ter pelo menos 6 caracteres.');return;}
+    if(pass!==confirm){setError('As senhas não coincidem.');return;}
+    setLoading(true);setError('');
+    const {error:err}=await supabase.auth.updateUser({password:pass});
+    setLoading(false);
+    if(err){setError('Erro ao definir senha. Tente novamente.');return;}
+    setDone(true);
+    setTimeout(()=>window.location.href='/',1800);
+  };
+
+  return(
+    <div style={{minHeight:"100vh",background:"var(--bg-base)",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"var(--font)",padding:16}}>
+      <div style={{position:"fixed",top:-100,right:-100,width:400,height:400,borderRadius:"50%",background:"rgba(91,79,232,0.07)",filter:"blur(80px)",pointerEvents:"none"}}/>
+      <div style={{position:"fixed",bottom:-80,left:-80,width:320,height:320,borderRadius:"50%",background:"rgba(26,158,138,0.07)",filter:"blur(60px)",pointerEvents:"none"}}/>
+      <div style={{background:"var(--bg-elevated)",borderRadius:"var(--radius-xl)",border:"1px solid var(--border-mid)",boxShadow:"0 8px 48px rgba(60,40,20,0.14), 0 1px 0 rgba(255,255,255,0.8) inset",width:"100%",maxWidth:400,padding:"40px 36px",animation:"fadeUp .4s cubic-bezier(.4,0,.2,1) both"}}>
+        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:32}}>
+          <div style={{width:44,height:44,borderRadius:13,background:"linear-gradient(135deg,#5B4FE8 0%,#9B8FF5 100%)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,boxShadow:"0 4px 16px rgba(91,79,232,.35)"}}>◈</div>
+          <div>
+            <div style={{fontFamily:"var(--font-display)",fontSize:18,fontWeight:600,color:"var(--text-primary)"}}>Starbank</div>
+            <div style={{fontSize:11,fontWeight:700,color:"var(--accent)",letterSpacing:".09em",textTransform:"uppercase"}}>CRM Indicações</div>
+          </div>
+        </div>
+
+        {done?(
+          <div style={{textAlign:"center",padding:"20px 0"}}>
+            <div style={{fontSize:40,marginBottom:12}}>✅</div>
+            <div style={{fontFamily:"var(--font-display)",fontSize:20,fontWeight:600,color:"var(--text-primary)",marginBottom:8}}>Senha definida!</div>
+            <div style={{fontSize:13,color:"var(--text-muted)"}}>Redirecionando para o login…</div>
+          </div>
+        ):(
+          <>
+            <div style={{marginBottom:24}}>
+              <div style={{fontSize:22,fontWeight:600,fontFamily:"var(--font-display)",color:"var(--text-primary)",letterSpacing:"-.02em",marginBottom:4}}>Definir sua senha</div>
+              <div style={{fontSize:13,color:"var(--text-muted)"}}>Crie uma senha para acessar o sistema</div>
+            </div>
+
+            <div style={{marginBottom:12}}>
+              <label style={{display:"block",fontSize:10,fontWeight:700,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:".08em",marginBottom:6}}>Nova senha</label>
+              <div style={{position:"relative"}}>
+                <input className="inp" type={showPass?"text":"password"} value={pass} onChange={e=>{setPass(e.target.value);setError('');}} placeholder="Mínimo 6 caracteres" style={{paddingRight:44}}/>
+                <button onClick={()=>setShowPass(v=>!v)} style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",fontSize:15,color:"var(--text-muted)",padding:4,lineHeight:1}}>{showPass?"🙈":"👁"}</button>
+              </div>
+            </div>
+
+            <div style={{marginBottom:error?10:24}}>
+              <label style={{display:"block",fontSize:10,fontWeight:700,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:".08em",marginBottom:6}}>Confirmar senha</label>
+              <input className="inp" type={showPass?"text":"password"} value={confirm} onChange={e=>{setConfirm(e.target.value);setError('');}} onKeyDown={e=>e.key==="Enter"&&submit()} placeholder="Repita a senha"/>
+            </div>
+
+            {error&&<div style={{display:"flex",alignItems:"center",gap:8,padding:"9px 12px",borderRadius:8,marginBottom:16,background:"var(--danger-dim)",border:"1px solid rgba(196,66,58,.2)",fontSize:12,fontWeight:500,color:"var(--danger)"}}><span>⚠</span>{error}</div>}
+
+            <button className="btn btn-primary" style={{width:"100%",justifyContent:"center",padding:"11px 0",fontSize:14}} onClick={submit} disabled={loading}>
+              {loading?"Salvando…":"Salvar senha e entrar"}
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function Unauthorized({onLogout}){
   return(
@@ -954,10 +1044,8 @@ function Auditoria(){
 
 // ─── ROOT ─────────────────────────────────────────────────────────────────────
 
-// ─── ROOT ─────────────────────────────────────────────────────────────────────
-
 export default function App(){
-  const {session,profile,authLoading,unauthorized,signOut}=useAuth();
+  const {session,profile,authLoading,unauthorized,signOut,configError,isRecovery}=useAuth();
   const [s,dispatch]=useReducer(R,INIT);
   const {leads,view,sel,newOpen,filters,rules,dragId}=s;
   const selected=leads.find(l=>l.id===sel);
@@ -1014,6 +1102,31 @@ export default function App(){
   },[profile,leads,session]);
 
   // ── Auth states ──
+  if(configError){
+    return(
+      <>
+        <GlobalStyles/>
+        <div style={{minHeight:"100vh",background:"var(--bg-base)",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"var(--font)",padding:24}}>
+          <div style={{maxWidth:480,background:"var(--bg-elevated)",borderRadius:"var(--radius-xl)",border:"1px solid var(--border-mid)",padding:"36px 32px",boxShadow:"0 8px 48px rgba(60,40,20,0.14)"}}>
+            <div style={{fontSize:32,marginBottom:16}}>⚠️</div>
+            <div style={{fontFamily:"var(--font-display)",fontSize:20,fontWeight:600,color:"var(--text-primary)",marginBottom:8}}>Supabase não configurado</div>
+            <div style={{fontSize:13,color:"var(--text-secondary)",lineHeight:1.7,marginBottom:20}}>
+              O arquivo <code style={{background:"rgba(90,70,50,.1)",padding:"1px 6px",borderRadius:4,fontSize:12}}>.env</code> não foi criado ou as chaves estão incorretas.<br/><br/>
+              Crie o arquivo <strong>.env</strong> na raiz do projeto com o conteúdo abaixo:
+            </div>
+            <div style={{background:"rgba(90,70,50,.06)",border:"1px solid var(--border-mid)",borderRadius:8,padding:"12px 14px",fontFamily:"monospace",fontSize:12,color:"var(--text-primary)",lineHeight:1.8,marginBottom:20}}>
+              VITE_SUPABASE_URL=https://xxxx.supabase.co<br/>
+              VITE_SUPABASE_ANON_KEY=sua_chave_anon_aqui
+            </div>
+            <div style={{fontSize:12,color:"var(--text-muted)",lineHeight:1.7}}>
+              Após criar o .env, <strong>pare o servidor</strong> com Ctrl+C e rode <code style={{background:"rgba(90,70,50,.1)",padding:"1px 6px",borderRadius:4}}>npm run dev</code> novamente.<br/>
+              As chaves estão em: <strong>Supabase → Project Settings → API</strong>
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
   if(authLoading){
     return(
       <>
@@ -1027,6 +1140,7 @@ export default function App(){
       </>
     );
   }
+  if(isRecovery) return <><GlobalStyles/><ResetPassword/></>;
   if(!session) return <><GlobalStyles/><Login/></>;
   if(unauthorized) return <><GlobalStyles/><Unauthorized onLogout={signOut}/></>;
   if(!profile) return(
