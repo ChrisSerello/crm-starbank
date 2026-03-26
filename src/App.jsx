@@ -1125,9 +1125,26 @@ export default function App(){
   // ── Load leads from Supabase on login ──
   useEffect(()=>{
     if(!session) return;
-    supabase.from('leads').select('data').order('created_at',{ascending:true}).then(({data,error})=>{
+    supabase.from('leads').select('data').then(async({data,error})=>{
       if(error) console.error('Erro ao carregar leads:', error);
-      if(data?.length>0) dispatch({type:'SET_LEADS',leads:data.map(r=>r.data)});
+      const remoteLeads = data?.map(r=>r.data) || [];
+
+      if(remoteLeads.length >= LEADS0.length){
+        // Supabase has all leads — use them
+        dispatch({type:'SET_LEADS', leads:remoteLeads});
+      } else {
+        // Supabase is missing leads — seed from LEADS0 and use LEADS0
+        console.log(`Supabase tem ${remoteLeads.length} leads, fazendo seed de ${LEADS0.length} leads...`);
+        const toSeed = LEADS0.map(l=>({id:l.id, data:l}));
+        // Batch upsert in chunks of 50
+        for(let i=0;i<toSeed.length;i+=50){
+          const chunk = toSeed.slice(i,i+50);
+          const {error:e} = await supabase.from('leads').upsert(chunk,{onConflict:'id'});
+          if(e) console.error('Seed error:', e);
+        }
+        dispatch({type:'SET_LEADS', leads:LEADS0});
+        console.log('Seed concluído!');
+      }
       setLeadsReady(true);
     });
   },[session]);
