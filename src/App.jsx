@@ -251,11 +251,13 @@ function useAuth(){
 
   const loadProfile=useCallback(async(uid,email)=>{
     try {
+      const emailLower = email.toLowerCase().trim();
       let {data}=await supabase.from('profiles').select('*').eq('id',uid).single();
       if(data){ setProfile(data); setAuthLoading(false); return; }
-      const {data:allowed}=await supabase.from('allowed_users').select('*').eq('email',email.toLowerCase()).single();
+      // Use ilike for case-insensitive match — handles any capitalization in DB
+      const {data:allowed}=await supabase.from('allowed_users').select('*').ilike('email',emailLower).single();
       if(allowed){
-        const {data:created}=await supabase.from('profiles').insert({id:uid,email:email.toLowerCase(),nome:allowed.nome,role:allowed.role}).select().single();
+        const {data:created}=await supabase.from('profiles').insert({id:uid,email:emailLower,nome:allowed.nome,role:allowed.role}).select().single();
         setProfile(created);
       } else {
         setUnauthorized(true);
@@ -797,12 +799,12 @@ function Detail({lead,dispatch}){
               <select className="sel" value={ed} onChange={e=>setEd(e.target.value)} style={{marginBottom:10}}>{DOC_STATUS.map(s=><option key={s} value={s}>{s}</option>)}</select>
               <label style={{fontSize:12,color:"var(--text-muted)",display:"block",marginBottom:5}}>Equipe</label>
               <select className="sel" value={eq} onChange={e=>setEq(e.target.value)} style={{marginBottom:10}}>
-                <option value="">Selecionar equipe</option>
+                <option value="">— Selecionar equipe —</option>
                 {EQUIPES.map(e=><option key={e} value={e}>{e}</option>)}
               </select>
               <label style={{fontSize:12,color:"var(--text-muted)",display:"block",marginBottom:5}}>Operador Repassado</label>
               <select className="sel" value={or} onChange={e=>setOr(e.target.value)} style={{marginBottom:12}}>
-                <option value="">Selecionar operador</option>
+                <option value="">— Selecionar operador —</option>
                 {OPERADORES_REPASSADOS.map(o=><option key={o} value={o}>{o}</option>)}
               </select>
               <button className="btn btn-primary" style={{width:"100%"}} onClick={save}>Salvar alterações</button>
