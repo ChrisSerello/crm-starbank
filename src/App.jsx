@@ -349,7 +349,10 @@ function Sidebar({view,dispatch,onLogout,profile}){
     {id:"kanban",   icon:"⊞",label:"Pipeline"},
     {id:"leads",    icon:"≡",label:"Leads"},
     {id:"attribution",icon:"⇋",label:"Atribuição"},
-    ...(isAdmin ? [{id:"auditoria",icon:"🔍",label:"Auditoria"}] : []),
+    ...(isAdmin ? [
+      {id:"auditoria", icon:"🔍", label:"Auditoria"},
+      {id:"equipe",    icon:"👥", label:"Gestão de Equipe"},
+    ] : []),
   ];
   return(
     <div style={{width:228,background:"var(--bg-surface)",borderRight:"1px solid var(--border)",display:"flex",flexDirection:"column",flexShrink:0,height:"100vh",position:"sticky",top:0}}>
@@ -1194,6 +1197,237 @@ function Auditoria(){
   );
 }
 
+// ─── GESTÃO DE EQUIPE (ADMIN ONLY) ───────────────────────────────────────────
+
+function GestaoEquipe(){
+  const [pessoas,setPessoas]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [showModal,setShowModal]=useState(false);
+  const [editing,setEditing]=useState(null); // null = new, object = editing
+  const [saving,setSaving]=useState(false);
+  const [confirmDelete,setConfirmDelete]=useState(null);
+  const [form,setForm]=useState({email:'',nome:'',role:'pos_venda'});
+  const [msg,setMsg]=useState(null); // {type:'success'|'error', text}
+
+  const load=async()=>{
+    setLoading(true);
+    const {data}=await supabase.from('allowed_users').select('*').order('nome');
+    setPessoas(data||[]);
+    setLoading(false);
+  };
+
+  useEffect(()=>{ load(); },[]);
+
+  const openNew=()=>{
+    setEditing(null);
+    setForm({email:'',nome:'',role:'pos_venda'});
+    setShowModal(true);
+  };
+
+  const openEdit=(p)=>{
+    setEditing(p);
+    setForm({email:p.email,nome:p.nome,role:p.role});
+    setShowModal(true);
+  };
+
+  const save=async()=>{
+    if(!form.email.trim()||!form.nome.trim()){setMsg({type:'error',text:'E-mail e nome são obrigatórios.'});return;}
+    const emailLower=form.email.trim().toLowerCase();
+    setSaving(true);setMsg(null);
+    if(editing){
+      // Update allowed_users
+      const {error}=await supabase.from('allowed_users')
+        .update({email:emailLower,nome:form.nome.trim(),role:form.role})
+        .eq('email',editing.email);
+      // Also update profile if exists
+      await supabase.from('profiles')
+        .update({email:emailLower,nome:form.nome.trim(),role:form.role})
+        .ilike('email',editing.email);
+      if(error){setMsg({type:'error',text:'Erro ao salvar. Verifique os dados.'});}
+      else{setMsg({type:'success',text:`${form.nome} atualizado com sucesso!`});setShowModal(false);load();}
+    } else {
+      // Check if already exists
+      const {data:exists}=await supabase.from('allowed_users').select('email').ilike('email',emailLower).single();
+      if(exists){setSaving(false);setMsg({type:'error',text:'Este e-mail já está cadastrado.'});return;}
+      const {error}=await supabase.from('allowed_users').insert({email:emailLower,nome:form.nome.trim(),role:form.role});
+      if(error){setMsg({type:'error',text:'Erro ao adicionar. Tente novamente.'});}
+      else{setMsg({type:'success',text:`${form.nome} adicionado! Crie o acesso no Supabase Auth.`});setShowModal(false);load();}
+    }
+    setSaving(false);
+  };
+
+  const remove=async(pessoa)=>{
+    // Remove from allowed_users and profiles
+    await supabase.from('profiles').delete().ilike('email',pessoa.email);
+    await supabase.from('allowed_users').delete().eq('email',pessoa.email);
+    setConfirmDelete(null);
+    setMsg({type:'success',text:`${pessoa.nome} removido do sistema.`});
+    load();
+  };
+
+  const roleLabel={admin:'Admin',pos_venda:'Pós-venda'};
+  const roleColor={admin:'var(--amber)',pos_venda:'var(--accent)'};
+  const roleBg={admin:'var(--amber-dim)',pos_venda:'var(--accent-dim)'};
+
+  return(
+    <div style={{padding:"28px 32px",maxWidth:860}}>
+      <div className="fu" style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:24}}>
+        <div>
+          <div className="section-title">Gestão de Equipe</div>
+          <div className="section-sub">Gerencie quem tem acesso ao sistema</div>
+        </div>
+        <button className="btn btn-primary" onClick={openNew}>+ Adicionar pessoa</button>
+      </div>
+
+      {msg&&(
+        <div className="fu" style={{
+          display:"flex",alignItems:"center",gap:8,padding:"10px 14px",borderRadius:9,marginBottom:16,
+          background:msg.type==='success'?"var(--success-dim)":"var(--danger-dim)",
+          border:`1px solid ${msg.type==='success'?"rgba(30,143,94,.2)":"rgba(196,66,58,.2)"}`,
+          fontSize:13,color:msg.type==='success'?"var(--success)":"var(--danger)",
+        }}>
+          <span>{msg.type==='success'?'✓':'⚠'}</span>{msg.text}
+          <button onClick={()=>setMsg(null)} style={{marginLeft:"auto",background:"none",border:"none",cursor:"pointer",color:"inherit",fontSize:16}}>×</button>
+        </div>
+      )}
+
+      {loading?(
+        <div style={{textAlign:"center",padding:"40px 0",fontSize:13,color:"var(--text-muted)"}}>Carregando equipe…</div>
+      ):(
+        <>
+          {/* Admins */}
+          {['admin','pos_venda'].map(roleGroup=>(
+            <div key={roleGroup} style={{marginBottom:24}}>
+              <div className="eyebrow" style={{marginBottom:12}}>
+                {roleGroup==='admin'?'Administradores':'Time Pós-venda'}
+                <span style={{marginLeft:8,fontWeight:400,color:"var(--text-faint)"}}>
+                  ({pessoas.filter(p=>p.role===roleGroup).length})
+                </span>
+              </div>
+              <div className="card" style={{overflow:"hidden"}}>
+                {pessoas.filter(p=>p.role===roleGroup).length===0?(
+                  <div style={{padding:"20px 18px",fontSize:13,color:"var(--text-muted)"}}>Nenhuma pessoa neste grupo.</div>
+                ):(
+                  pessoas.filter(p=>p.role===roleGroup).map((p,i,arr)=>(
+                    <div key={p.email} style={{
+                      display:"flex",alignItems:"center",gap:12,padding:"13px 18px",
+                      borderBottom:i<arr.length-1?"1px solid var(--border)":"none",
+                      transition:"background .15s",
+                    }}>
+                      <Avatar name={p.nome} size={38} color={roleColor[p.role]}/>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontSize:13,fontWeight:600,color:"var(--text-primary)"}}>{p.nome}</div>
+                        <div style={{fontSize:12,color:"var(--text-muted)",marginTop:1}}>{p.email}</div>
+                      </div>
+                      <span className="tag" style={{background:roleBg[p.role],color:roleColor[p.role],fontSize:11}}>
+                        {roleLabel[p.role]}
+                      </span>
+                      <div style={{display:"flex",gap:6,marginLeft:8}}>
+                        <button className="btn btn-ghost" style={{padding:"5px 11px",fontSize:12}}
+                          onClick={()=>openEdit(p)}>Editar</button>
+                        <button onClick={()=>setConfirmDelete(p)} style={{
+                          padding:"5px 11px",borderRadius:7,fontSize:12,fontWeight:600,cursor:"pointer",
+                          background:"var(--danger-dim)",color:"var(--danger)",
+                          border:"1px solid rgba(196,66,58,.2)",transition:"all .15s",
+                        }}>Remover</button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          ))}
+
+          {/* Info box */}
+          <div style={{padding:"12px 16px",background:"rgba(90,70,50,.05)",borderRadius:10,border:"1px solid var(--border)",fontSize:12,color:"var(--text-muted)",lineHeight:1.7}}>
+            💡 <strong>Para dar acesso a uma nova pessoa:</strong> adicione aqui primeiro, depois vá em{' '}
+            <strong>Supabase → Authentication → Users → Add user → Create new user</strong> e crie o usuário com o mesmo e-mail e uma senha inicial.
+          </div>
+        </>
+      )}
+
+      {/* Modal Add/Edit */}
+      {showModal&&(
+        <div className="mbk" onClick={e=>{if(e.target===e.currentTarget){setShowModal(false);setMsg(null);}}}>
+          <div className="mbox" style={{maxWidth:440}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:22}}>
+              <div>
+                <div style={{fontFamily:"var(--font-display)",fontSize:20,fontWeight:600,color:"var(--text-primary)"}}>
+                  {editing?'Editar pessoa':'Adicionar pessoa'}
+                </div>
+                <div style={{fontSize:12,color:"var(--text-muted)",marginTop:2}}>
+                  {editing?'Atualize os dados da pessoa':'Preencha os dados da nova pessoa'}
+                </div>
+              </div>
+              <button onClick={()=>{setShowModal(false);setMsg(null);}} style={{background:"rgba(90,70,50,.08)",border:"1px solid var(--border-mid)",borderRadius:9,color:"var(--text-secondary)",cursor:"pointer",width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>×</button>
+            </div>
+
+            {msg&&<div style={{padding:"9px 12px",borderRadius:8,marginBottom:14,background:"var(--danger-dim)",border:"1px solid rgba(196,66,58,.2)",fontSize:12,color:"var(--danger)"}}>{msg.text}</div>}
+
+            <div style={{marginBottom:12}}>
+              <label style={{display:"block",fontSize:10,fontWeight:700,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:".07em",marginBottom:6}}>Nome completo</label>
+              <input className="inp" value={form.nome} onChange={e=>setForm(f=>({...f,nome:e.target.value}))} placeholder="Nome da pessoa"/>
+            </div>
+            <div style={{marginBottom:12}}>
+              <label style={{display:"block",fontSize:10,fontWeight:700,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:".07em",marginBottom:6}}>E-mail</label>
+              <input className="inp" type="email" value={form.email} onChange={e=>setForm(f=>({...f,email:e.target.value}))}
+                placeholder="email@exemplo.com" disabled={!!editing}
+                style={{opacity:editing?0.6:1}}/>
+              {editing&&<div style={{fontSize:11,color:"var(--text-muted)",marginTop:4}}>O e-mail não pode ser alterado após o cadastro.</div>}
+            </div>
+            <div style={{marginBottom:22}}>
+              <label style={{display:"block",fontSize:10,fontWeight:700,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:".07em",marginBottom:6}}>Papel no sistema</label>
+              <div style={{display:"flex",gap:8}}>
+                {[{v:'pos_venda',l:'Pós-venda'},{v:'admin',l:'Administrador'}].map(opt=>{
+                  const sel=form.role===opt.v;
+                  return(
+                    <button key={opt.v} onClick={()=>setForm(f=>({...f,role:opt.v}))} style={{
+                      flex:1,padding:"9px 0",borderRadius:9,fontSize:13,fontWeight:600,cursor:"pointer",
+                      background:sel?roleColor[opt.v]:"rgba(90,70,50,.06)",
+                      color:sel?"#fff":"var(--text-secondary)",
+                      border:sel?"none":"1px solid var(--border)",
+                      transition:"all .15s",
+                    }}>{opt.l}</button>
+                  );
+                })}
+              </div>
+            </div>
+            <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+              <button className="btn btn-ghost" onClick={()=>{setShowModal(false);setMsg(null);}}>Cancelar</button>
+              <button className="btn btn-primary" onClick={save} disabled={saving}>
+                {saving?"Salvando…":editing?"Salvar alterações":"Adicionar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirm delete modal */}
+      {confirmDelete&&(
+        <div className="mbk" onClick={e=>{if(e.target===e.currentTarget)setConfirmDelete(null);}}>
+          <div className="mbox" style={{maxWidth:400}}>
+            <div style={{textAlign:"center",padding:"8px 0 20px"}}>
+              <div style={{fontSize:36,marginBottom:12}}>⚠️</div>
+              <div style={{fontFamily:"var(--font-display)",fontSize:18,fontWeight:600,color:"var(--text-primary)",marginBottom:8}}>
+                Remover {confirmDelete.nome}?
+              </div>
+              <div style={{fontSize:13,color:"var(--text-muted)",lineHeight:1.6,marginBottom:24}}>
+                Esta pessoa perderá acesso ao sistema imediatamente.<br/>
+                O histórico de ações dela na auditoria será mantido.
+              </div>
+              <div style={{display:"flex",gap:8,justifyContent:"center"}}>
+                <button className="btn btn-ghost" onClick={()=>setConfirmDelete(null)}>Cancelar</button>
+                <button className="btn" style={{background:"var(--danger)",color:"#fff",boxShadow:"0 3px 12px rgba(196,66,58,.3)"}}
+                  onClick={()=>remove(confirmDelete)}>Sim, remover acesso</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── ROOT ─────────────────────────────────────────────────────────────────────
 
 export default function App(){
@@ -1363,6 +1597,7 @@ export default function App(){
           {view==="leads"       &&<LeadsTable leads={leads} dispatch={auditedDispatch} filters={filters}/>}
           {view==="attribution" &&<Attribution rules={rules} dispatch={auditedDispatch}/>}
           {view==="auditoria"   &&<Auditoria/>}
+          {view==="equipe"      &&<GestaoEquipe/>}
         </main>
         {selected&&<Detail key={selected.id} lead={selected} dispatch={auditedDispatch}/>}
         {newOpen&&<NewLead dispatch={auditedDispatch}/>}
