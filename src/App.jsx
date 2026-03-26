@@ -1,7 +1,7 @@
 import { useState, useReducer, useMemo, useEffect, useRef, useCallback } from "react";
 import { supabase } from "./supabase";
 
-// GLOBAL STYLES
+// ─── GLOBAL STYLES ────────────────────────────────────────────────────────────
 const GlobalStyles = () => (
   <style>{`
     @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Fraunces:ital,opsz,wght@0,9..144,600;0,9..144,700;1,9..144,500&display=swap');
@@ -113,7 +113,7 @@ const GlobalStyles = () => (
     .ptab:not(.on) { color:var(--text-muted); }
     .ptab:not(.on):hover { color:var(--text-secondary); }
 
-    .kcol { min-width:210px; width:220px; flex-shrink:0; background:rgba(90,70,50,0.04); border:1px solid var(--border); border-radius:var(--radius-lg); padding:12px 10px; transition:var(--transition); }
+    .kcol { min-width:210px; width:220px; flex-shrink:0; background:rgba(90,70,50,0.04); border:1px solid var(--border); border-radius:var(--radius-lg); padding:12px 10px; transition:var(--transition); overflow:visible; }
     .kcol.dover { background:var(--accent-dim); border-color:rgba(91,79,232,0.35); box-shadow:0 0 0 3px var(--accent-dim); }
 
     .adot { display:inline-block; border-radius:50%; animation:pulseDot 2s ease infinite; }
@@ -138,7 +138,7 @@ const GlobalStyles = () => (
   `}</style>
 );
 
-// CONSTANTS
+// ─── CONSTANTS ────────────────────────────────────────────────────────────────
 
 const STAGES = [
   { id:"distribuido",   label:"Distribuído",   color:"#7B6EA8", bg:"rgba(123,110,168,0.1)" },
@@ -173,7 +173,7 @@ const INDICATION_TYPES = [
 ];
 const DOC_STATUS = ["Não solicitado","Solicitado","Recebido","Validado","Aprovado"];
 
-// HELPERS
+// ─── HELPERS ──────────────────────────────────────────────────────────────────
 
 const gid    = () => Math.random().toString(36).slice(2,9);
 const ago    = n  => new Date(Date.now()-n*86400000).toISOString().split("T")[0];
@@ -479,7 +479,8 @@ function KCard({lead,dispatch}){
 
   return(
     <div className="kcard fu" draggable onDragStart={()=>dispatch({type:"DRAG",id:lead.id})}
-      onClick={e=>{ if(!menuOpen) dispatch({type:"SEL",id:lead.id}); }}>
+      onClick={e=>{ if(!menuOpen) dispatch({type:"SEL",id:lead.id}); }}
+      style={{position:"relative", zIndex:menuOpen?50:1}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:7}}>
         <div style={{fontSize:13,fontWeight:600,color:"var(--text-primary)",lineHeight:1.3,flex:1,minWidth:0,paddingRight:6}}>{lead.nomeIndicado}</div>
         <div style={{display:"flex",alignItems:"center",gap:4,flexShrink:0}}>
