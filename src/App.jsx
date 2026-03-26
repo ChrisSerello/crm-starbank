@@ -464,13 +464,81 @@ function Dashboard({leads}){
 // ─── KANBAN ───────────────────────────────────────────────────────────────────
 
 function KCard({lead,dispatch}){
+  const [menuOpen,setMenuOpen]=useState(false);
+  const menuRef=useRef(null);
   const days=sinceD(lead.ultimoContato);
   const o=opr(lead.responsavelId);
+  const currentStage=stg(lead.statusComercial);
+
+  useEffect(()=>{
+    if(!menuOpen) return;
+    const close=(e)=>{ if(menuRef.current&&!menuRef.current.contains(e.target)) setMenuOpen(false); };
+    document.addEventListener('mousedown',close);
+    return()=>document.removeEventListener('mousedown',close);
+  },[menuOpen]);
+
   return(
-    <div className="kcard fu" draggable onDragStart={()=>dispatch({type:"DRAG",id:lead.id})} onClick={()=>dispatch({type:"SEL",id:lead.id})}>
+    <div className="kcard fu" draggable onDragStart={()=>dispatch({type:"DRAG",id:lead.id})}
+      onClick={e=>{ if(!menuOpen) dispatch({type:"SEL",id:lead.id}); }}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:7}}>
-        <div style={{fontSize:13,fontWeight:600,color:"var(--text-primary)",lineHeight:1.3}}>{lead.nomeIndicado}</div>
-        <AlertDot days={days}/>
+        <div style={{fontSize:13,fontWeight:600,color:"var(--text-primary)",lineHeight:1.3,flex:1,minWidth:0,paddingRight:6}}>{lead.nomeIndicado}</div>
+        <div style={{display:"flex",alignItems:"center",gap:4,flexShrink:0}}>
+          <AlertDot days={days}/>
+          {/* 3-dot menu */}
+          <div ref={menuRef} style={{position:"relative"}}>
+            <button
+              onClick={e=>{e.stopPropagation();setMenuOpen(v=>!v);}}
+              style={{
+                background:"none",border:"none",cursor:"pointer",padding:"2px 4px",
+                borderRadius:5,color:"var(--text-muted)",fontSize:16,lineHeight:1,
+                display:"flex",alignItems:"center",justifyContent:"center",
+                transition:"background .15s",
+              }}
+              onMouseEnter={e=>e.currentTarget.style.background="rgba(90,70,50,.1)"}
+              onMouseLeave={e=>e.currentTarget.style.background="none"}
+              title="Mover para estágio"
+            >⋮</button>
+            {menuOpen&&(
+              <div onClick={e=>e.stopPropagation()} style={{
+                position:"absolute",top:"100%",right:0,zIndex:999,
+                background:"var(--bg-elevated)",border:"1px solid var(--border-mid)",
+                borderRadius:10,boxShadow:"0 8px 32px rgba(60,40,20,0.18)",
+                minWidth:180,overflow:"hidden",marginTop:4,
+                animation:"fadeUp .15s cubic-bezier(.4,0,.2,1)",
+              }}>
+                <div style={{padding:"8px 12px 6px",fontSize:10,fontWeight:700,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:".08em",borderBottom:"1px solid var(--border)"}}>
+                  Mover para estágio
+                </div>
+                {STAGES.map(s=>{
+                  const isCurrent=s.id===lead.statusComercial;
+                  return(
+                    <button key={s.id}
+                      onClick={e=>{
+                        e.stopPropagation();
+                        if(!isCurrent) dispatch({type:"MOVE",lid:lead.id,st:s.id});
+                        setMenuOpen(false);
+                      }}
+                      style={{
+                        width:"100%",display:"flex",alignItems:"center",gap:9,
+                        padding:"9px 12px",background:isCurrent?"rgba(90,70,50,.06)":"none",
+                        border:"none",cursor:isCurrent?"default":"pointer",
+                        fontFamily:"var(--font)",fontSize:12,fontWeight:isCurrent?600:400,
+                        color:isCurrent?s.color:"var(--text-primary)",
+                        textAlign:"left",transition:"background .12s",
+                      }}
+                      onMouseEnter={e=>{ if(!isCurrent) e.currentTarget.style.background="rgba(90,70,50,.06)"; }}
+                      onMouseLeave={e=>{ if(!isCurrent) e.currentTarget.style.background="none"; }}
+                    >
+                      <div style={{width:8,height:8,borderRadius:"50%",background:s.color,flexShrink:0}}/>
+                      {s.label}
+                      {isCurrent&&<span style={{marginLeft:"auto",fontSize:10,color:s.color}}>✓ atual</span>}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
       <div style={{fontSize:11,color:"var(--text-muted)",marginBottom:8}}>{lead.orgaoPrefeitura}</div>
       <div style={{display:"flex",flexWrap:"wrap",gap:4,marginBottom:10}}>
@@ -479,6 +547,7 @@ function KCard({lead,dispatch}){
       </div>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
         {o&&<div style={{display:"flex",alignItems:"center",gap:5}}><Avatar name={o.name} size={18} color={o.color}/><span style={{fontSize:10,color:"var(--text-muted)",fontWeight:500}}>{o.name}</span></div>}
+        {!o&&<div/>}
         <span style={{fontSize:10,fontWeight:600,color:lead.documentoStatus==="Aprovado"?"var(--success)":lead.documentoStatus==="Não solicitado"?"var(--text-faint)":"var(--amber)"}}>📄 {lead.documentoStatus}</span>
       </div>
     </div>
