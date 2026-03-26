@@ -1,7 +1,7 @@
 import { useState, useReducer, useMemo, useEffect, useRef, useCallback } from "react";
 import { supabase } from "./supabase";
 
-// ─── GLOBAL STYLES ────────────────────────────────────────────────────────────
+// GLOBAL STYLES
 const GlobalStyles = () => (
   <style>{`
     @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Fraunces:ital,opsz,wght@0,9..144,600;0,9..144,700;1,9..144,500&display=swap');
@@ -138,7 +138,7 @@ const GlobalStyles = () => (
   `}</style>
 );
 
-// ─── CONSTANTS ────────────────────────────────────────────────────────────────
+// CONSTANTS
 
 const STAGES = [
   { id:"distribuido",   label:"Distribuído",   color:"#7B6EA8", bg:"rgba(123,110,168,0.1)" },
@@ -173,7 +173,7 @@ const INDICATION_TYPES = [
 ];
 const DOC_STATUS = ["Não solicitado","Solicitado","Recebido","Validado","Aprovado"];
 
-// ─── HELPERS ──────────────────────────────────────────────────────────────────
+// HELPERS
 
 const gid    = () => Math.random().toString(36).slice(2,9);
 const ago    = n  => new Date(Date.now()-n*86400000).toISOString().split("T")[0];
