@@ -234,6 +234,7 @@ function R(s,{type:t,...a}){
     case"ADD":   return{...s,newOpen:false,leads:[{...a.lead,id:gid(),activities:[{id:gid(),type:"stage_change",date:TODAY,user:"Sistema",text:"Lead criado e distribuído"}]},...s.leads]};
     case"TRULE": return{...s,rules:s.rules.map(r=>r.id!==a.id?r:{...r,active:!r.active})};
     case"SET_LEADS": return{...s,leads:a.leads};
+    case"__SAVE_HOOK__": return s;
     default:     return s;
   }
 }
@@ -1120,31 +1121,50 @@ export default function App(){
   const {leads,view,sel,newOpen,filters,rules,dragId}=s;
   const selected=leads.find(l=>l.id===sel);
   const [leadsReady,setLeadsReady]=useState(false);
-  const prevLeadsRef=useRef(leads);
 
   // ── Load leads from Supabase on login ──
   useEffect(()=>{
     if(!session) return;
-    supabase.from('leads').select('data').then(({data})=>{
+    supabase.from('leads').select('data').order('created_at',{ascending:true}).then(({data,error})=>{
+      if(error) console.error('Erro ao carregar leads:', error);
       if(data?.length>0) dispatch({type:'SET_LEADS',leads:data.map(r=>r.data)});
       setLeadsReady(true);
     });
   },[session]);
 
-  // ── Sync changed leads to Supabase ──
-  useEffect(()=>{
-    if(!leadsReady||!session) return;
-    const prev=prevLeadsRef.current;
-    const toUpsert=leads.filter(l=>{
-      const old=prev.find(p=>p.id===l.id);
-      return !old||JSON.stringify(old)!==JSON.stringify(l);
-    }).map(l=>({id:l.id,data:l}));
-    if(toUpsert.length>0) supabase.from('leads').upsert(toUpsert);
-    prevLeadsRef.current=leads;
-  },[leads,leadsReady,session]);
+  // ── Save a single lead to Supabase ──
+  const saveLead=useCallback(async(lead)=>{
+    if(!session||!leadsReady) return;
+    const {error}=await supabase.from('leads').upsert({id:lead.id,data:lead},{onConflict:'id'});
+    if(error) console.error('Erro ao salvar lead:', error);
+  },[session,leadsReady]);
 
-  // ── Audited dispatch — logs pos_venda actions ──
+  // ── Audited dispatch — saves directly + logs pos_venda actions ──
   const auditedDispatch=useCallback((action)=>{
+    // First dispatch to update local state
+    dispatch(action);
+
+    // Then save affected lead(s) to Supabase
+    if(session&&leadsReady){
+      setTimeout(()=>{
+        // We need the updated leads — get from the reducer result directly
+        const affectedId=action.lid||action.lead?.id||action.leadId;
+        if(['MOVE','NOTE','UPD'].includes(action.type)&&affectedId){
+          // Re-read from current state via a callback approach
+          setLeadsReady(prev=>{ // trick to access latest leads
+            return prev;
+          });
+          // Use functional state read
+          dispatch({type:'__SAVE_HOOK__',id:affectedId,_save:saveLead});
+        }
+        if(action.type==='ADD'&&action.lead){
+          const newLead={...action.lead,id:action.lead.id||'tmp'};
+          saveLead({...newLead,id:newLead.id});
+        }
+      },50);
+    }
+
+    // Audit log for pos_venda
     if(profile?.role==='pos_venda'){
       const auditMap={
         MOVE:()=>({action:'Moveu lead no pipeline',leadId:action.lid,details:`Estágio → "${stg(action.st).label}"`}),
@@ -1159,17 +1179,30 @@ export default function App(){
           ?action.lead?.nomeIndicado
           :leads.find(l=>l.id===leadId)?.nomeIndicado||'—';
         supabase.from('audit_log').insert({
-          user_id:session.user.id,
-          user_nome:profile.nome,
-          action:act,
-          lead_id:leadId||null,
-          lead_nome:leadNome,
-          detalhes:details,
+          user_id:session.user.id,user_nome:profile.nome,
+          action:act,lead_id:leadId||null,lead_nome:leadNome,detalhes:details,
         });
       }
     }
-    dispatch(action);
-  },[profile,leads,session]);
+  },[profile,leads,session,leadsReady,saveLead]);
+
+  // ── Watch leads and sync any changes to Supabase ──
+  const leadsRef=useRef(leads);
+  useEffect(()=>{
+    if(!leadsReady||!session) return;
+    const prev=leadsRef.current;
+    const changed=leads.filter(l=>{
+      const old=prev.find(p=>p.id===l.id);
+      return !old||JSON.stringify(old)!==JSON.stringify(l);
+    });
+    if(changed.length>0){
+      Promise.all(changed.map(l=>
+        supabase.from('leads').upsert({id:l.id,data:l},{onConflict:'id'})
+          .then(({error})=>{ if(error) console.error('Sync error:',l.id,error); })
+      ));
+    }
+    leadsRef.current=leads;
+  },[leads,leadsReady,session]);
 
   // ── Auth states ──
   if(configError){
