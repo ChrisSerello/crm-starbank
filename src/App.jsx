@@ -751,10 +751,11 @@ function Detail({lead,dispatch}){
   const [ed,setEd]=useState(lead.documentoStatus);
   const [eq,setEq]=useState(lead.equipe||"");
   const [or,setOr]=useState(lead.operadorRepassado||"");
+  const [resp,setResp]=useState(lead.responsavelId||"");
   const o=opr(lead.responsavelId);
   const days=sinceD(lead.ultimoContato);
   const save=()=>{
-    const updated={...lead,documentoStatus:ed,equipe:eq,operadorRepassado:or};
+    const updated={...lead,documentoStatus:ed,equipe:eq,operadorRepassado:or,responsavelId:resp};
     if(es!==lead.statusComercial)dispatch({type:"MOVE",lid:lead.id,st:es});
     dispatch({type:"UPD",lead:updated});
   };
@@ -784,7 +785,7 @@ function Detail({lead,dispatch}){
         {tab==="info"&&(
           <div>
             <div style={{background:"var(--bg-card)",border:"1px solid var(--border)",borderRadius:10,overflow:"hidden",marginBottom:16}}>
-              {[["Telefone",lead.telefone||"—"],["Quem indicou",lead.nomeQuemIndicou||<em style={{color:"var(--text-faint)"}}>Não informado</em>],["Tipo indicação",INDICATION_TYPES.find(t=>t.id===lead.statusIndicacao)?.label||"—"],["Perfil",lead.perfilCliente||"—"],["Secretaria",lead.secretariaAtuacao||"—"],["Equipe",lead.equipe||<em style={{color:"var(--text-faint)"}}>Não definida</em>],["Op. Repassado",lead.operadorRepassado||<em style={{color:"var(--text-faint)"}}>Não definido</em>],["Data entrada",fmtD(lead.dataEntrada)],["Atribuído em",fmtD(lead.dataAtribuicao)],["Último contato",fmtD(lead.ultimoContato)]].map(([k,v])=>(
+              {[["Telefone",lead.telefone||"—"],["Quem indicou",lead.nomeQuemIndicou||<em style={{color:"var(--text-faint)"}}>Não informado</em>],["Tipo indicação",INDICATION_TYPES.find(t=>t.id===lead.statusIndicacao)?.label||"—"],["Perfil",lead.perfilCliente||"—"],["Secretaria",lead.secretariaAtuacao||"—"],["Responsável",opr(lead.responsavelId)?.name||<em style={{color:"var(--text-faint)"}}>Não definido</em>],["Equipe",lead.equipe||<em style={{color:"var(--text-faint)"}}>Não definida</em>],["Op. Repassado",lead.operadorRepassado||<em style={{color:"var(--text-faint)"}}>Não definido</em>],["Data entrada",fmtD(lead.dataEntrada)],["Atribuído em",fmtD(lead.dataAtribuicao)],["Último contato",fmtD(lead.ultimoContato)]].map(([k,v])=>(
                 <div key={k} style={{display:"flex",justifyContent:"space-between",padding:"9px 12px",borderBottom:"1px solid var(--border)"}}>
                   <span style={{fontSize:12,color:"var(--text-muted)"}}>{k}</span>
                   <span style={{fontSize:12,color:"var(--text-primary)",fontWeight:500,textAlign:"right",maxWidth:"58%"}}>{v}</span>
@@ -800,6 +801,11 @@ function Detail({lead,dispatch}){
               <select className="sel" value={es} onChange={e=>setEs(e.target.value)} style={{marginBottom:10}}>{STAGES.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}</select>
               <label style={{fontSize:12,color:"var(--text-muted)",display:"block",marginBottom:5}}>Documento</label>
               <select className="sel" value={ed} onChange={e=>setEd(e.target.value)} style={{marginBottom:10}}>{DOC_STATUS.map(s=><option key={s} value={s}>{s}</option>)}</select>
+              <label style={{fontSize:12,color:"var(--text-muted)",display:"block",marginBottom:5}}>Responsável (Pós-venda)</label>
+              <select className="sel" value={resp} onChange={e=>setResp(e.target.value)} style={{marginBottom:10}}>
+                <option value="">— Selecionar responsável —</option>
+                {OPERATORS.map(o=><option key={o.id} value={o.id}>{o.name}</option>)}
+              </select>
               <label style={{fontSize:12,color:"var(--text-muted)",display:"block",marginBottom:5}}>Equipe</label>
               <select className="sel" value={eq} onChange={e=>setEq(e.target.value)} style={{marginBottom:10}}>
                 <option value="">— Selecionar equipe —</option>
