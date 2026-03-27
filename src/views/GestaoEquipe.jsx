@@ -98,49 +98,92 @@ export function GestaoEquipe(){
         <div style={{textAlign:"center",padding:"40px 0",fontSize:13,color:"var(--text-muted)"}}>Carregando equipe…</div>
       ):(
         <>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:20,marginBottom:24}}>
-          {['admin','pos_venda','operador'].map(roleGroup=>(
-            <div key={roleGroup}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:24,marginBottom:24}}>
+            {/* Coluna esquerda: Admin + Pós-venda */}
+            <div>
+              {['admin','pos_venda'].map(roleGroup=>(
+                <div key={roleGroup} style={{marginBottom:24}}>
+                  <div className="eyebrow" style={{marginBottom:12}}>
+                    {roleGroup==='admin'?'Administradores':'Time Pós-venda'}
+                    <span style={{marginLeft:8,fontWeight:400,color:"var(--text-faint)"}}>
+                      ({pessoas.filter(p=>p.role===roleGroup).length})
+                    </span>
+                  </div>
+                  <div className="card" style={{overflow:"hidden"}}>
+                    {pessoas.filter(p=>p.role===roleGroup).length===0?(
+                      <div style={{padding:"20px 18px",fontSize:13,color:"var(--text-muted)"}}>Nenhuma pessoa neste grupo.</div>
+                    ):(
+                      pessoas.filter(p=>p.role===roleGroup).map((p,i,arr)=>(
+                        <div key={p.email} style={{
+                          display:"flex",alignItems:"center",gap:12,padding:"13px 18px",
+                          borderBottom:i<arr.length-1?"1px solid var(--border)":"none",
+                          transition:"background .15s",
+                        }}>
+                          <Avatar name={p.nome} size={38} color={roleColor[p.role]}/>
+                          <div style={{flex:1,minWidth:0}}>
+                            <div style={{fontSize:13,fontWeight:600,color:"var(--text-primary)"}}>{p.nome}</div>
+                            <div style={{fontSize:12,color:"var(--text-muted)",marginTop:1}}>{p.email}</div>
+                          </div>
+                          <span className="tag" style={{background:roleBg[p.role],color:roleColor[p.role],fontSize:11}}>
+                            {roleLabel[p.role]}
+                          </span>
+                          <div style={{display:"flex",gap:6,marginLeft:8}}>
+                            <button className="btn btn-ghost" style={{padding:"5px 11px",fontSize:12}}
+                              onClick={()=>openEdit(p)}>Editar</button>
+                            <button onClick={()=>setConfirmDelete(p)} style={{
+                              padding:"5px 11px",borderRadius:7,fontSize:12,fontWeight:600,cursor:"pointer",
+                              background:"var(--danger-dim)",color:"var(--danger)",
+                              border:"1px solid rgba(196,66,58,.2)",transition:"all .15s",
+                            }}>Remover</button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Coluna direita: Operadores */}
+            <div>
               <div className="eyebrow" style={{marginBottom:12}}>
-                {roleGroup==='admin'?'Administradores':roleGroup==='pos_venda'?'Time Pós-venda':'Operadores'}
+                Operadores
                 <span style={{marginLeft:8,fontWeight:400,color:"var(--text-faint)"}}>
-                  ({pessoas.filter(p=>p.role===roleGroup).length})
+                  ({pessoas.filter(p=>p.role==='operador').length})
                 </span>
               </div>
               <div className="card" style={{overflow:"hidden"}}>
-                {pessoas.filter(p=>p.role===roleGroup).length===0?(
-                  <div style={{padding:"20px 18px",fontSize:13,color:"var(--text-muted)"}}>Nenhuma pessoa neste grupo.</div>
+                {pessoas.filter(p=>p.role==='operador').length===0?(
+                  <div style={{padding:"20px 18px",fontSize:13,color:"var(--text-muted)"}}>Nenhum operador cadastrado.</div>
                 ):(
-                  pessoas.filter(p=>p.role===roleGroup).map((p,i,arr)=>(
+                  pessoas.filter(p=>p.role==='operador').map((p,i,arr)=>(
                     <div key={p.email} style={{
                       display:"flex",alignItems:"center",gap:12,padding:"13px 18px",
                       borderBottom:i<arr.length-1?"1px solid var(--border)":"none",
+                      transition:"background .15s",
                     }}>
-                      <Avatar name={p.nome} size={38} color={roleColor[p.role]}/>
+                      <Avatar name={p.nome} size={38} color={roleColor['operador']}/>
                       <div style={{flex:1,minWidth:0}}>
                         <div style={{fontSize:13,fontWeight:600,color:"var(--text-primary)"}}>{p.nome}</div>
-                        <div style={{fontSize:11,color:"var(--text-muted)",marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.email}</div>
+                        <div style={{fontSize:12,color:"var(--text-muted)",marginTop:1}}>{p.email}</div>
                       </div>
-                      <div style={{display:"flex",flexDirection:"column",gap:4,alignItems:"flex-end",flexShrink:0}}>
-                        <span className="tag" style={{background:roleBg[p.role],color:roleColor[p.role],fontSize:11}}>
-                          {roleLabel[p.role]}
-                        </span>
-                        <div style={{display:"flex",gap:4}}>
-                          <button className="btn btn-ghost" style={{padding:"4px 9px",fontSize:11}}
-                            onClick={()=>openEdit(p)}>Editar</button>
-                          <button onClick={()=>setConfirmDelete(p)} style={{
-                            padding:"4px 9px",borderRadius:7,fontSize:11,fontWeight:600,cursor:"pointer",
-                            background:"var(--danger-dim)",color:"var(--danger)",
-                            border:"1px solid rgba(196,66,58,.2)",
-                          }}>Remover</button>
-                        </div>
+                      <span className="tag" style={{background:roleBg['operador'],color:roleColor['operador'],fontSize:11}}>
+                        Operador
+                      </span>
+                      <div style={{display:"flex",gap:6,marginLeft:8}}>
+                        <button className="btn btn-ghost" style={{padding:"5px 11px",fontSize:12}}
+                          onClick={()=>openEdit(p)}>Editar</button>
+                        <button onClick={()=>setConfirmDelete(p)} style={{
+                          padding:"5px 11px",borderRadius:7,fontSize:12,fontWeight:600,cursor:"pointer",
+                          background:"var(--danger-dim)",color:"var(--danger)",
+                          border:"1px solid rgba(196,66,58,.2)",transition:"all .15s",
+                        }}>Remover</button>
                       </div>
                     </div>
                   ))
                 )}
               </div>
             </div>
-          ))}
           </div>
 
           {/* Info box */}
