@@ -76,7 +76,7 @@ function OperadorDashboard({ leads, profile }) {
   );
 
   return (
-    <div style={{padding:"28px 32px",maxWidth:1000}}>
+    <div style={{padding:"28px 32px"}}>
       <div className="fu" style={{marginBottom:6}}>
         <div className="section-title">Meu Dashboard</div>
         <div className="section-sub">Leads atribuídos a você · {fmtD(TODAY)}</div>
@@ -89,48 +89,132 @@ function OperadorDashboard({ leads, profile }) {
           <div style={{fontSize:13,color:"var(--text-muted)"}}>Quando a equipe pós-venda repassar leads para você, eles aparecerão aqui.</div>
         </div>
       ) : (
-        <>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(4,minmax(0,1fr))",gap:14,marginBottom:22,marginTop:20}}>
-            <StatCard label="Meus leads"      value={total}  sub="Total atribuído"       color="#1A9E8A" icon="◈"/>
-            <StatCard label="Convertidos"     value={ganhos} sub={`${taxa}% conversão`}  color="#1E8F5E" icon="✓"/>
-            <StatCard label="Em negociação"   value={emNeg}  sub="Estágio ativo"          color="#5B4FE8" icon="⟳"/>
-            <StatCard label="Leads frios"     value={frios}  sub="Sem contato +7 dias"    color="#C4423A" icon="❄"/>
-          </div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 360px",gap:20,marginTop:20}}>
 
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:14}}>
-            {/* Pipeline por estágio */}
-            <div className="card fu1" style={{padding:"18px 20px"}}>
-              <div className="eyebrow" style={{marginBottom:14}}>Pipeline por estágio</div>
-              {byStage.map(s => (
-                <div key={s.id} style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
-                  <div style={{width:8,height:8,borderRadius:"50%",background:s.color,flexShrink:0}}/>
-                  <div style={{flex:1,fontSize:12,color:"var(--text-secondary)"}}>{s.label}</div>
-                  <div style={{width:120,height:6,background:"rgba(90,70,50,.1)",borderRadius:99,overflow:"hidden"}}>
-                    <div style={{height:"100%",borderRadius:99,background:s.color,width:`${Math.max(s.count/Math.max(...byStage.map(x=>x.count),1)*100,0)}%`,transition:"width .6s"}}/>
-                  </div>
-                  <div style={{fontSize:12,fontWeight:600,color:"var(--text-primary)",width:20,textAlign:"right"}}>{s.count}</div>
-                </div>
-              ))}
+          {/* Coluna esquerda */}
+          <div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:14,marginBottom:20}}>
+              <StatCard label="Meus leads"      value={total}  sub="Total atribuído"       color="#1A9E8A" icon="◈"/>
+              <StatCard label="Convertidos"     value={ganhos} sub={`${taxa}% conversão`}  color="#1E8F5E" icon="✓"/>
+              <StatCard label="Em negociação"   value={emNeg}  sub="Estágio ativo"          color="#5B4FE8" icon="⟳"/>
+              <StatCard label="Leads frios"     value={frios}  sub="Sem contato +7 dias"    color="#C4423A" icon="❄"/>
             </div>
 
-            {/* Atividade recente */}
-            <div className="card fu2" style={{padding:"18px 20px"}}>
-              <div className="eyebrow" style={{marginBottom:14}}>Atividade recente</div>
-              {recent.length === 0 ? (
-                <div style={{fontSize:12,color:"var(--text-muted)"}}>Nenhuma atividade ainda.</div>
-              ) : recent.map((a,i) => (
-                <div key={a.id||i} style={{display:"flex",gap:10,padding:"7px 0",borderBottom:i<recent.length-1?"1px solid var(--border)":"none"}}>
-                  <div style={{width:28,height:28,borderRadius:8,background:"var(--accent-dim)",color:"var(--accent)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,flexShrink:0}}>⇄</div>
-                  <div style={{flex:1,minWidth:0}}>
-                    <div style={{fontSize:12,fontWeight:600,color:"var(--text-primary)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.leadName}</div>
-                    <div style={{fontSize:11,color:"var(--text-muted)",marginTop:1}}>{a.text}</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+              {/* Pipeline por estágio */}
+              <div className="card fu1" style={{padding:"18px 20px"}}>
+                <div className="eyebrow" style={{marginBottom:14}}>Pipeline por estágio</div>
+                {byStage.map(s => (
+                  <div key={s.id} style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
+                    <div style={{width:8,height:8,borderRadius:"50%",background:s.color,flexShrink:0}}/>
+                    <div style={{flex:1,fontSize:12,color:"var(--text-secondary)"}}>{s.label}</div>
+                    <div style={{width:80,height:6,background:"rgba(90,70,50,.1)",borderRadius:99,overflow:"hidden"}}>
+                      <div style={{height:"100%",borderRadius:99,background:s.color,width:`${Math.max(s.count/Math.max(...byStage.map(x=>x.count),1)*100,0)}%`,transition:"width .6s"}}/>
+                    </div>
+                    <div style={{fontSize:12,fontWeight:600,color:"var(--text-primary)",width:20,textAlign:"right"}}>{s.count}</div>
                   </div>
-                  <div style={{fontSize:10,color:"var(--text-faint)",flexShrink:0}}>{fmtD(a.date)}</div>
-                </div>
-              ))}
+                ))}
+              </div>
+
+              {/* Atividade recente */}
+              <div className="card fu2" style={{padding:"18px 20px"}}>
+                <div className="eyebrow" style={{marginBottom:14}}>Atividade recente</div>
+                {recent.length === 0 ? (
+                  <div style={{fontSize:12,color:"var(--text-muted)"}}>Nenhuma atividade ainda.</div>
+                ) : recent.map((a,i) => (
+                  <div key={a.id||i} style={{display:"flex",gap:10,padding:"7px 0",borderBottom:i<recent.length-1?"1px solid var(--border)":"none"}}>
+                    <div style={{width:28,height:28,borderRadius:8,background:"var(--accent-dim)",color:"var(--accent)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,flexShrink:0}}>⇄</div>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:12,fontWeight:600,color:"var(--text-primary)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.leadName}</div>
+                      <div style={{fontSize:11,color:"var(--text-muted)",marginTop:1}}>{a.text}</div>
+                    </div>
+                    <div style={{fontSize:10,color:"var(--text-faint)",flexShrink:0}}>{fmtD(a.date)}</div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
-        </>
+
+          {/* Coluna direita — Leads que precisam de atenção */}
+          <div style={{display:"flex",flexDirection:"column",gap:14}}>
+
+            {/* Sem contato +7 dias */}
+            {(()=>{
+              const frios7 = meus.filter(l=>sinceD(l.ultimoContato)>=7).slice(0,5);
+              return(
+                <div className="card fu1" style={{padding:"16px 18px"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+                    <div style={{width:8,height:8,borderRadius:"50%",background:"var(--danger)",boxShadow:"0 0 5px var(--danger)"}}/>
+                    <div className="eyebrow" style={{color:"var(--danger)"}}>Sem contato +7 dias</div>
+                    <span style={{marginLeft:"auto",fontSize:11,fontWeight:700,background:"var(--danger-dim)",color:"var(--danger)",borderRadius:99,padding:"1px 8px"}}>{meus.filter(l=>sinceD(l.ultimoContato)>=7).length}</span>
+                  </div>
+                  {frios7.length===0?(
+                    <div style={{fontSize:12,color:"var(--success)",display:"flex",alignItems:"center",gap:6}}>✓ Nenhum lead frio. Bom trabalho!</div>
+                  ):frios7.map((l,i)=>(
+                    <div key={l.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:i<frios7.length-1?"1px solid var(--border)":"none"}}>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontSize:12,fontWeight:600,color:"var(--text-primary)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.nomeIndicado}</div>
+                        <div style={{fontSize:11,color:"var(--text-muted)"}}>{l.orgaoPrefeitura}</div>
+                      </div>
+                      <span style={{fontSize:11,fontWeight:700,color:"var(--danger)",flexShrink:0}}>{sinceD(l.ultimoContato)}d</span>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+
+            {/* Documentos pendentes */}
+            {(()=>{
+              const docPend = meus.filter(l=>l.documentoStatus==="Solicitado"||l.documentoStatus==="Recebido").slice(0,5);
+              return(
+                <div className="card fu2" style={{padding:"16px 18px"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+                    <div style={{width:8,height:8,borderRadius:"50%",background:"var(--amber)",boxShadow:"0 0 5px var(--amber)"}}/>
+                    <div className="eyebrow" style={{color:"var(--amber)"}}>Documentos pendentes</div>
+                    <span style={{marginLeft:"auto",fontSize:11,fontWeight:700,background:"var(--amber-dim)",color:"var(--amber)",borderRadius:99,padding:"1px 8px"}}>{meus.filter(l=>l.documentoStatus==="Solicitado"||l.documentoStatus==="Recebido").length}</span>
+                  </div>
+                  {docPend.length===0?(
+                    <div style={{fontSize:12,color:"var(--success)",display:"flex",alignItems:"center",gap:6}}>✓ Documentação em dia!</div>
+                  ):docPend.map((l,i)=>(
+                    <div key={l.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:i<docPend.length-1?"1px solid var(--border)":"none"}}>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontSize:12,fontWeight:600,color:"var(--text-primary)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.nomeIndicado}</div>
+                        <div style={{fontSize:11,color:"var(--text-muted)"}}>{l.orgaoPrefeitura}</div>
+                      </div>
+                      <span style={{fontSize:11,fontWeight:600,color:"var(--amber)",flexShrink:0}}>{l.documentoStatus}</span>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+
+            {/* Em negociação */}
+            {(()=>{
+              const negoc = meus.filter(l=>l.statusComercial==="em_negociacao").slice(0,5);
+              return(
+                <div className="card fu3" style={{padding:"16px 18px"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+                    <div style={{width:8,height:8,borderRadius:"50%",background:"var(--accent)",boxShadow:"0 0 5px var(--accent)"}}/>
+                    <div className="eyebrow" style={{color:"var(--accent)"}}>Em negociação ⚡</div>
+                    <span style={{marginLeft:"auto",fontSize:11,fontWeight:700,background:"var(--accent-dim)",color:"var(--accent)",borderRadius:99,padding:"1px 8px"}}>{meus.filter(l=>l.statusComercial==="em_negociacao").length}</span>
+                  </div>
+                  {negoc.length===0?(
+                    <div style={{fontSize:12,color:"var(--text-muted)"}}>Nenhum lead em negociação.</div>
+                  ):negoc.map((l,i)=>(
+                    <div key={l.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:i<negoc.length-1?"1px solid var(--border)":"none"}}>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontSize:12,fontWeight:600,color:"var(--text-primary)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{l.nomeIndicado}</div>
+                        <div style={{fontSize:11,color:"var(--text-muted)"}}>{l.orgaoPrefeitura}</div>
+                      </div>
+                      <span style={{fontSize:11,color:"var(--text-faint)",flexShrink:0}}>{fmtD(l.ultimoContato)}</span>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+
+          </div>
+        </div>
       )}
     </div>
   );
