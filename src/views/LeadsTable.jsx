@@ -89,7 +89,7 @@ export function LeadsTable({leads,dispatch,filters}){
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
             <thead>
               <tr style={{background:"rgba(90,70,50,.04)",borderBottom:"1px solid var(--border)"}}>
-                <TH c="Nome / CPF"/><TH c="Órgão / Prefeitura"/><TH c="Produtos"/><TH c="Estágio"/><TH c="Equipe Pós-Venda"/><TH c="Último contato"/><TH c="Documento"/><TH c=""/>
+                <TH c="Nome / CPF"/><TH c="Órgão / Prefeitura"/><TH c="Produtos"/><TH c="Estágio"/><TH c="Operador"/><TH c="Último contato"/><TH c="Documento"/><TH c=""/>
               </tr>
             </thead>
             <tbody>
