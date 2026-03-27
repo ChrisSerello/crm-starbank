@@ -3,8 +3,6 @@ import { STAGES, PRODUCTS, OPERATORS, PER_PAGE } from '../constants';
 import { sinceD, fmtD, opr } from '../utils';
 import { Avatar, StageTag, AlertDot } from '../components/shared';
 
-const PER_PAGE = 100;
-
 export function LeadsTable({leads,dispatch,filters}){
   const [page,setPage]=useState(1);
 
