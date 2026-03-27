@@ -9,8 +9,8 @@ export function Sidebar({view,dispatch,onLogout,onAlterarSenha,profile}){
     {id:"leads",    icon:"≡",label:"Leads"},
     {id:"attribution",icon:"⇋",label:"Atribuição"},
     ...(isAdmin ? [
-      {id:"auditoria", icon:"🔍", label:"Auditoria"},
-      {id:"equipe",    icon:"👥", label:"Gestão de Equipe"},
+      {id:"auditoria", icon:"⌕", label:"Auditoria"},
+      {id:"equipe",    icon:"●●●", label:"Gestão de Equipe"},
     ] : []),
   ];
   return(
