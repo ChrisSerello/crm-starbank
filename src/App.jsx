@@ -342,7 +342,7 @@ function Bar({label,val,max,color,di=0}){
 
 // ─── SIDEBAR ──────────────────────────────────────────────────────────────────
 
-function Sidebar({view,dispatch,onLogout,profile}){
+function Sidebar({view,dispatch,onLogout,onAlterarSenha,profile}){
   const isAdmin = profile?.role === 'admin';
   const items=[
     {id:"dashboard",icon:"◈",label:"Dashboard"},
@@ -388,6 +388,12 @@ function Sidebar({view,dispatch,onLogout,profile}){
           onMouseEnter={e=>e.currentTarget.style.background="rgba(196,66,58,.14)"}
           onMouseLeave={e=>e.currentTarget.style.background="rgba(196,66,58,.08)"}
         >Sair da conta</button>
+        <button
+          onClick={onAlterarSenha}
+          style={{marginTop:6,width:"100%",padding:"7px 0",borderRadius:7,background:"rgba(90,70,50,.06)",border:"1px solid var(--border)",color:"var(--text-muted)",fontSize:12,fontWeight:500,cursor:"pointer",fontFamily:"var(--font)",transition:"all .15s"}}
+          onMouseEnter={e=>e.currentTarget.style.background="rgba(90,70,50,.1)"}
+          onMouseLeave={e=>e.currentTarget.style.background="rgba(90,70,50,.06)"}
+        >🔑 Alterar senha</button>
       </div>
     </div>
   );
@@ -960,6 +966,7 @@ function Attribution({rules,dispatch}){
 // ─── LOGIN ────────────────────────────────────────────────────────────────────
 
 function Login(){
+  const [screen,setScreen]=useState('login'); // 'login' | 'forgot' | 'sent'
   const [email,setEmail]=useState('');
   const [pass,setPass]=useState('');
   const [showPass,setShowPass]=useState(false);
@@ -972,47 +979,188 @@ function Login(){
     setLoading(true);setError('');
     const {error:err}=await supabase.auth.signInWithPassword({email:email.trim().toLowerCase(),password:pass});
     setLoading(false);
-    if(err){
-      setError('E-mail ou senha incorretos.');
-      setShaking(true);setTimeout(()=>setShaking(false),500);
-    }
+    if(err){setError('E-mail ou senha incorretos.');setShaking(true);setTimeout(()=>setShaking(false),500);}
   };
+
+  const sendReset=async()=>{
+    if(!email.trim()){setError('Digite seu e-mail para continuar.');return;}
+    setLoading(true);setError('');
+    const {error:err}=await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(),{
+      redirectTo:`${window.location.origin}/`,
+    });
+    setLoading(false);
+    if(err){setError('Erro ao enviar e-mail. Verifique o endereço.');}
+    else{setScreen('sent');}
+  };
+
+  const Logo=()=>(
+    <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:32}}>
+      <div style={{width:44,height:44,borderRadius:13,background:"linear-gradient(135deg,#5B4FE8 0%,#9B8FF5 100%)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,boxShadow:"0 4px 16px rgba(91,79,232,.35)"}}>◈</div>
+      <div>
+        <div style={{fontFamily:"var(--font-display)",fontSize:18,fontWeight:600,color:"var(--text-primary)"}}>Starbank</div>
+        <div style={{fontSize:11,fontWeight:700,color:"var(--accent)",letterSpacing:".09em",textTransform:"uppercase"}}>CRM Indicações</div>
+      </div>
+    </div>
+  );
 
   return(
     <div style={{minHeight:"100vh",background:"var(--bg-base)",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"var(--font)",padding:16}}>
       <style>{`@keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}}.shake{animation:shake .45s both;}`}</style>
       <div style={{position:"fixed",top:-100,right:-100,width:400,height:400,borderRadius:"50%",background:"rgba(91,79,232,0.07)",filter:"blur(80px)",pointerEvents:"none"}}/>
       <div style={{position:"fixed",bottom:-80,left:-80,width:320,height:320,borderRadius:"50%",background:"rgba(26,158,138,0.07)",filter:"blur(60px)",pointerEvents:"none"}}/>
-      <div className={shaking?"shake":""} style={{background:"var(--bg-elevated)",borderRadius:"var(--radius-xl)",border:"1px solid var(--border-mid)",boxShadow:"0 8px 48px rgba(60,40,20,0.14), 0 1px 0 rgba(255,255,255,0.8) inset",width:"100%",maxWidth:400,padding:"40px 36px",animation:"fadeUp .4s cubic-bezier(.4,0,.2,1) both"}}>
-        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:32}}>
-          <div style={{width:44,height:44,borderRadius:13,background:"linear-gradient(135deg,#5B4FE8 0%,#9B8FF5 100%)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,boxShadow:"0 4px 16px rgba(91,79,232,.35)"}}>◈</div>
+
+      {/* ── Login ── */}
+      {screen==='login'&&(
+        <div className={shaking?"shake":""} style={{background:"var(--bg-elevated)",borderRadius:"var(--radius-xl)",border:"1px solid var(--border-mid)",boxShadow:"0 8px 48px rgba(60,40,20,0.14), 0 1px 0 rgba(255,255,255,0.8) inset",width:"100%",maxWidth:400,padding:"40px 36px",animation:"fadeUp .4s cubic-bezier(.4,0,.2,1) both"}}>
+          <Logo/>
+          <div style={{marginBottom:24}}>
+            <div style={{fontSize:22,fontWeight:600,fontFamily:"var(--font-display)",color:"var(--text-primary)",letterSpacing:"-.02em",marginBottom:4}}>Bem-vindo de volta</div>
+            <div style={{fontSize:13,color:"var(--text-muted)"}}>Acesso restrito à equipe Starbank</div>
+          </div>
+          <div style={{marginBottom:12}}>
+            <label style={{display:"block",fontSize:10,fontWeight:700,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:".08em",marginBottom:6}}>E-mail</label>
+            <input className="inp" type="email" value={email} onChange={e=>{setEmail(e.target.value);setError('');}} onKeyDown={e=>e.key==="Enter"&&attempt()} placeholder="seu@email.com" autoComplete="email"/>
+          </div>
+          <div style={{marginBottom:6}}>
+            <label style={{display:"block",fontSize:10,fontWeight:700,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:".08em",marginBottom:6}}>Senha</label>
+            <div style={{position:"relative"}}>
+              <input className="inp" type={showPass?"text":"password"} value={pass} onChange={e=>{setPass(e.target.value);setError('');}} onKeyDown={e=>e.key==="Enter"&&attempt()} placeholder="••••••••" autoComplete="current-password" style={{paddingRight:44}}/>
+              <button onClick={()=>setShowPass(v=>!v)} style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",fontSize:15,color:"var(--text-muted)",padding:4,lineHeight:1}}>{showPass?"🙈":"👁"}</button>
+            </div>
+          </div>
+          {/* Forgot password link */}
+          <div style={{textAlign:"right",marginBottom:error?10:20}}>
+            <button onClick={()=>{setScreen('forgot');setError('');}} style={{background:"none",border:"none",cursor:"pointer",fontSize:12,color:"var(--accent)",fontFamily:"var(--font)",fontWeight:500}}>
+              Esqueci minha senha
+            </button>
+          </div>
+          {error&&<div style={{display:"flex",alignItems:"center",gap:8,padding:"9px 12px",borderRadius:8,marginBottom:16,background:"var(--danger-dim)",border:"1px solid rgba(196,66,58,.2)",fontSize:12,fontWeight:500,color:"var(--danger)"}}><span>⚠</span>{error}</div>}
+          <button className="btn btn-primary" style={{width:"100%",justifyContent:"center",padding:"11px 0",fontSize:14}} onClick={attempt} disabled={loading}>
+            {loading?"Entrando…":"Entrar no sistema"}
+          </button>
+          <div style={{marginTop:20,padding:"12px 14px",background:"rgba(90,70,50,.05)",borderRadius:10,border:"1px solid var(--border)"}}>
+            <div style={{fontSize:11,color:"var(--text-muted)",lineHeight:1.7}}>🔒 Acesso por convite. Não tem conta? Fale com um administrador.</div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Esqueci minha senha ── */}
+      {screen==='forgot'&&(
+        <div style={{background:"var(--bg-elevated)",borderRadius:"var(--radius-xl)",border:"1px solid var(--border-mid)",boxShadow:"0 8px 48px rgba(60,40,20,0.14), 0 1px 0 rgba(255,255,255,0.8) inset",width:"100%",maxWidth:400,padding:"40px 36px",animation:"fadeUp .4s cubic-bezier(.4,0,.2,1) both"}}>
+          <Logo/>
+          <div style={{marginBottom:24}}>
+            <div style={{fontSize:22,fontWeight:600,fontFamily:"var(--font-display)",color:"var(--text-primary)",letterSpacing:"-.02em",marginBottom:4}}>Redefinir senha</div>
+            <div style={{fontSize:13,color:"var(--text-muted)"}}>Digite seu e-mail e enviaremos um link para redefinir sua senha.</div>
+          </div>
+          <div style={{marginBottom:error?10:24}}>
+            <label style={{display:"block",fontSize:10,fontWeight:700,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:".08em",marginBottom:6}}>E-mail</label>
+            <input className="inp" type="email" value={email} onChange={e=>{setEmail(e.target.value);setError('');}} onKeyDown={e=>e.key==="Enter"&&sendReset()} placeholder="seu@email.com" autoComplete="email"/>
+          </div>
+          {error&&<div style={{display:"flex",alignItems:"center",gap:8,padding:"9px 12px",borderRadius:8,marginBottom:16,background:"var(--danger-dim)",border:"1px solid rgba(196,66,58,.2)",fontSize:12,fontWeight:500,color:"var(--danger)"}}><span>⚠</span>{error}</div>}
+          <button className="btn btn-primary" style={{width:"100%",justifyContent:"center",padding:"11px 0",fontSize:14,marginBottom:12}} onClick={sendReset} disabled={loading}>
+            {loading?"Enviando…":"Enviar link de redefinição"}
+          </button>
+          <button onClick={()=>{setScreen('login');setError('');}} style={{width:"100%",padding:"9px 0",background:"none",border:"none",cursor:"pointer",fontSize:13,color:"var(--text-muted)",fontFamily:"var(--font)"}}>
+            ← Voltar ao login
+          </button>
+        </div>
+      )}
+
+      {/* ── E-mail enviado ── */}
+      {screen==='sent'&&(
+        <div style={{background:"var(--bg-elevated)",borderRadius:"var(--radius-xl)",border:"1px solid var(--border-mid)",boxShadow:"0 8px 48px rgba(60,40,20,0.14), 0 1px 0 rgba(255,255,255,0.8) inset",width:"100%",maxWidth:400,padding:"40px 36px",animation:"fadeUp .4s cubic-bezier(.4,0,.2,1) both",textAlign:"center"}}>
+          <Logo/>
+          <div style={{fontSize:48,marginBottom:16}}>📬</div>
+          <div style={{fontFamily:"var(--font-display)",fontSize:20,fontWeight:600,color:"var(--text-primary)",marginBottom:10}}>E-mail enviado!</div>
+          <div style={{fontSize:13,color:"var(--text-muted)",lineHeight:1.7,marginBottom:24}}>
+            Enviamos um link de redefinição para<br/>
+            <strong style={{color:"var(--text-primary)"}}>{email}</strong><br/>
+            Verifique sua caixa de entrada e spam.
+          </div>
+          <button onClick={()=>{setScreen('login');setError('');}} style={{width:"100%",padding:"9px 0",background:"none",border:"none",cursor:"pointer",fontSize:13,color:"var(--accent)",fontFamily:"var(--font)",fontWeight:600}}>
+            ← Voltar ao login
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── ALTERAR SENHA (usuário logado) ──────────────────────────────────────────
+
+function AlterarSenha({onClose}){
+  const [atual,setAtual]=useState('');
+  const [nova,setNova]=useState('');
+  const [confirmar,setConfirmar]=useState('');
+  const [showAtual,setShowAtual]=useState(false);
+  const [showNova,setShowNova]=useState(false);
+  const [loading,setLoading]=useState(false);
+  const [error,setError]=useState('');
+  const [done,setDone]=useState(false);
+
+  const submit=async()=>{
+    if(!atual){setError('Digite sua senha atual.');return;}
+    if(!nova||nova.length<6){setError('A nova senha deve ter pelo menos 6 caracteres.');return;}
+    if(nova===atual){setError('A nova senha deve ser diferente da atual.');return;}
+    if(nova!==confirmar){setError('As senhas não coincidem.');return;}
+    setLoading(true);setError('');
+    // Re-authenticate first
+    const {data:sessionData}=await supabase.auth.getSession();
+    const userEmail=sessionData?.session?.user?.email;
+    const {error:authErr}=await supabase.auth.signInWithPassword({email:userEmail,password:atual});
+    if(authErr){setLoading(false);setError('Senha atual incorreta.');return;}
+    // Update password
+    const {error:updErr}=await supabase.auth.updateUser({password:nova});
+    setLoading(false);
+    if(updErr){setError('Erro ao alterar senha. Tente novamente.');}
+    else{setDone(true);}
+  };
+
+  return(
+    <div className="mbk" onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
+      <div className="mbox" style={{maxWidth:420}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:22}}>
           <div>
-            <div style={{fontFamily:"var(--font-display)",fontSize:18,fontWeight:600,color:"var(--text-primary)"}}>Starbank</div>
-            <div style={{fontSize:11,fontWeight:700,color:"var(--accent)",letterSpacing:".09em",textTransform:"uppercase"}}>CRM Indicações</div>
+            <div style={{fontFamily:"var(--font-display)",fontSize:20,fontWeight:600,color:"var(--text-primary)"}}>Alterar senha</div>
+            <div style={{fontSize:12,color:"var(--text-muted)",marginTop:2}}>Crie uma nova senha de acesso</div>
           </div>
+          <button onClick={onClose} style={{background:"rgba(90,70,50,.08)",border:"1px solid var(--border-mid)",borderRadius:9,color:"var(--text-secondary)",cursor:"pointer",width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>×</button>
         </div>
-        <div style={{marginBottom:24}}>
-          <div style={{fontSize:22,fontWeight:600,fontFamily:"var(--font-display)",color:"var(--text-primary)",letterSpacing:"-.02em",marginBottom:4}}>Bem-vindo de volta</div>
-          <div style={{fontSize:13,color:"var(--text-muted)"}}>Acesso restrito à equipe Starbank</div>
-        </div>
-        <div style={{marginBottom:12}}>
-          <label style={{display:"block",fontSize:10,fontWeight:700,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:".08em",marginBottom:6}}>E-mail</label>
-          <input className="inp" type="email" value={email} onChange={e=>{setEmail(e.target.value);setError('');}} onKeyDown={e=>e.key==="Enter"&&attempt()} placeholder="seu@email.com" autoComplete="email"/>
-        </div>
-        <div style={{marginBottom:error?10:24}}>
-          <label style={{display:"block",fontSize:10,fontWeight:700,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:".08em",marginBottom:6}}>Senha</label>
-          <div style={{position:"relative"}}>
-            <input className="inp" type={showPass?"text":"password"} value={pass} onChange={e=>{setPass(e.target.value);setError('');}} onKeyDown={e=>e.key==="Enter"&&attempt()} placeholder="••••••••" autoComplete="current-password" style={{paddingRight:44}}/>
-            <button onClick={()=>setShowPass(v=>!v)} style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",fontSize:15,color:"var(--text-muted)",padding:4,lineHeight:1}}>{showPass?"🙈":"👁"}</button>
+
+        {done?(
+          <div style={{textAlign:"center",padding:"16px 0 8px"}}>
+            <div style={{fontSize:40,marginBottom:12}}>✅</div>
+            <div style={{fontFamily:"var(--font-display)",fontSize:18,fontWeight:600,color:"var(--text-primary)",marginBottom:8}}>Senha alterada!</div>
+            <div style={{fontSize:13,color:"var(--text-muted)",marginBottom:20}}>Sua senha foi atualizada com sucesso.</div>
+            <button className="btn btn-primary" style={{justifyContent:"center"}} onClick={onClose}>Fechar</button>
           </div>
-        </div>
-        {error&&<div style={{display:"flex",alignItems:"center",gap:8,padding:"9px 12px",borderRadius:8,marginBottom:16,background:"var(--danger-dim)",border:"1px solid rgba(196,66,58,.2)",fontSize:12,fontWeight:500,color:"var(--danger)"}}><span>⚠</span>{error}</div>}
-        <button className="btn btn-primary" style={{width:"100%",justifyContent:"center",padding:"11px 0",fontSize:14}} onClick={attempt} disabled={loading}>
-          {loading?"Entrando…":"Entrar no sistema"}
-        </button>
-        <div style={{marginTop:20,padding:"12px 14px",background:"rgba(90,70,50,.05)",borderRadius:10,border:"1px solid var(--border)"}}>
-          <div style={{fontSize:11,color:"var(--text-muted)",lineHeight:1.7}}>🔒 Acesso por convite.<br/>Não tem conta? Fale com um administrador.</div>
-        </div>
+        ):(
+          <>
+            <div style={{marginBottom:12}}>
+              <label style={{display:"block",fontSize:10,fontWeight:700,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:".07em",marginBottom:6}}>Senha atual</label>
+              <div style={{position:"relative"}}>
+                <input className="inp" type={showAtual?"text":"password"} value={atual} onChange={e=>{setAtual(e.target.value);setError('');}} placeholder="Sua senha atual" style={{paddingRight:44}}/>
+                <button onClick={()=>setShowAtual(v=>!v)} style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",fontSize:14,color:"var(--text-muted)",padding:4}}>{showAtual?"🙈":"👁"}</button>
+              </div>
+            </div>
+            <div style={{marginBottom:12}}>
+              <label style={{display:"block",fontSize:10,fontWeight:700,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:".07em",marginBottom:6}}>Nova senha</label>
+              <div style={{position:"relative"}}>
+                <input className="inp" type={showNova?"text":"password"} value={nova} onChange={e=>{setNova(e.target.value);setError('');}} placeholder="Mínimo 6 caracteres" style={{paddingRight:44}}/>
+                <button onClick={()=>setShowNova(v=>!v)} style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",fontSize:14,color:"var(--text-muted)",padding:4}}>{showNova?"🙈":"👁"}</button>
+              </div>
+            </div>
+            <div style={{marginBottom:error?10:20}}>
+              <label style={{display:"block",fontSize:10,fontWeight:700,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:".07em",marginBottom:6}}>Confirmar nova senha</label>
+              <input className="inp" type={showNova?"text":"password"} value={confirmar} onChange={e=>{setConfirmar(e.target.value);setError('');}} onKeyDown={e=>e.key==="Enter"&&submit()} placeholder="Repita a nova senha"/>
+            </div>
+            {error&&<div style={{display:"flex",alignItems:"center",gap:8,padding:"9px 12px",borderRadius:8,marginBottom:14,background:"var(--danger-dim)",border:"1px solid rgba(196,66,58,.2)",fontSize:12,color:"var(--danger)"}}><span>⚠</span>{error}</div>}
+            <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+              <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
+              <button className="btn btn-primary" onClick={submit} disabled={loading}>{loading?"Salvando…":"Alterar senha"}</button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -1441,7 +1589,7 @@ export default function App(){
   const [s,dispatch]=useReducer(R,INIT);
   const {leads,view,sel,newOpen,filters,rules,dragId}=s;
   const selected=leads.find(l=>l.id===sel);
-  const [leadsReady,setLeadsReady]=useState(false);
+  const [showAlterarSenha,setShowAlterarSenha]=useState(false);
 
   // ── Load leads from Supabase on login ──
   useEffect(()=>{
@@ -1596,7 +1744,7 @@ export default function App(){
     <>
       <GlobalStyles/>
       <div style={{display:"flex",minHeight:"100vh",background:"var(--bg-base)",fontFamily:"var(--font)"}}>
-        <Sidebar view={view} dispatch={auditedDispatch} onLogout={signOut} profile={profile}/>
+        <Sidebar view={view} dispatch={auditedDispatch} onLogout={signOut} onAlterarSenha={()=>setShowAlterarSenha(true)} profile={profile}/>
         <main style={{flex:1,minWidth:0,overflowY:"auto",paddingRight:selected?490:0,transition:"padding-right .3s cubic-bezier(.4,0,.2,1)"}}>
           {view==="dashboard"   &&<Dashboard leads={leads}/>}
           {view==="kanban"      &&<Kanban leads={leads} dispatch={auditedDispatch} dragId={dragId}/>}
@@ -1607,6 +1755,7 @@ export default function App(){
         </main>
         {selected&&<Detail key={selected.id} lead={selected} dispatch={auditedDispatch}/>}
         {newOpen&&<NewLead dispatch={auditedDispatch}/>}
+        {showAlterarSenha&&<AlterarSenha onClose={()=>setShowAlterarSenha(false)}/>}
       </div>
     </>
   );
