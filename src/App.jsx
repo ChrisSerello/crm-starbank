@@ -19,6 +19,7 @@ import { LeadsTable } from "./views/LeadsTable";
 import { Attribution } from "./views/Attribution";
 import { Auditoria } from "./views/Auditoria";
 import { GestaoEquipe } from "./views/GestaoEquipe";
+import { OperadorApp } from "./views/OperadorApp";
 
 // ─── ROOT ─────────────────────────────────────────────────────────────────────
 
@@ -141,6 +142,21 @@ export default function App(){
       <div style={{minHeight:"100vh",background:"var(--bg-base)",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"var(--font)"}}>
         <div style={{fontSize:13,color:"var(--text-muted)"}}>Verificando perfil…</div>
       </div>
+    </>
+  );
+
+  // ── Operador — app separado com visão filtrada ──
+  if(profile.role==='operador') return(
+    <>
+      <GlobalStyles/>
+      <OperadorApp
+        leads={leads}
+        profile={profile}
+        dispatch={auditedDispatch}
+        onLogout={signOut}
+        onAlterarSenha={()=>setShowAlterarSenha(true)}
+      />
+      {showAlterarSenha && <AlterarSenha onClose={()=>setShowAlterarSenha(false)}/>}
     </>
   );
 
