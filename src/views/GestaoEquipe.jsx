@@ -73,7 +73,7 @@ export function GestaoEquipe(){
   const roleBg={admin:'var(--amber-dim)',pos_venda:'var(--accent-dim)',operador:'var(--teal-dim)'};
 
   return(
-    <div style={{padding:"28px 32px",maxWidth:860}}>
+    <div style={{padding:"28px 32px"}}>
       <div className="fu" style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:24}}>
         <div>
           <div className="section-title">Gestão de Equipe</div>
@@ -98,9 +98,9 @@ export function GestaoEquipe(){
         <div style={{textAlign:"center",padding:"40px 0",fontSize:13,color:"var(--text-muted)"}}>Carregando equipe…</div>
       ):(
         <>
-          {/* Admins */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:20,marginBottom:24}}>
           {['admin','pos_venda','operador'].map(roleGroup=>(
-            <div key={roleGroup} style={{marginBottom:24}}>
+            <div key={roleGroup}>
               <div className="eyebrow" style={{marginBottom:12}}>
                 {roleGroup==='admin'?'Administradores':roleGroup==='pos_venda'?'Time Pós-venda':'Operadores'}
                 <span style={{marginLeft:8,fontWeight:400,color:"var(--text-faint)"}}>
@@ -115,24 +115,25 @@ export function GestaoEquipe(){
                     <div key={p.email} style={{
                       display:"flex",alignItems:"center",gap:12,padding:"13px 18px",
                       borderBottom:i<arr.length-1?"1px solid var(--border)":"none",
-                      transition:"background .15s",
                     }}>
                       <Avatar name={p.nome} size={38} color={roleColor[p.role]}/>
                       <div style={{flex:1,minWidth:0}}>
                         <div style={{fontSize:13,fontWeight:600,color:"var(--text-primary)"}}>{p.nome}</div>
-                        <div style={{fontSize:12,color:"var(--text-muted)",marginTop:1}}>{p.email}</div>
+                        <div style={{fontSize:11,color:"var(--text-muted)",marginTop:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.email}</div>
                       </div>
-                      <span className="tag" style={{background:roleBg[p.role],color:roleColor[p.role],fontSize:11}}>
-                        {roleLabel[p.role]}
-                      </span>
-                      <div style={{display:"flex",gap:6,marginLeft:8}}>
-                        <button className="btn btn-ghost" style={{padding:"5px 11px",fontSize:12}}
-                          onClick={()=>openEdit(p)}>Editar</button>
-                        <button onClick={()=>setConfirmDelete(p)} style={{
-                          padding:"5px 11px",borderRadius:7,fontSize:12,fontWeight:600,cursor:"pointer",
-                          background:"var(--danger-dim)",color:"var(--danger)",
-                          border:"1px solid rgba(196,66,58,.2)",transition:"all .15s",
-                        }}>Remover</button>
+                      <div style={{display:"flex",flexDirection:"column",gap:4,alignItems:"flex-end",flexShrink:0}}>
+                        <span className="tag" style={{background:roleBg[p.role],color:roleColor[p.role],fontSize:11}}>
+                          {roleLabel[p.role]}
+                        </span>
+                        <div style={{display:"flex",gap:4}}>
+                          <button className="btn btn-ghost" style={{padding:"4px 9px",fontSize:11}}
+                            onClick={()=>openEdit(p)}>Editar</button>
+                          <button onClick={()=>setConfirmDelete(p)} style={{
+                            padding:"4px 9px",borderRadius:7,fontSize:11,fontWeight:600,cursor:"pointer",
+                            background:"var(--danger-dim)",color:"var(--danger)",
+                            border:"1px solid rgba(196,66,58,.2)",
+                          }}>Remover</button>
+                        </div>
                       </div>
                     </div>
                   ))
@@ -140,6 +141,7 @@ export function GestaoEquipe(){
               </div>
             </div>
           ))}
+          </div>
 
           {/* Info box */}
           <div style={{padding:"12px 16px",background:"rgba(90,70,50,.05)",borderRadius:10,border:"1px solid var(--border)",fontSize:12,color:"var(--text-muted)",lineHeight:1.7}}>
