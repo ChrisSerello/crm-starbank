@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { supabase } from '../supabase';
 import { STAGES, DOC_STATUS, INDICATION_TYPES } from '../constants';
 import { sinceD, fmtD, stg, gid, TODAY } from '../utils';
 import { Avatar, StageTag, AlertDot } from '../components/shared';
@@ -284,13 +285,66 @@ function OperadorDetail({ lead, profile, dispatch, onClose }) {
   const [note, setNote] = useState('');
   const [es, setEs] = useState(lead.statusComercial);
   const [ed, setEd] = useState(lead.documentoStatus);
+  const [docs, setDocs] = useState(lead.documentos||[]);
+  const [uploading, setUploading] = useState(false);
+  const [uploadMsg, setUploadMsg] = useState(null);
   const days = sinceD(lead.ultimoContato);
 
   const save = () => {
-    const updated = { ...lead, documentoStatus: ed };
+    const updated = { ...lead, documentoStatus: ed, documentos: docs };
     if (es !== lead.statusComercial) dispatch({ type:'MOVE', lid:lead.id, st:es });
     dispatch({ type:'UPD', lead: updated });
     onClose();
+  };
+
+  const handleUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) { setUploadMsg({type:'error',text:'Arquivo muito grande. Máximo 10MB.'}); return; }
+
+    setUploading(true);
+    setUploadMsg(null);
+    const path = `leads/${lead.id}/${Date.now()}_${file.name}`;
+
+    const { error } = await supabase.storage.from('documentos').upload(path, file);
+    if (error) {
+      setUploadMsg({type:'error', text:'Erro ao enviar arquivo. Tente novamente.'});
+      setUploading(false);
+      return;
+    }
+
+    const { data: { publicUrl } } = supabase.storage.from('documentos').getPublicUrl(path);
+    const novoDoc = { nome: file.name, path, url: publicUrl, data: TODAY, enviadoPor: profile?.nome||'Operador' };
+    const novosDoc = [...docs, novoDoc];
+    setDocs(novosDoc);
+
+    // Salva imediatamente no lead
+    dispatch({ type:'UPD', lead: { ...lead, documentos: novosDoc, documentoStatus: ed } });
+    setUploadMsg({type:'success', text:`"${file.name}" enviado com sucesso!`});
+    setUploading(false);
+    e.target.value = '';
+  };
+
+  const handleDelete = async (doc) => {
+    if (!confirm(`Remover "${doc.nome}"?`)) return;
+    await supabase.storage.from('documentos').remove([doc.path]);
+    const novosDoc = docs.filter(d => d.path !== doc.path);
+    setDocs(novosDoc);
+    dispatch({ type:'UPD', lead: { ...lead, documentos: novosDoc } });
+  };
+
+  const getSignedUrl = async (path) => {
+    const { data } = await supabase.storage.from('documentos').createSignedUrl(path, 3600);
+    if (data?.signedUrl) window.open(data.signedUrl, '_blank');
+  };
+
+  const fileIcon = (nome) => {
+    const ext = nome.split('.').pop().toLowerCase();
+    if (['jpg','jpeg','png','gif','webp'].includes(ext)) return '🖼️';
+    if (ext === 'pdf') return '📄';
+    if (['doc','docx'].includes(ext)) return '📝';
+    if (['xls','xlsx'].includes(ext)) return '📊';
+    return '📎';
   };
 
   return (
@@ -310,7 +364,7 @@ function OperadorDetail({ lead, profile, dispatch, onClose }) {
       </div>
 
       <div style={{display:"flex",borderBottom:"1px solid var(--border)",background:"var(--bg-card)"}}>
-        {[["info","Informações"],["activity","Atividades"]].map(([id,lb])=>(
+        {[["info","Informações"],["docs","Documentos"],["activity","Atividades"]].map(([id,lb])=>(
           <button key={id} className={`ptab ${tab===id?"on":""}`} onClick={()=>setTab(id)}>{lb}</button>
         ))}
       </div>
@@ -346,6 +400,83 @@ function OperadorDetail({ lead, profile, dispatch, onClose }) {
               </select>
               <button className="btn btn-primary" style={{width:"100%"}} onClick={save}>Salvar alterações</button>
             </div>
+          </div>
+        )}
+
+        {tab==="docs" && (
+          <div>
+            {/* Upload area */}
+            <div style={{marginBottom:16}}>
+              <div className="eyebrow" style={{marginBottom:10}}>Enviar documento</div>
+              <label style={{
+                display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",
+                gap:8,padding:"24px 16px",borderRadius:12,cursor:"pointer",
+                border:"2px dashed var(--border-mid)",background:"rgba(90,70,50,.03)",
+                transition:"all .15s",
+              }}
+                onMouseEnter={e=>{e.currentTarget.style.background="rgba(91,79,232,.05)";e.currentTarget.style.borderColor="var(--accent)";}}
+                onMouseLeave={e=>{e.currentTarget.style.background="rgba(90,70,50,.03)";e.currentTarget.style.borderColor="var(--border-mid)";}}
+              >
+                <input type="file" style={{display:"none"}} onChange={handleUpload} disabled={uploading}
+                  accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.webp"/>
+                <div style={{fontSize:28}}>{uploading?"⏳":"📤"}</div>
+                <div style={{fontSize:13,fontWeight:600,color:"var(--text-primary)"}}>
+                  {uploading?"Enviando…":"Clique para enviar arquivo"}
+                </div>
+                <div style={{fontSize:11,color:"var(--text-muted)"}}>PDF, Word, Excel, Imagens · Máx. 10MB</div>
+              </label>
+
+              {uploadMsg&&(
+                <div style={{
+                  marginTop:10,padding:"9px 12px",borderRadius:8,fontSize:12,fontWeight:500,
+                  background:uploadMsg.type==='success'?"var(--success-dim)":"var(--danger-dim)",
+                  color:uploadMsg.type==='success'?"var(--success)":"var(--danger)",
+                  border:`1px solid ${uploadMsg.type==='success'?"rgba(30,143,94,.2)":"rgba(196,66,58,.2)"}`,
+                }}>
+                  {uploadMsg.type==='success'?'✓':'⚠'} {uploadMsg.text}
+                </div>
+              )}
+            </div>
+
+            {/* Documentos enviados */}
+            <div className="eyebrow" style={{marginBottom:10}}>
+              Documentos ({docs.length})
+            </div>
+            {docs.length===0?(
+              <div style={{textAlign:"center",padding:"32px 0",fontSize:13,color:"var(--text-muted)"}}>
+                <div style={{fontSize:28,marginBottom:8}}>📁</div>
+                Nenhum documento enviado ainda.
+              </div>
+            ):(
+              <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                {docs.map((doc,i)=>(
+                  <div key={i} style={{
+                    display:"flex",alignItems:"center",gap:10,padding:"11px 14px",
+                    background:"var(--bg-card)",border:"1px solid var(--border)",
+                    borderRadius:10,transition:"all .15s",
+                  }}>
+                    <div style={{fontSize:22,flexShrink:0}}>{fileIcon(doc.nome)}</div>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:13,fontWeight:600,color:"var(--text-primary)",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{doc.nome}</div>
+                      <div style={{fontSize:11,color:"var(--text-muted)",marginTop:1}}>
+                        {fmtD(doc.data)} · {doc.enviadoPor}
+                      </div>
+                    </div>
+                    <div style={{display:"flex",gap:6,flexShrink:0}}>
+                      <button className="btn btn-ghost" style={{padding:"5px 10px",fontSize:11}}
+                        onClick={()=>getSignedUrl(doc.path)}>
+                        ↓ Abrir
+                      </button>
+                      <button onClick={()=>handleDelete(doc)} style={{
+                        padding:"5px 10px",borderRadius:7,fontSize:11,fontWeight:600,cursor:"pointer",
+                        background:"var(--danger-dim)",color:"var(--danger)",
+                        border:"1px solid rgba(196,66,58,.2)",
+                      }}>✕</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
