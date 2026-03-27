@@ -4,6 +4,13 @@ import { TODAY } from './utils';
 
 export const LS_KEY = "crm_indicacoes_v1";
 
+// INIT_RULES must be declared BEFORE loadState() uses it
+export const INIT_RULES = [
+  {id:"r1",name:"Pós-venda → Time pós-venda",condition:"captacao_pos_venda",action:"team:pos_venda",showIndicator:true,active:true},
+  {id:"r2",name:"Indicação c/ nome → Mesa (Round-robin)",condition:"indicacao_com_nome",action:"round_robin:mesa",showIndicator:true,active:true},
+  {id:"r3",name:"Indicação s/ nome → Mesa (Round-robin)",condition:"indicacao_sem_nome",action:"round_robin:mesa",showIndicator:false,active:true},
+];
+
 function loadState() {
   try {
     const saved = localStorage.getItem(LS_KEY);
@@ -14,12 +21,6 @@ function loadState() {
   } catch(e) {}
   return { leads: LEADS0, rules: INIT_RULES };
 }
-
-export const INIT_RULES = [
-  {id:"r1",name:"Pós-venda → Time pós-venda",condition:"captacao_pos_venda",action:"team:pos_venda",showIndicator:true,active:true},
-  {id:"r2",name:"Indicação c/ nome → Mesa (Round-robin)",condition:"indicacao_com_nome",action:"round_robin:mesa",showIndicator:true,active:true},
-  {id:"r3",name:"Indicação s/ nome → Mesa (Round-robin)",condition:"indicacao_sem_nome",action:"round_robin:mesa",showIndicator:false,active:true},
-];
 
 const { leads: savedLeads, rules: savedRules } = loadState();
 
