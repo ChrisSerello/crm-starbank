@@ -2,12 +2,21 @@ import { useState } from 'react';
 import { PRODUCTS, OPERATORS, INDICATION_TYPES } from '../constants';
 import { TODAY } from '../utils';
 
+// Field deve ficar FORA do NewLead para não ser recriado a cada keystroke(letra)
+function Field({label,children}){
+  return(
+    <div>
+      <label style={{display:"block",fontSize:10,fontWeight:700,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:".07em",marginBottom:6}}>{label}</label>
+      {children}
+    </div>
+  );
+}
+
 export function NewLead({dispatch}){
   const blank={nomeIndicado:"",cpfIndicado:"",telefone:"",nomeQuemIndicou:"",orgaoPrefeitura:"",statusIndicacao:"indicacao_com_nome",produtosInteresse:[],responsavelId:"beatriz",perfilCliente:"",secretariaAtuacao:"",observacoes:"",documentoStatus:"Não solicitado",statusComercial:"distribuido",equipe:"",resultado:"Em andamento",dataEntrada:TODAY,dataAtribuicao:TODAY,ultimoContato:TODAY,operadorRepassado:""};
   const [form,setForm]=useState(blank);
   const set=(k,v)=>setForm(f=>({...f,[k]:v}));
   const tp=p=>set("produtosInteresse",form.produtosInteresse.includes(p)?form.produtosInteresse.filter(x=>x!==p):[...form.produtosInteresse,p]);
-  const Field=({label,children})=>(<div><label style={{display:"block",fontSize:10,fontWeight:700,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:".07em",marginBottom:6}}>{label}</label>{children}</div>);
   return(
     <div className="mbk" onClick={e=>{if(e.target===e.currentTarget)dispatch({type:"TNEW"})}}>
       <div className="mbox">
