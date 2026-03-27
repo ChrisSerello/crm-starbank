@@ -68,9 +68,9 @@ export function GestaoEquipe(){
     load();
   };
 
-  const roleLabel={admin:'Admin',pos_venda:'Pós-venda'};
-  const roleColor={admin:'var(--amber)',pos_venda:'var(--accent)'};
-  const roleBg={admin:'var(--amber-dim)',pos_venda:'var(--accent-dim)'};
+  const roleLabel={admin:'Admin',pos_venda:'Pós-venda',operador:'Operador'};
+  const roleColor={admin:'var(--amber)',pos_venda:'var(--accent)',operador:'var(--teal)'};
+  const roleBg={admin:'var(--amber-dim)',pos_venda:'var(--accent-dim)',operador:'var(--teal-dim)'};
 
   return(
     <div style={{padding:"28px 32px",maxWidth:860}}>
@@ -99,10 +99,10 @@ export function GestaoEquipe(){
       ):(
         <>
           {/* Admins */}
-          {['admin','pos_venda'].map(roleGroup=>(
+          {['admin','pos_venda','operador'].map(roleGroup=>(
             <div key={roleGroup} style={{marginBottom:24}}>
               <div className="eyebrow" style={{marginBottom:12}}>
-                {roleGroup==='admin'?'Administradores':'Time Pós-venda'}
+                {roleGroup==='admin'?'Administradores':roleGroup==='pos_venda'?'Time Pós-venda':'Operadores'}
                 <span style={{marginLeft:8,fontWeight:400,color:"var(--text-faint)"}}>
                   ({pessoas.filter(p=>p.role===roleGroup).length})
                 </span>
@@ -181,7 +181,7 @@ export function GestaoEquipe(){
             <div style={{marginBottom:22}}>
               <label style={{display:"block",fontSize:10,fontWeight:700,color:"var(--text-muted)",textTransform:"uppercase",letterSpacing:".07em",marginBottom:6}}>Papel no sistema</label>
               <div style={{display:"flex",gap:8}}>
-                {[{v:'pos_venda',l:'Pós-venda'},{v:'admin',l:'Administrador'}].map(opt=>{
+                {[{v:'pos_venda',l:'Pós-venda'},{v:'admin',l:'Administrador'},{v:'operador',l:'Operador'}].map(opt=>{
                   const sel=form.role===opt.v;
                   return(
                     <button key={opt.v} onClick={()=>setForm(f=>({...f,role:opt.v}))} style={{
