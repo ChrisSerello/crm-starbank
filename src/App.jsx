@@ -1590,8 +1590,7 @@ export default function App(){
   const {leads,view,sel,newOpen,filters,rules,dragId}=s;
   const selected=leads.find(l=>l.id===sel);
   const [showAlterarSenha,setShowAlterarSenha]=useState(false);
-
-  // ── Load leads from Supabase on login ──
+  const [leadsReady,setLeadsReady]=useState(false);
   useEffect(()=>{
     if(!session) return;
     supabase.from('leads').select('data').then(async({data,error})=>{
