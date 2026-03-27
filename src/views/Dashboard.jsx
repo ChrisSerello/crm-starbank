@@ -25,11 +25,11 @@ export function Dashboard({leads}){
   const taxa=total>0?Math.round(ganhos/total*100):0;
   const byStage=STAGES.map(s=>({...s,count:leads.filter(l=>l.statusComercial===s.id).length}));
   const mxSt=Math.max(...byStage.map(s=>s.count),1);
-  const byProd=PRODUCTS.map(p=>({name:p.length>19?p.slice(0,17)+"…":p,count:leads.filter(l=>l.produtosInteresse.includes(p)).length})).filter(p=>p.count>0).sort((a,b)=>b.count-a.count);
+  const byProd=PRODUCTS.map(p=>({name:p.length>19?p.slice(0,17)+"…":p,count:leads.filter(l=>(l.produtosInteresse||[]).includes(p)).length})).filter(p=>p.count>0).sort((a,b)=>b.count-a.count);
   const mxPr=Math.max(...byProd.map(p=>p.count),1);
   const byOp=OPERATORS.map(o=>({...o,count:leads.filter(l=>l.responsavelId===o.id).length}));
   const mxOp=Math.max(...byOp.map(o=>o.count),1);
-  const recent=leads.flatMap(l=>l.activities.map(a=>({...a,leadName:l.nomeIndicado}))).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,5);
+  const recent=leads.flatMap(l=>(l.activities||[]).map(a=>({...a,leadName:l.nomeIndicado}))).sort((a,b)=>(b.date||'').localeCompare(a.date||'')).slice(0,5);
   const aIcon={stage_change:"⇄",contact:"☎",doc:"📄",note:"✎"};
   const aColor={stage_change:"var(--accent)",contact:"var(--success)",doc:"var(--amber)",note:"var(--text-muted)"};
   const aBg={stage_change:"var(--accent-dim)",contact:"var(--success-dim)",doc:"var(--amber-dim)",note:"rgba(90,70,50,.06)"};
