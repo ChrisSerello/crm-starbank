@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { supabase } from '../supabase';
 import { STAGES, DOC_STATUS, INDICATION_TYPES } from '../constants';
 import { sinceD, fmtD, stg, gid, TODAY } from '../utils';
@@ -599,13 +599,24 @@ function OperadorDetail({ lead, profile, dispatch, onClose }) {
 
 // ─── APP DO OPERADOR (ENTRY POINT) ────────────────────────────────────────────
 
-export function OperadorApp({ leads, profile, dispatch, onLogout, onAlterarSenha }) {
+export function OperadorApp({ leads, profile, dispatch, onLogout, onAlterarSenha, session }) {
   const [view, setView] = useState('dashboard');
   const [sel, setSel] = useState(null);
   const selected = leads.find(l => l.id === sel);
 
+  const auditLog = useCallback((action, leadId, leadNome, details) => {
+    if (!session || !profile) return;
+    supabase.from('audit_log').insert({
+      user_id: session.user.id,
+      user_nome: profile.nome,
+      action, lead_id: leadId||null, lead_nome: leadNome||'—', detalhes: details||'',
+    });
+  }, [session, profile]);
+
   const handleMove = (lid, st) => {
+    const lead = leads.find(l => l.id === lid);
     dispatch({ type:'MOVE', lid, st });
+    auditLog('Moveu lead no pipeline', lid, lead?.nomeIndicado, `Estágio → "${stg(st).label}"`);
   };
 
   return (

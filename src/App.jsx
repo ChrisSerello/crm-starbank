@@ -77,10 +77,10 @@ export default function App(){
     leadsRef.current=leads;
   },[leads,leadsReady,session]);
 
-  // ── Audited dispatch — logs pos_venda actions ──
+  // ── Audited dispatch — logs ALL user actions ──
   const auditedDispatch=useCallback((action)=>{
     dispatch(action);
-    if(profile?.role==='pos_venda'&&session){
+    if(session&&profile){
       const auditMap={
         MOVE:()=>({action:'Moveu lead no pipeline',leadId:action.lid,details:`Estágio → "${stg(action.st).label}"`}),
         NOTE:()=>({action:'Adicionou nota',leadId:action.lid,details:action.act?.text||''}),
@@ -155,6 +155,7 @@ export default function App(){
         dispatch={auditedDispatch}
         onLogout={signOut}
         onAlterarSenha={()=>setShowAlterarSenha(true)}
+        session={session}
       />
       {showAlterarSenha && <AlterarSenha onClose={()=>setShowAlterarSenha(false)}/>}
     </>
