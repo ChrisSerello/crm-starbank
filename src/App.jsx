@@ -4,7 +4,8 @@ import { GlobalStyles } from "./styles";
 import { useAuth } from "./hooks/useAuth";
 import { INIT, R } from "./store";
 import { LEADS0 } from "./leads_data";
-import { stg } from "./utils";
+import { stg, TODAY } from "./utils";
+import { OPERATORS } from "./constants";
 
 import { Sidebar } from "./components/Sidebar";
 import { Detail } from "./components/Detail";
@@ -77,15 +78,60 @@ export default function App(){
     leadsRef.current=leads;
   },[leads,leadsReady,session]);
 
-  // ── Audited dispatch — logs ALL user actions ──
   const auditedDispatch=useCallback((action)=>{
     dispatch(action);
     if(session&&profile){
       const auditMap={
-        MOVE:()=>({action:'Moveu lead no pipeline',leadId:action.lid,details:`Estágio → "${stg(action.st).label}"`}),
-        NOTE:()=>({action:'Adicionou nota',leadId:action.lid,details:action.act?.text||''}),
-        UPD: ()=>({action:'Editou informações',leadId:action.lead?.id,details:'Campos atualizados no lead'}),
-        ADD: ()=>({action:'Criou novo lead',leadId:null,details:`Nome: ${action.lead?.nomeIndicado||'—'}`}),
+        MOVE:()=>({
+          action:'Moveu lead no pipeline',
+          leadId:action.lid,
+          details:`Estágio → "${stg(action.st).label}"`,
+        }),
+        NOTE:()=>({
+          action:'Adicionou nota',
+          leadId:action.lid,
+          details:action.act?.text||'',
+        }),
+        UPD:()=>{
+          const leadAtual=leads.find(l=>l.id===action.lead?.id);
+          const detalhes=[];
+          if(leadAtual){
+            // Detecta troca de responsável
+            if(action.lead.responsavelId!==undefined&&action.lead.responsavelId!==leadAtual.responsavelId){
+              const antes=OPERATORS.find(o=>o.id===leadAtual.responsavelId)?.name||leadAtual.responsavelId||'Nenhum';
+              const depois=OPERATORS.find(o=>o.id===action.lead.responsavelId)?.name||action.lead.responsavelId||'Nenhum';
+              detalhes.push(`Responsável: ${antes} → ${depois}`);
+            }
+            // Detecta troca de estágio via UPD
+            if(action.lead.statusComercial!==undefined&&action.lead.statusComercial!==leadAtual.statusComercial){
+              detalhes.push(`Estágio: "${stg(leadAtual.statusComercial).label}" → "${stg(action.lead.statusComercial).label}"`);
+            }
+            // Detecta troca de documento
+            if(action.lead.documentoStatus!==undefined&&action.lead.documentoStatus!==leadAtual.documentoStatus){
+              detalhes.push(`Documento: ${leadAtual.documentoStatus} → ${action.lead.documentoStatus}`);
+            }
+            // Detecta troca de operador repassado
+            if(action.lead.operadorRepassado!==undefined&&action.lead.operadorRepassado!==leadAtual.operadorRepassado){
+              const antes=leadAtual.operadorRepassado||'Nenhum';
+              const depois=action.lead.operadorRepassado||'Nenhum';
+              detalhes.push(`Op. Repassado: ${antes} → ${depois}`);
+            }
+            // Detecta troca de equipe
+            if(action.lead.equipe!==undefined&&action.lead.equipe!==leadAtual.equipe){
+              detalhes.push(`Equipe: ${leadAtual.equipe||'Nenhuma'} → ${action.lead.equipe||'Nenhuma'}`);
+            }
+          }
+          return{
+            action:'Editou informações',
+            leadId:action.lead?.id,
+            details:detalhes.length>0?detalhes.join(' | '):'Campos atualizados no lead',
+          };
+        },
+        ADD:()=>({
+          action:'Criou novo lead',
+          leadId:null,
+          details:`Nome: ${action.lead?.nomeIndicado||'—'}`,
+        }),
       };
       const fn=auditMap[action.type];
       if(fn){
