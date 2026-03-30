@@ -610,6 +610,9 @@ export function OperadorApp({ leads, profile, dispatch, onLogout, onAlterarSenha
       user_id: session.user.id,
       user_nome: profile.nome,
       action, lead_id: leadId||null, lead_nome: leadNome||'—', detalhes: details||'',
+    }).then(({error})=>{
+      if(error) console.error('❌ Audit log error (operador):', error.message, error.details, error.hint);
+      else console.log('✅ Audit log saved (operador):', action, leadNome);
     });
   }, [session, profile]);
 

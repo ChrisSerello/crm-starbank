@@ -96,6 +96,9 @@ export default function App(){
         supabase.from('audit_log').insert({
           user_id:session.user.id,user_nome:profile.nome,
           action:act,lead_id:leadId||null,lead_nome:leadNome,detalhes:details,
+        }).then(({error})=>{
+          if(error) console.error('❌ Audit log error:', error.message, error.details, error.hint);
+          else console.log('✅ Audit log saved:', act, leadNome);
         });
       }
     }
