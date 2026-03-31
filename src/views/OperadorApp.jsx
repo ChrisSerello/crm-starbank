@@ -226,12 +226,37 @@ function OperadorKanban({ leads, profile, onSelect, onMove }) {
   const nome = profile?.nome || '';
   const meus = leads.filter(l => l.operadorRepassado === nome);
   const [dragId, setDragId] = useState(null);
+  const [search, setSearch] = useState('');
+
+  const filtered = search.trim()
+    ? meus.filter(l=>
+        l.nomeIndicado?.toLowerCase().includes(search.toLowerCase())||
+        l.cpfIndicado?.includes(search)||
+        l.orgaoPrefeitura?.toLowerCase().includes(search.toLowerCase())
+      )
+    : meus;
+
+  const isSearching = search.trim().length > 0;
 
   return (
     <div style={{padding:"28px 32px",overflowX:"auto"}}>
-      <div className="fu" style={{marginBottom:20}}>
-        <div className="section-title">Meu Pipeline</div>
-        <div className="section-sub">{meus.length} leads atribuídos a você</div>
+      <div className="fu" style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:16}}>
+        <div>
+          <div className="section-title">Meu Pipeline</div>
+          <div className="section-sub">
+            {isSearching
+              ? `${filtered.length} resultado${filtered.length!==1?'s':''} para "${search}"`
+              : `${meus.length} leads atribuídos a você`}
+          </div>
+        </div>
+        <div className="search-wrap" style={{width:280}}>
+          <span className="search-icon">⌕</span>
+          <input className="inp" placeholder="Buscar cliente por nome, CPF ou órgão…"
+            value={search} onChange={e=>setSearch(e.target.value)}/>
+          {search&&(
+            <button onClick={()=>setSearch('')} style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",fontSize:14,color:"var(--text-muted)",padding:2}}>×</button>
+          )}
+        </div>
       </div>
       {meus.length === 0 ? (
         <div className="card" style={{padding:"48px 32px",textAlign:"center"}}>
@@ -241,7 +266,8 @@ function OperadorKanban({ leads, profile, onSelect, onMove }) {
       ) : (
         <div style={{display:"flex",gap:10,alignItems:"flex-start",minWidth:"max-content",paddingBottom:16}}>
           {STAGES.map(s => {
-            const sl = meus.filter(l => l.statusComercial === s.id);
+            const sl = filtered.filter(l => l.statusComercial === s.id);
+            const total = meus.filter(l => l.statusComercial === s.id).length;
             const [over, setOver] = useState(false);
             return (
               <div key={s.id} className={`kcol ${over?"dover":""}`}
@@ -251,7 +277,9 @@ function OperadorKanban({ leads, profile, onSelect, onMove }) {
                 <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:11,padding:"0 3px"}}>
                   <div style={{width:8,height:8,borderRadius:"50%",background:s.color,flexShrink:0}}/>
                   <span style={{fontSize:12,fontWeight:600,color:"var(--text-secondary)",flex:1}}>{s.label}</span>
-                  <span style={{fontSize:11,fontWeight:700,background:s.bg,color:s.color,borderRadius:99,padding:"1px 6px"}}>{sl.length}</span>
+                  <span style={{fontSize:11,fontWeight:700,background:s.bg,color:s.color,borderRadius:99,padding:"1px 6px"}}>
+                    {isSearching?`${sl.length}/${total}`:sl.length}
+                  </span>
                 </div>
                 <div style={{minHeight:44}}>
                   {sl.map(l => (
@@ -267,7 +295,11 @@ function OperadorKanban({ leads, profile, onSelect, onMove }) {
                       </div>
                     </div>
                   ))}
-                  {sl.length===0&&<div style={{textAlign:"center",padding:"18px 0",fontSize:11,color:"var(--text-faint)"}}>Solte aqui</div>}
+                  {sl.length===0&&(
+                    <div style={{textAlign:"center",padding:"18px 0",fontSize:11,color:"var(--text-faint)"}}>
+                      {isSearching?"Sem resultado":"Solte aqui"}
+                    </div>
+                  )}
                 </div>
               </div>
             );
