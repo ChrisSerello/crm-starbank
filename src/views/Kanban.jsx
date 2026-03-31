@@ -110,8 +110,8 @@ export function Kanban({leads,dispatch,dragId}){
 
   return(
     <div style={{padding:"28px 32px",overflowX:"auto"}}>
-      <div className="fu" style={{display:"flex",justifyContent:"space-between",alignItems:"flex-end",marginBottom:16}}>
-        <div>
+      <div className="fu" style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20,gap:16}}>
+        <div style={{flexShrink:0}}>
           <div className="section-title">Pipeline</div>
           <div className="section-sub">
             {isSearching
@@ -119,19 +119,22 @@ export function Kanban({leads,dispatch,dragId}){
               : 'Arraste os cards para mover entre estágios'}
           </div>
         </div>
-        <div className="search-wrap" style={{width:280}}>
-          <span className="search-icon">⌕</span>
+        {/* Search bar compacta */}
+        <div style={{position:"relative",width:260,flexShrink:0}}>
+          <span style={{position:"absolute",left:11,top:"50%",transform:"translateY(-50%)",color:"var(--text-faint)",fontSize:13,pointerEvents:"none"}}>⌕</span>
           <input
             className="inp"
-            placeholder="Buscar cliente por nome, CPF ou órgão…"
+            style={{paddingLeft:32,paddingRight:search?32:12,fontSize:12,height:36}}
+            placeholder="Buscar cliente…"
             value={search}
             onChange={e=>setSearch(e.target.value)}
           />
           {search&&(
             <button onClick={()=>setSearch('')} style={{
               position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",
-              background:"none",border:"none",cursor:"pointer",fontSize:14,
-              color:"var(--text-muted)",padding:2,lineHeight:1,
+              background:"rgba(90,70,50,.08)",border:"none",borderRadius:"50%",
+              cursor:"pointer",width:18,height:18,display:"flex",alignItems:"center",
+              justifyContent:"center",fontSize:11,color:"var(--text-muted)",lineHeight:1,
             }}>×</button>
           )}
         </div>
