@@ -19,8 +19,8 @@ export function Sidebar({view,dispatch,onLogout,onAlterarSenha,profile}){
         <div style={{display:"flex",alignItems:"center",gap:10}}>
           <div style={{width:34,height:34,borderRadius:10,background:"linear-gradient(135deg,#5B4FE8 0%,#9B8FF5 100%)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,boxShadow:"0 4px 14px rgba(91,79,232,.3), 0 1px 0 rgba(255,255,255,.25) inset"}}>◈</div>
           <div>
-            <div style={{fontFamily:"var(--font-display)",fontSize:15,fontWeight:600,color:"var(--text-primary)",letterSpacing:"-.01em"}}>CRM</div>
-            <div style={{fontSize:10,fontWeight:700,color:"var(--accent)",letterSpacing:".09em",textTransform:"uppercase"}}>Indicações</div>
+            <div style={{fontFamily:"var(--font-display)",fontSize:15,fontWeight:600,color:"var(--text-primary)",letterSpacing:"-.01em"}}>StarNexus</div>
+            <div style={{fontSize:10,fontWeight:700,color:"var(--accent)",letterSpacing:".09em",textTransform:"uppercase"}}>CRM</div>
           </div>
         </div>
       </div>
