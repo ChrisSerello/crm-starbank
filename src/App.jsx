@@ -21,6 +21,7 @@ import { Attribution } from "./views/Attribution";
 import { Auditoria } from "./views/Auditoria";
 import { GestaoEquipe } from "./views/GestaoEquipe";
 import { OperadorApp } from "./views/OperadorApp";
+import { CorbanApp } from "./views/corbans/CorbanApp";
 
 // ─── ROOT ─────────────────────────────────────────────────────────────────────
 
@@ -191,6 +192,20 @@ export default function App(){
       <div style={{minHeight:"100vh",background:"var(--bg-base)",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"var(--font)"}}>
         <div style={{fontSize:13,color:"var(--text-muted)"}}>Verificando perfil…</div>
       </div>
+    </>
+  );
+
+  // ── Corbans — módulo totalmente isolado ──
+  if(profile.modulo==='corbans') return(
+    <>
+      <GlobalStyles/>
+      <CorbanApp
+        profile={profile}
+        session={session}
+        signOut={signOut}
+        onAlterarSenha={()=>setShowAlterarSenha(true)}
+      />
+      {showAlterarSenha && <AlterarSenha onClose={()=>setShowAlterarSenha(false)}/>}
     </>
   );
 
