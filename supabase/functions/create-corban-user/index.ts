@@ -43,15 +43,31 @@ serve(async (req) => {
     }
 
     // ── 4. Buscar perfil do chamador para validar papel ──
+    // Verifica tanto profiles quanto allowed_users (fallback caso profile ainda não tenha modulo correto)
     const { data: callerProfile } = await supabaseAdmin
       .from("profiles")
       .select("role, modulo, email")
       .eq("id", user.id)
       .single();
 
+    // Fallback: verificar allowed_users pelo email
+    const { data: callerAllowed } = await supabaseAdmin
+      .from("allowed_users")
+      .select("role, modulo")
+      .ilike("email", user.email || "")
+      .single();
+
+    const effectiveRole = callerProfile?.role || callerAllowed?.role;
+    const effectiveModulo = callerProfile?.modulo || callerAllowed?.modulo;
+
     const allowedRoles = ["master", "promotora_principal", "promotora"];
-    if (!callerProfile || !allowedRoles.includes(callerProfile.role) || callerProfile.modulo !== "corbans") {
-      return new Response(JSON.stringify({ error: "Sem permissão para criar usuários" }), {
+    if (!effectiveRole || !allowedRoles.includes(effectiveRole) || effectiveModulo !== "corbans") {
+      // Log para debug
+      console.log("Permission denied:", { effectiveRole, effectiveModulo, callerProfile, callerAllowed });
+      return new Response(JSON.stringify({ 
+        error: "Sem permissão para criar usuários",
+        debug: { role: effectiveRole, modulo: effectiveModulo }
+      }), {
         status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
@@ -76,8 +92,8 @@ serve(async (req) => {
       promotora_principal:  ["promotora", "digitalizador"],
       promotora:            ["digitalizador"],
     };
-    if (!hierarchy[callerProfile.role]?.includes(role)) {
-      return new Response(JSON.stringify({ error: `${callerProfile.role} não pode criar ${role}` }), {
+    if (!hierarchy[effectiveRole]?.includes(role)) {
+      return new Response(JSON.stringify({ error: `${effectiveRole} não pode criar ${role}` }), {
         status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
