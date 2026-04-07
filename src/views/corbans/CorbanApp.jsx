@@ -58,7 +58,8 @@ function CorbanSidebar({view,setView,profile,onLogout,onAlterarSenha}){
   const items=[
     {id:'dashboard',icon:'◈',label:'Dashboard'},
     {id:'clientes', icon:'≡',label:r==='digitalizador'?'Meus Clientes':'Clientes'},
-    ...(r!=='digitalizador'?[{id:'estrutura',icon:'⎇',label:'Estrutura'}]:[]),
+    ...(r!=='digitalizador'?[{id:'arvore',icon:'⎇',label:'Estrutura'}]:[]),
+    ...(r==='master'||r==='promotora_principal'?[{id:'estrutura',icon:'＋',label:'Cadastrar'}]:[]),
     ...(r==='master'?[{id:'auditoria',icon:'🔍',label:'Auditoria'}]:[]),
   ];
   return(
@@ -67,7 +68,7 @@ function CorbanSidebar({view,setView,profile,onLogout,onAlterarSenha}){
         <div style={{display:'flex',alignItems:'center',gap:10}}>
           <div style={{width:34,height:34,borderRadius:10,background:`linear-gradient(135deg,${G_MID} 0%,#52B788 100%)`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,boxShadow:`0 4px 14px ${G_GLOW}`}}>◈</div>
           <div>
-            <div style={{fontFamily:'var(--font-display)',fontSize:15,fontWeight:600,color:'#FFF'}}>StarNexus</div>
+            <div style={{fontFamily:'var(--font-display)',fontSize:15,fontWeight:600,color:'#FFF'}}>StarFlow</div>
             <div style={{fontSize:10,fontWeight:700,color:G_TEXT,letterSpacing:'.09em',textTransform:'uppercase'}}>Corbans</div>
           </div>
         </div>
@@ -139,13 +140,51 @@ function CorbanDashboard({clientes,estrutura,profile}){
     return clientes;
   },[clientes,estrutura,r,filtroTipo,filtroId]);
 
-  const total=clientesFiltrados.length;
-  const ganhos=clientesFiltrados.filter(c=>c.statusComercial==='ganho'||c.statusComercial==='pedido').length;
-  const emNeg=clientesFiltrados.filter(c=>c.statusComercial==='em_negociacao').length;
-  const frios=clientesFiltrados.filter(c=>sinceD(c.ultimoContato)>=7).length;
+  // ── Filtro por período ──
+  const [periodo,setPeriodo]=useState('todos'); // 'hoje'|'semana'|'mes'|'30d'|'todos'
+
+  const periodoLabel={'hoje':'Hoje','semana':'Esta semana','mes':'Este mês','30d':'Últimos 30 dias','todos':'Todo período'};
+
+  const clientesPeriodo=useMemo(()=>{
+    if(periodo==='todos') return clientesFiltrados;
+    const now=new Date();
+    const cutoff=new Date();
+    if(periodo==='hoje') cutoff.setHours(0,0,0,0);
+    else if(periodo==='semana') cutoff.setDate(now.getDate()-now.getDay());
+    else if(periodo==='mes') cutoff.setDate(1),cutoff.setHours(0,0,0,0);
+    else if(periodo==='30d') cutoff.setDate(now.getDate()-30);
+    const cutoffStr=cutoff.toISOString().split('T')[0];
+    return clientesFiltrados.filter(c=>c.dataEntrada>=cutoffStr);
+  },[clientesFiltrados,periodo]);
+
+  // ── Filtro por produto ──
+  const [filtroProduto,setFiltroProduto]=useState('');
+  const clientesComFiltros=useMemo(()=>{
+    if(!filtroProduto) return clientesPeriodo;
+    return clientesPeriodo.filter(c=>(c.produtosInteresse||[]).includes(filtroProduto));
+  },[clientesPeriodo,filtroProduto]);
+
+  const total=clientesComFiltros.length;
+  const ganhos=clientesComFiltros.filter(c=>c.statusComercial==='ganho'||c.statusComercial==='pedido').length;
+  const emNeg=clientesComFiltros.filter(c=>c.statusComercial==='em_negociacao').length;
+  const frios=clientesComFiltros.filter(c=>sinceD(c.ultimoContato)>=7).length;
   const taxa=total>0?Math.round(ganhos/total*100):0;
-  const byStage=STAGES.map(s=>({...s,count:clientesFiltrados.filter(c=>c.statusComercial===s.id).length}));
-  const recent=clientesFiltrados.flatMap(c=>(c.activities||[]).map(a=>({...a,clienteName:c.nomeCliente}))).sort((a,b)=>(b.date||'').localeCompare(a.date||'')).slice(0,8);
+  const byStage=STAGES.map(s=>({...s,count:clientesComFiltros.filter(c=>c.statusComercial===s.id).length}));
+  const recent=clientesComFiltros.flatMap(c=>(c.activities||[]).map(a=>({...a,clienteName:c.nomeCliente}))).sort((a,b)=>(b.date||'').localeCompare(a.date||'')).slice(0,8);
+
+  // ── Ranking de promotoras ── (só master/pp)
+  const rankingPromotoras=useMemo(()=>{
+    if(r==='digitalizador') return [];
+    const map={};
+    clientesComFiltros.forEach(c=>{
+      const nome=r==='master'?(c.promotoraNome||'Sem promotora'):(c.digitalizadorNome||'Sem digitalizador');
+      if(!map[nome]) map[nome]={nome,total:0,ganhos:0,emNeg:0};
+      map[nome].total++;
+      if(c.statusComercial==='ganho'||c.statusComercial==='pedido') map[nome].ganhos++;
+      if(c.statusComercial==='em_negociacao') map[nome].emNeg++;
+    });
+    return Object.values(map).sort((a,b)=>b.total-a.total).slice(0,8);
+  },[clientesComFiltros,r]);
 
   // Estrutura stats
   const pps=estrutura.filter(u=>u.role==='promotora_principal').length;
@@ -210,6 +249,27 @@ function CorbanDashboard({clientes,estrutura,profile}){
         </div>
       )}
 
+      {/* Filtros de período e produto — abaixo do filtro de promotora */}
+      <div style={{display:'flex',gap:8,marginBottom:16,flexWrap:'wrap',alignItems:'center'}}>
+        {/* Período */}
+        <div style={{display:'flex',gap:4,background:'rgba(90,70,50,.06)',borderRadius:9,padding:3}}>
+          {Object.entries(periodoLabel).map(([v,label])=>(
+            <button key={v} onClick={()=>setPeriodo(v)} style={{padding:'5px 10px',borderRadius:7,fontSize:11,fontWeight:600,cursor:'pointer',border:'none',fontFamily:'var(--font)',transition:'all .12s',background:periodo===v?'var(--bg-elevated)':'transparent',color:periodo===v?'var(--text-primary)':'var(--text-muted)',boxShadow:periodo===v?'0 1px 4px rgba(60,40,20,.1)':'none'}}>{label}</button>
+          ))}
+        </div>
+        {/* Produto */}
+        <select className="sel" style={{width:190,height:34,fontSize:12}} value={filtroProduto} onChange={e=>setFiltroProduto(e.target.value)}>
+          <option value="">Todos os produtos</option>
+          {PRODUCTS.map(p=><option key={p} value={p}>{p}</option>)}
+        </select>
+        {(periodo!=='todos'||filtroProduto)&&(
+          <button className="btn btn-ghost" style={{fontSize:11,padding:'6px 10px'}} onClick={()=>{setPeriodo('todos');setFiltroProduto('');}}>✕ Limpar</button>
+        )}
+        <span style={{fontSize:11,color:'var(--text-muted)',marginLeft:'auto'}}>
+          {total} cliente{total!==1?'s':''}{periodo!=='todos'?` · ${periodoLabel[periodo].toLowerCase()}`:''}
+        </span>
+      </div>
+
       {/* Stats grid */}
       <div style={{display:'grid',gridTemplateColumns:'repeat(4,minmax(0,1fr))',gap:14,marginBottom:20}}>
         <StatCard label="Total Clientes" value={total}  sub={isFiltrado?labelFiltro:'No seu escopo'}     color={G_MID}    icon="◈"/>
@@ -260,60 +320,154 @@ function CorbanDashboard({clientes,estrutura,profile}){
           ))}
         </div>
       </div>
+      {/* Ranking por promotora/digitalizador — só master e pp */}
+      {(r==='master'||r==='promotora_principal')&&rankingPromotoras.length>0&&(
+        <div className="card fu3" style={{padding:'18px 20px',marginTop:14}}>
+          <div className="eyebrow" style={{marginBottom:14}}>
+            {r==='master'?'Ranking por Promotora':'Ranking por Digitalizador'}
+          </div>
+          {rankingPromotoras.map((item,i)=>{
+            const maxT=rankingPromotoras[0].total||1;
+            const taxa=item.total>0?Math.round(item.ganhos/item.total*100):0;
+            return(
+              <div key={item.nome} style={{display:'flex',alignItems:'center',gap:10,marginBottom:i<rankingPromotoras.length-1?10:0}}>
+                <div style={{width:22,height:22,borderRadius:7,background:i<3?G_LIGHT:'rgba(90,70,50,.06)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,fontWeight:700,color:i<3?G_MID:'var(--text-muted)',flexShrink:0}}>{i+1}</div>
+                <div style={{fontSize:12,fontWeight:600,color:'var(--text-primary)',width:160,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',flexShrink:0}}>{item.nome}</div>
+                <div style={{flex:1,height:7,background:'rgba(90,70,50,.08)',borderRadius:99,overflow:'hidden'}}>
+                  <div style={{height:'100%',borderRadius:99,background:G_MID,width:`${Math.round(item.total/maxT*100)}%`,transition:'width .6s'}}/>
+                </div>
+                <div style={{fontSize:12,fontWeight:700,color:'var(--text-primary)',width:28,textAlign:'right',flexShrink:0}}>{item.total}</div>
+                <div style={{fontSize:11,color:'var(--success)',width:42,textAlign:'right',flexShrink:0}}>{taxa}% ✓</div>
+                {item.emNeg>0&&<div style={{fontSize:10,color:'var(--accent)',flexShrink:0,background:'var(--accent-dim)',borderRadius:99,padding:'1px 6px'}}>{item.emNeg} neg.</div>}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
-
-// ── CLIENTES LIST ─────────────────────────────────────────────────────────────
-function CorbanClientes({clientes,profile,onSelect,onNew}){
+function CorbanClientes({clientes,profile,estrutura,onSelect,onNew}){
   const [search,setSearch]=useState('');
   const [stage,setStage]=useState('');
+  const [digitalizador,setDigitalizador]=useState('');
+  const [promotora,setPromotora]=useState('');
+  const [produto,setProduto]=useState('');
+  const [dataFrom,setDataFrom]=useState('');
+  const [dataTo,setDataTo]=useState('');
   const [page,setPage]=useState(1);
   const PER=50;
+  const r=profile?.role;
+
+  // Unique digitalizadores e promotoras presentes nos clientes
+  const digs=useMemo(()=>[...new Set(clientes.map(c=>c.digitalizadorNome).filter(Boolean))].sort(),[clientes]);
+  const proms=useMemo(()=>[...new Set(clientes.map(c=>c.promotoraNome).filter(Boolean))].sort(),[clientes]);
+
+  const hasFilter=search||stage||digitalizador||promotora||produto||dataFrom||dataTo;
 
   const filtered=useMemo(()=>clientes.filter(c=>{
     if(stage&&c.statusComercial!==stage) return false;
+    if(digitalizador&&c.digitalizadorNome!==digitalizador) return false;
+    if(promotora&&c.promotoraNome!==promotora) return false;
+    if(produto&&!(c.produtosInteresse||[]).includes(produto)) return false;
+    if(dataFrom&&c.dataEntrada<dataFrom) return false;
+    if(dataTo&&c.dataEntrada>dataTo) return false;
     if(search){
       const s=search.toLowerCase();
       if(!c.nomeCliente?.toLowerCase().includes(s)&&!c.cpfCliente?.includes(s)&&!c.orgaoPrefeitura?.toLowerCase().includes(s)) return false;
     }
     return true;
-  }),[clientes,search,stage]);
+  }),[clientes,search,stage,digitalizador,promotora,produto,dataFrom,dataTo]);
 
-  const total=Math.max(1,Math.ceil(filtered.length/PER));
+  const totalPages=Math.max(1,Math.ceil(filtered.length/PER));
   const paged=filtered.slice((page-1)*PER,page*PER);
-  const r=profile?.role;
+
+  const clearFilters=()=>{setSearch('');setStage('');setDigitalizador('');setPromotora('');setProduto('');setDataFrom('');setDataTo('');setPage(1);};
+
+  // Export to CSV/Excel
+  const exportCSV=()=>{
+    const headers=['Nome','CPF','Órgão','Estágio','Produto','Documento','Digitalizador','Promotora','Promotora Principal','Data Entrada','Último Contato'];
+    const rows=filtered.map(c=>[
+      c.nomeCliente||'',c.cpfCliente||'',c.orgaoPrefeitura||'',
+      c.statusComercial||'',
+      (c.produtosInteresse||[]).join('; '),
+      c.documentoStatus||'',
+      c.digitalizadorNome||'',c.promotoraNome||'',c.promotoraPrincipalNome||'',
+      c.dataEntrada||'',c.ultimoContato||''
+    ]);
+    const csv=[headers,...rows].map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+    const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8;'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url;a.download=`clientes_corbans_${TODAY}.csv`;a.click();
+    URL.revokeObjectURL(url);
+  };
 
   return(
     <div style={{padding:'28px 32px'}}>
-      <div className="fu" style={{display:'flex',justifyContent:'space-between',alignItems:'flex-end',marginBottom:20}}>
+      <div className="fu" style={{display:'flex',justifyContent:'space-between',alignItems:'flex-end',marginBottom:16}}>
         <div>
           <div className="section-title">{r==='digitalizador'?'Meus Clientes':'Clientes'}</div>
-          <div className="section-sub">{filtered.length} de {clientes.length} registros{total>1?` · Pág ${page}/${total}`:''}</div>
+          <div className="section-sub">{filtered.length} de {clientes.length} registros{totalPages>1?` · Pág ${page}/${totalPages}`:''}</div>
         </div>
-        <button className="btn" style={{background:G_MID,color:'#fff',boxShadow:`0 3px 16px ${G_GLOW}`}} onClick={onNew}>
-          <span style={{fontSize:16,lineHeight:1}}>+</span> Novo Cliente
-        </button>
+        <div style={{display:'flex',gap:8}}>
+          <button className="btn btn-ghost" style={{fontSize:12,padding:'7px 12px'}} onClick={exportCSV}>⬇ Exportar CSV</button>
+          <button className="btn" style={{background:G_MID,color:'#fff',boxShadow:`0 3px 16px ${G_GLOW}`}} onClick={onNew}>
+            <span style={{fontSize:16,lineHeight:1}}>+</span> Novo Cliente
+          </button>
+        </div>
       </div>
 
-      <div className="fu1" style={{display:'flex',gap:8,marginBottom:16,flexWrap:'wrap'}}>
-        <div className="search-wrap" style={{flex:1,minWidth:220}}>
+      {/* Filtros linha 1 */}
+      <div className="fu1" style={{display:'flex',gap:8,marginBottom:8,flexWrap:'wrap'}}>
+        <div className="search-wrap" style={{flex:1,minWidth:200}}>
           <span className="search-icon">⌕</span>
-          <input className="inp" placeholder="Buscar por nome, CPF ou órgão…" value={search} onChange={e=>{setSearch(e.target.value);setPage(1);}}/>
+          <input className="inp" placeholder="Nome, CPF ou órgão…" value={search} onChange={e=>{setSearch(e.target.value);setPage(1);}}/>
         </div>
-        <select className="sel" style={{width:168}} value={stage} onChange={e=>{setStage(e.target.value);setPage(1);}}>
-          <option value="">Todos os estágios</option>
+        <select className="sel" style={{width:150}} value={stage} onChange={e=>{setStage(e.target.value);setPage(1);}}>
+          <option value="">Todos estágios</option>
           {STAGES.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}
         </select>
-        {(search||stage)&&<button className="btn btn-ghost" onClick={()=>{setSearch('');setStage('');setPage(1);}}>✕ Limpar</button>}
+        <select className="sel" style={{width:150}} value={produto} onChange={e=>{setProduto(e.target.value);setPage(1);}}>
+          <option value="">Todos produtos</option>
+          {PRODUCTS.map(p=><option key={p} value={p}>{p}</option>)}
+        </select>
       </div>
+
+      {/* Filtros linha 2 — só para master/pp */}
+      {(r==='master'||r==='promotora_principal')&&(
+        <div style={{display:'flex',gap:8,marginBottom:8,flexWrap:'wrap'}}>
+          {r==='master'&&(
+            <select className="sel" style={{width:180}} value={promotora} onChange={e=>{setPromotora(e.target.value);setPage(1);}}>
+              <option value="">Todas promotoras</option>
+              {proms.map(p=><option key={p} value={p}>{p}</option>)}
+            </select>
+          )}
+          <select className="sel" style={{width:180}} value={digitalizador} onChange={e=>{setDigitalizador(e.target.value);setPage(1);}}>
+            <option value="">Todos digitalizadores</option>
+            {digs.map(d=><option key={d} value={d}>{d}</option>)}
+          </select>
+          <div style={{display:'flex',alignItems:'center',gap:6}}>
+            <label style={{fontSize:11,color:'var(--text-muted)',whiteSpace:'nowrap'}}>De</label>
+            <input type="date" className="inp" style={{width:136,padding:'8px 10px'}} value={dataFrom} onChange={e=>{setDataFrom(e.target.value);setPage(1);}}/>
+          </div>
+          <div style={{display:'flex',alignItems:'center',gap:6}}>
+            <label style={{fontSize:11,color:'var(--text-muted)',whiteSpace:'nowrap'}}>Até</label>
+            <input type="date" className="inp" style={{width:136,padding:'8px 10px'}} value={dataTo} onChange={e=>{setDataTo(e.target.value);setPage(1);}}/>
+          </div>
+          {hasFilter&&<button className="btn btn-ghost" style={{fontSize:12}} onClick={clearFilters}>✕ Limpar</button>}
+        </div>
+      )}
+      {r==='digitalizador'&&hasFilter&&<div style={{marginBottom:8}}><button className="btn btn-ghost" style={{fontSize:12}} onClick={clearFilters}>✕ Limpar filtros</button></div>}
 
       <div className="fu2 card" style={{overflow:'hidden',marginBottom:16}}>
         <div style={{overflowX:'auto'}}>
           <table style={{width:'100%',borderCollapse:'collapse',fontSize:13}}>
             <thead>
               <tr style={{background:'rgba(90,70,50,.04)',borderBottom:'1px solid var(--border)'}}>
-                {['Nome / CPF','Órgão','Estágio','Documento','Digitalizador','Último contato',''].map(h=>(
+                {['Nome / CPF','Órgão','Estágio','Produto','Documento',
+                  ...(r!=='digitalizador'?['Digitalizador']:['Promotora']),
+                  'Entrada',''].map(h=>(
                   <th key={h} style={{padding:'11px 14px',textAlign:'left',fontSize:10,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.08em',whiteSpace:'nowrap'}}>{h}</th>
                 ))}
               </tr>
@@ -322,30 +476,36 @@ function CorbanClientes({clientes,profile,onSelect,onNew}){
               {paged.map(c=>(
                 <tr key={c.id} className="trow" onClick={()=>onSelect(c.id)}>
                   <td style={{padding:'12px 14px'}}><div style={{fontWeight:600}}>{c.nomeCliente}</div><div style={{fontSize:11,color:'var(--text-muted)',marginTop:1}}>{c.cpfCliente}</div></td>
-                  <td style={{padding:'12px 14px',color:'var(--text-secondary)',fontSize:12}}>{c.orgaoPrefeitura}</td>
+                  <td style={{padding:'12px 14px',color:'var(--text-secondary)',fontSize:12}}>{c.orgaoPrefeitura||'—'}</td>
                   <td style={{padding:'12px 14px'}}><StageTag stageId={c.statusComercial}/></td>
+                  <td style={{padding:'12px 14px',fontSize:11,color:'var(--text-secondary)'}}>{(c.produtosInteresse||[]).slice(0,1).join('') ||'—'}</td>
                   <td style={{padding:'12px 14px'}}><span style={{fontSize:11,fontWeight:600,color:c.documentoStatus==='Aprovado'?'var(--success)':c.documentoStatus==='Não solicitado'?'var(--text-faint)':'var(--amber)'}}>{c.documentoStatus}</span></td>
-                  <td style={{padding:'12px 14px',fontSize:12,color:'var(--text-secondary)'}}>{c.digitalizadorNome||'—'}</td>
-                  <td style={{padding:'12px 14px',fontSize:12,color:'var(--text-secondary)'}}>{fmtD(c.ultimoContato)}</td>
+                  <td style={{padding:'12px 14px',fontSize:12,color:'var(--text-secondary)'}}>
+                    {r!=='digitalizador'
+                      ?<div><div>{c.digitalizadorNome||'—'}</div><div style={{fontSize:10,color:'var(--text-faint)'}}>{c.promotoraNome||''}</div></div>
+                      :<div>{c.promotoraNome||'—'}</div>
+                    }
+                  </td>
+                  <td style={{padding:'12px 14px',fontSize:11,color:'var(--text-secondary)',whiteSpace:'nowrap'}}>{fmtD(c.dataEntrada)}</td>
                   <td style={{padding:'12px 14px',color:'var(--text-muted)',fontSize:16}}>›</td>
                 </tr>
               ))}
-              {paged.length===0&&<tr><td colSpan={7} style={{padding:'40px 0',textAlign:'center',color:'var(--text-muted)',fontSize:13}}>Nenhum cliente encontrado</td></tr>}
+              {paged.length===0&&<tr><td colSpan={8} style={{padding:'40px 0',textAlign:'center',color:'var(--text-muted)',fontSize:13}}>Nenhum cliente encontrado{hasFilter&&<> — <button onClick={clearFilters} style={{background:'none',border:'none',cursor:'pointer',color:G_MID,fontSize:13}}>limpar filtros</button></>}</td></tr>}
             </tbody>
           </table>
         </div>
       </div>
 
-      {total>1&&(
+      {totalPages>1&&(
         <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:6}}>
           <button className="btn btn-ghost" style={{padding:'6px 12px',fontSize:12}} onClick={()=>setPage(1)} disabled={page===1}>«</button>
-          <button className="btn btn-ghost" style={{padding:'6px 12px',fontSize:12}} onClick={()=>setPage(p=>Math.max(1,p-1))} disabled={page===1}>‹ Anterior</button>
-          {Array.from({length:total},(_,i)=>i+1).filter(p=>p===1||p===total||Math.abs(p-page)<=2).map((p,i,arr)=>[
-            i>0&&arr[i-1]!==p-1?<span key={`e${i}`} style={{padding:'6px 4px',fontSize:12,color:'var(--text-muted)'}}>…</span>:null,
-            <button key={p} onClick={()=>setPage(p)} style={{width:32,height:32,borderRadius:8,border:'none',cursor:'pointer',fontSize:12,fontWeight:p===page?600:400,background:p===page?G_MID:'transparent',color:p===page?'#fff':'var(--text-secondary)',transition:'all .15s'}}>{p}</button>
+          <button className="btn btn-ghost" style={{padding:'6px 12px',fontSize:12}} onClick={()=>setPage(p=>Math.max(1,p-1))} disabled={page===1}>‹</button>
+          {Array.from({length:totalPages},(_,i)=>i+1).filter(p=>p===1||p===totalPages||Math.abs(p-page)<=2).map((p,i,arr)=>[
+            i>0&&arr[i-1]!==p-1?<span key={`e${i}`} style={{padding:'0 4px',fontSize:12,color:'var(--text-muted)'}}>…</span>:null,
+            <button key={p} onClick={()=>setPage(p)} style={{width:32,height:32,borderRadius:8,border:'none',cursor:'pointer',fontSize:12,fontWeight:p===page?600:400,background:p===page?G_MID:'transparent',color:p===page?'#fff':'var(--text-secondary)'}}>{p}</button>
           ])}
-          <button className="btn btn-ghost" style={{padding:'6px 12px',fontSize:12}} onClick={()=>setPage(p=>Math.min(total,p+1))} disabled={page===total}>Próxima ›</button>
-          <button className="btn btn-ghost" style={{padding:'6px 12px',fontSize:12}} onClick={()=>setPage(total)} disabled={page===total}>»</button>
+          <button className="btn btn-ghost" style={{padding:'6px 12px',fontSize:12}} onClick={()=>setPage(p=>Math.min(totalPages,p+1))} disabled={page===totalPages}>›</button>
+          <button className="btn btn-ghost" style={{padding:'6px 12px',fontSize:12}} onClick={()=>setPage(totalPages)} disabled={page===totalPages}>»</button>
         </div>
       )}
     </div>
@@ -538,7 +698,7 @@ function CorbanEstrutura({profile,session}){
   const [showModal,setShowModal]=useState(false);
   const [form,setForm]=useState({
     // campos comuns
-    email:'', role:'digitalizador',
+    email:'', senha:'', role:'digitalizador',
     promotora_principal_email:'', promotora_email:'',
     // campos pessoa jurídica (PP e Promotora)
     cnpj:'', razaoSocial:'', nomeFantasia:'', telefone:'',
@@ -583,11 +743,12 @@ function CorbanEstrutura({profile,session}){
         setMsg({t:'error',text:'Nome, CPF e E-mail são obrigatórios.'});return;
       }
     }
+    if(!form.senha||form.senha.length<6){
+      setMsg({t:'error',text:'A senha deve ter no mínimo 6 caracteres.'});return;
+    }
 
     setSaving(true);setMsg(null);
     const email=form.email.trim().toLowerCase();
-
-    // Nome para exibição: PJ usa Nome Fantasia ou Razão Social; PF usa nome
     const nomeExibicao=isPJ?(form.nomeFantasia.trim()||form.razaoSocial.trim()):form.nome.trim();
 
     // Hierarquia
@@ -596,24 +757,50 @@ function CorbanEstrutura({profile,session}){
     if(r==='promotora_principal'){ pp_email=profile.email; }
     if(r==='promotora'){ p_email=profile.email; pp_email=profile.promotora_principal_email||''; }
 
-    // Dados extras salvos em metadata JSON no campo `extra_data` (vamos adicionar no allowed_users)
     const extraData=isPJ
       ?{cnpj:form.cnpj,razaoSocial:form.razaoSocial,nomeFantasia:form.nomeFantasia,telefone:form.telefone}
       :{dataNasc:form.dataNasc,cpf:form.cpf,telefone:form.telefoneDig};
 
-    const {error}=await supabase.from('allowed_users').insert({
-      email, nome:nomeExibicao, role:form.role, modulo:'corbans',
-      promotora_principal_email:pp_email||null,
-      promotora_email:p_email||null,
-      extra_data:extraData,
-    });
-    setSaving(false);
-    if(error){setMsg({t:'error',text:error.message});}
-    else{
-      setMsg({t:'success',text:`${nomeExibicao} adicionado! Crie o acesso no Supabase Auth.`});
-      setShowModal(false);
-      load();
+    try {
+      // Chamar a Edge Function — ela tem service_role e faz tudo
+      const {data:{session:s}}=await supabase.auth.getSession();
+      const res=await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-corban-user`,
+        {
+          method:'POST',
+          headers:{
+            'Content-Type':'application/json',
+            'Authorization':`Bearer ${s?.access_token}`,
+          },
+          body:JSON.stringify({
+            email,
+            password:form.senha,
+            role:form.role,
+            nome:nomeExibicao,
+            promotora_principal_email:pp_email||null,
+            promotora_email:p_email||null,
+            extra_data:extraData,
+          }),
+        }
+      );
+
+      const result=await res.json();
+      setSaving(false);
+
+      if(!res.ok||result.error){
+        setMsg({t:'error',text:result.error||'Erro ao criar usuário.'});
+      } else {
+        setMsg({t:'success',text:`✓ ${nomeExibicao} criado com sucesso! Já pode fazer login.`});
+        setShowModal(false);
+        // Reset form
+        setForm({email:'',senha:'',role:creatableRoles[creatableRoles.length-1],promotora_principal_email:'',promotora_email:'',cnpj:'',razaoSocial:'',nomeFantasia:'',telefone:'',nome:'',dataNasc:'',cpf:'',telefoneDig:''});
+        load();
+      }
+    } catch(e){
+      setSaving(false);
+      setMsg({t:'error',text:'Erro de conexão. Tente novamente.'});
     }
+//   };
   };
 
   const remove=async(u)=>{
@@ -686,7 +873,7 @@ function CorbanEstrutura({profile,session}){
       )}
 
       <div style={{padding:'12px 16px',background:'rgba(45,134,83,.06)',borderRadius:10,border:`1px solid rgba(45,134,83,.2)`,fontSize:12,color:'var(--text-muted)',lineHeight:1.7}}>
-        💡 <strong>Para dar acesso:</strong> adicione aqui primeiro, depois vá em <strong>Supabase → Authentication → Users → Create new user</strong> com o mesmo e-mail e uma senha inicial.
+        💡 <strong>Cadastro independente:</strong> preencha os dados e defina uma senha inicial. O usuário já consegue fazer login imediatamente após o cadastro.
       </div>
 
       {showModal&&(
@@ -814,6 +1001,14 @@ function CorbanEstrutura({profile,session}){
               </>
             )}
 
+            {/* Campo senha — comum a todos os tipos */}
+            <div style={{marginTop:4,marginBottom:4,padding:'12px 14px',background:'rgba(90,70,50,.04)',borderRadius:10,border:'1px solid var(--border)'}}>
+              <div style={{fontSize:11,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:10}}>🔐 Acesso ao sistema</div>
+              <label style={{display:'block',fontSize:10,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:6}}>Senha inicial *</label>
+              <input className="inp" type="password" value={form.senha} onChange={e=>setForm(f=>({...f,senha:e.target.value}))} placeholder="Mínimo 6 caracteres"/>
+              <div style={{fontSize:11,color:'var(--text-muted)',marginTop:5}}>O usuário poderá alterar a senha após o primeiro login.</div>
+            </div>
+
             <div style={{display:'flex',gap:8,justifyContent:'flex-end',marginTop:20}}>
               <button className="btn btn-ghost" onClick={()=>{setShowModal(false);setMsg(null);}}>Cancelar</button>
               <button className="btn" style={{background:G_MID,color:'#fff',boxShadow:`0 3px 12px ${G_GLOW}`}} onClick={save} disabled={saving}>{saving?'Salvando…':'Adicionar'}</button>
@@ -837,6 +1032,216 @@ function CorbanEstrutura({profile,session}){
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ── ÁRVORE VISUAL DA ESTRUTURA ────────────────────────────────────────────────
+function CorbanArvore({estrutura,clientes,profile}){
+  const r=profile?.role;
+  const [expandedPP,setExpandedPP]=useState({});
+  const [expandedP,setExpandedP]=useState({});
+  const [detalhe,setDetalhe]=useState(null); // usuário selecionado para ver detalhes
+
+  const pps=estrutura.filter(u=>u.role==='promotora_principal');
+  const ps=estrutura.filter(u=>u.role==='promotora');
+  const ds=estrutura.filter(u=>u.role==='digitalizador');
+
+  const clientesDeDigitalizador=(nome)=>clientes.filter(c=>c.digitalizadorNome===nome);
+  const clientesDePromotora=(nome)=>clientes.filter(c=>c.promotoraNome===nome);
+  const clientesDePP=(nome)=>clientes.filter(c=>c.promotoraPrincipalNome===nome);
+
+  const togglePP=email=>setExpandedPP(e=>({...e,[email]:!e[email]}));
+  const toggleP=email=>setExpandedP(e=>({...e,[email]:!e[email]}));
+
+  const MiniBar=({val,max,color})=>(
+    <div style={{width:60,height:5,background:'rgba(90,70,50,.1)',borderRadius:99,overflow:'hidden',display:'inline-block',verticalAlign:'middle',marginLeft:6}}>
+      <div style={{height:'100%',borderRadius:99,background:color,width:max>0?`${Math.round(val/max*100)}%`:'0%',transition:'width .5s'}}/>
+    </div>
+  );
+
+  const maxCliDig=Math.max(...ds.map(d=>clientesDeDigitalizador(d.nome).length),1);
+
+  const DigRow=({d})=>{
+    const cs=clientesDeDigitalizador(d.nome);
+    const ganhos=cs.filter(c=>c.statusComercial==='ganho'||c.statusComercial==='pedido').length;
+    return(
+      <div style={{display:'flex',alignItems:'center',gap:10,padding:'9px 14px 9px 44px',borderBottom:'1px solid var(--border)',cursor:'pointer',transition:'background .12s'}}
+        onMouseEnter={e=>e.currentTarget.style.background='var(--bg-hover)'}
+        onMouseLeave={e=>e.currentTarget.style.background='transparent'}
+        onClick={()=>setDetalhe(d)}>
+        <div style={{width:6,height:6,borderRadius:'50%',background:ROLE_COLORS.digitalizador,flexShrink:0,marginLeft:10}}/>
+        <Avatar name={d.nome} size={26} color={ROLE_COLORS.digitalizador}/>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:12,fontWeight:600,color:'var(--text-primary)'}}>{d.nome}</div>
+          <div style={{fontSize:10,color:'var(--text-muted)'}}>{d.email}</div>
+        </div>
+        <div style={{textAlign:'right',flexShrink:0}}>
+          <span style={{fontSize:13,fontWeight:700,color:ROLE_COLORS.digitalizador}}>{cs.length}</span>
+          <span style={{fontSize:10,color:'var(--text-muted)',marginLeft:3}}>clientes</span>
+          <MiniBar val={cs.length} max={maxCliDig} color={ROLE_COLORS.digitalizador}/>
+        </div>
+        {ganhos>0&&<span style={{fontSize:10,fontWeight:700,background:'var(--success-dim)',color:'var(--success)',borderRadius:99,padding:'2px 7px',flexShrink:0}}>{ganhos} ✓</span>}
+        <span style={{fontSize:11,color:'var(--text-muted)'}}>›</span>
+      </div>
+    );
+  };
+
+  const PromRow=({p,pEmail})=>{
+    const pDs=ds.filter(d=>d.promotora_email===pEmail);
+    const cs=clientesDePromotora(p.nome);
+    const expanded=expandedP[pEmail];
+    return(
+      <div>
+        <div style={{display:'flex',alignItems:'center',gap:10,padding:'10px 14px 10px 24px',borderBottom:'1px solid var(--border)',cursor:'pointer',background:expanded?'rgba(26,158,138,.04)':'transparent',transition:'background .12s'}}
+          onClick={()=>{toggleP(pEmail);setDetalhe(null);}}>
+          <div style={{fontSize:11,color:'var(--text-muted)',marginLeft:4,transition:'transform .2s',transform:expanded?'rotate(90deg)':'rotate(0deg)'}}>▶</div>
+          <Avatar name={p.nome} size={28} color={ROLE_COLORS.promotora}/>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:12,fontWeight:600,color:'var(--text-primary)'}}>{p.nome}</div>
+            <div style={{fontSize:10,color:'var(--text-muted)'}}>{p.email}</div>
+          </div>
+          <div style={{display:'flex',gap:12,flexShrink:0,alignItems:'center'}}>
+            <span style={{fontSize:11,color:'var(--text-muted)'}}><strong style={{color:ROLE_COLORS.digitalizador}}>{pDs.length}</strong> dig.</span>
+            <span style={{fontSize:11,color:'var(--text-muted)'}}><strong style={{color:ROLE_COLORS.promotora}}>{cs.length}</strong> cli.</span>
+            <button onClick={e=>{e.stopPropagation();setDetalhe(p);}} style={{background:G_LIGHT,border:'none',borderRadius:6,padding:'3px 8px',fontSize:10,color:G_MID,cursor:'pointer',fontFamily:'var(--font)',fontWeight:600}}>detalhes</button>
+          </div>
+        </div>
+        {expanded&&(
+          <div style={{background:'rgba(26,158,138,.02)'}}>
+            {pDs.length===0
+              ?<div style={{padding:'10px 44px',fontSize:12,color:'var(--text-muted)'}}>Nenhum digitalizador vinculado.</div>
+              :pDs.map(d=><DigRow key={d.email} d={d}/>)
+            }
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Para PP: só mostra a própria PP e abaixo
+  const ppList=r==='promotora_principal'
+    ?estrutura.filter(u=>u.email===profile?.email)
+    :pps;
+
+  return(
+    <div style={{padding:'28px 32px'}}>
+      <div className="fu" style={{marginBottom:20}}>
+        <div className="section-title">Estrutura — Visão em Árvore</div>
+        <div className="section-sub">
+          {r==='master'?`${pps.length} Promotoras Principais · ${ps.length} Promotoras · ${ds.length} Digitalizadores · ${clientes.length} clientes totais`
+            :`${ps.length} Promotoras · ${ds.length} Digitalizadores · ${clientes.length} clientes`}
+        </div>
+      </div>
+
+      <div style={{display:'grid',gridTemplateColumns:detalhe?'1fr 320px':'1fr',gap:20}}>
+        <div>
+          {ppList.length===0&&<div className="card" style={{padding:'32px',textAlign:'center',fontSize:13,color:'var(--text-muted)'}}>Nenhuma estrutura cadastrada ainda.</div>}
+          {ppList.map(pp=>{
+            const ppEmail=pp.email;
+            const ppPs=ps.filter(p=>p.promotora_principal_email===ppEmail);
+            const ppCs=clientesDePP(pp.nome);
+            const expanded=expandedPP[ppEmail];
+            return(
+              <div key={ppEmail} className="card fu" style={{overflow:'hidden',marginBottom:16}}>
+                {/* Cabeçalho da PP */}
+                <div style={{display:'flex',alignItems:'center',gap:12,padding:'14px 18px',background:`linear-gradient(90deg,${G_DARK}08,transparent)`,borderBottom:'1px solid var(--border)',cursor:'pointer'}}
+                  onClick={()=>{if(r==='master')togglePP(ppEmail);}}>
+                  {r==='master'&&<div style={{fontSize:12,color:'var(--text-muted)',transition:'transform .2s',transform:expanded?'rotate(90deg)':'rotate(0deg)'}}>▶</div>}
+                  <Avatar name={pp.nome} size={36} color={ROLE_COLORS.promotora_principal}/>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:14,fontWeight:700,color:'var(--text-primary)'}}>{pp.nome}</div>
+                    <div style={{fontSize:11,color:'var(--text-muted)'}}>{pp.email}</div>
+                  </div>
+                  <div style={{display:'flex',gap:16,alignItems:'center'}}>
+                    <div style={{textAlign:'center'}}>
+                      <div style={{fontSize:18,fontWeight:700,color:ROLE_COLORS.promotora}}>{ppPs.length}</div>
+                      <div style={{fontSize:9,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.06em'}}>Promotoras</div>
+                    </div>
+                    <div style={{textAlign:'center'}}>
+                      <div style={{fontSize:18,fontWeight:700,color:ROLE_COLORS.digitalizador}}>{ds.filter(d=>d.promotora_principal_email===ppEmail).length}</div>
+                      <div style={{fontSize:9,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.06em'}}>Digitalizadores</div>
+                    </div>
+                    <div style={{textAlign:'center'}}>
+                      <div style={{fontSize:18,fontWeight:700,color:G_MID}}>{ppCs.length}</div>
+                      <div style={{fontSize:9,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.06em'}}>Clientes</div>
+                    </div>
+                    <button onClick={e=>{e.stopPropagation();setDetalhe(pp);}} style={{background:G_LIGHT,border:'none',borderRadius:7,padding:'5px 10px',fontSize:11,color:G_MID,cursor:'pointer',fontFamily:'var(--font)',fontWeight:600}}>detalhes</button>
+                  </div>
+                </div>
+
+                {/* Promotoras desta PP */}
+                {(expanded||r==='promotora_principal')&&(
+                  <div>
+                    {ppPs.length===0
+                      ?<div style={{padding:'12px 24px',fontSize:12,color:'var(--text-muted)'}}>Nenhuma promotora vinculada.</div>
+                      :ppPs.map(p=><PromRow key={p.email} p={p} pEmail={p.email}/>)
+                    }
+                    {/* Digitalizadores diretos da PP (sem promotora) */}
+                    {ds.filter(d=>d.promotora_principal_email===ppEmail&&!d.promotora_email).map(d=><DigRow key={d.email} d={d}/>)}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Painel de detalhes */}
+        {detalhe&&(
+          <div className="card" style={{padding:'20px',height:'fit-content',position:'sticky',top:28}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:16}}>
+              <div>
+                <span className="tag" style={{background:ROLE_COLORS[detalhe.role]+'18',color:ROLE_COLORS[detalhe.role],fontSize:10,marginBottom:8,display:'inline-block'}}>{ROLE_LABELS[detalhe.role]}</span>
+                <div style={{fontSize:15,fontWeight:700,color:'var(--text-primary)'}}>{detalhe.nome}</div>
+                <div style={{fontSize:11,color:'var(--text-muted)',marginTop:2}}>{detalhe.email}</div>
+              </div>
+              <button onClick={()=>setDetalhe(null)} style={{background:'rgba(90,70,50,.08)',border:'1px solid var(--border)',borderRadius:7,color:'var(--text-muted)',cursor:'pointer',width:28,height:28,display:'flex',alignItems:'center',justifyContent:'center',fontSize:16}}>×</button>
+            </div>
+
+            {/* Dados extras (CNPJ, CPF etc) */}
+            {detalhe.extra_data&&Object.keys(detalhe.extra_data).length>0&&(
+              <div style={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:9,overflow:'hidden',marginBottom:14}}>
+                {Object.entries({
+                  cnpj:'CNPJ',razaoSocial:'Razão Social',nomeFantasia:'Nome Fantasia',
+                  cpf:'CPF',dataNasc:'Data Nasc.',telefone:'Telefone'
+                }).filter(([k])=>detalhe.extra_data[k]).map(([k,label])=>(
+                  <div key={k} style={{display:'flex',justifyContent:'space-between',padding:'8px 12px',borderBottom:'1px solid var(--border)'}}>
+                    <span style={{fontSize:11,color:'var(--text-muted)'}}>{label}</span>
+                    <span style={{fontSize:11,color:'var(--text-primary)',fontWeight:500}}>{detalhe.extra_data[k]}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Métricas */}
+            {(()=>{
+              const cs=(detalhe.role==='digitalizador')
+                ?clientesDeDigitalizador(detalhe.nome)
+                :(detalhe.role==='promotora')
+                  ?clientesDePromotora(detalhe.nome)
+                  :clientesDePP(detalhe.nome);
+              const ganhos=cs.filter(c=>c.statusComercial==='ganho'||c.statusComercial==='pedido').length;
+              const emNeg=cs.filter(c=>c.statusComercial==='em_negociacao').length;
+              const frios=cs.filter(c=>sinceD(c.ultimoContato)>=7).length;
+              return(
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+                  {[
+                    {label:'Total clientes',val:cs.length,color:G_MID},
+                    {label:'Convertidos',val:ganhos,color:'var(--success)'},
+                    {label:'Em negociação',val:emNeg,color:'var(--accent)'},
+                    {label:'Leads frios',val:frios,color:'var(--danger)'},
+                  ].map(({label,val,color})=>(
+                    <div key={label} style={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:9,padding:'10px 12px'}}>
+                      <div style={{fontSize:9,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:4}}>{label}</div>
+                      <div style={{fontSize:20,fontWeight:700,color}}>{val}</div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -1020,7 +1425,8 @@ export function CorbanApp({profile,session,signOut,onAlterarSenha}){
         />
         <main style={{flex:1,minWidth:0,overflowY:'auto',paddingRight:selected?490:0,transition:'padding-right .3s cubic-bezier(.4,0,.2,1)'}}>
           {view==='dashboard' && <CorbanDashboard clientes={clientes} estrutura={estrutura} profile={profile}/>}
-          {view==='clientes'  && <CorbanClientes clientes={clientes} profile={profile} onSelect={id=>dispatch({type:'SEL',id})} onNew={()=>dispatch({type:'TNEW'})}/>}
+          {view==='clientes'  && <CorbanClientes clientes={clientes} profile={profile} estrutura={estrutura} onSelect={id=>dispatch({type:'SEL',id})} onNew={()=>dispatch({type:'TNEW'})}/>}
+          {view==='arvore'    && <CorbanArvore estrutura={estrutura} clientes={clientes} profile={profile}/>}
           {view==='estrutura' && <CorbanEstrutura profile={profile} session={session}/>}
           {view==='auditoria' && <CorbanAuditoria/>}
         </main>
