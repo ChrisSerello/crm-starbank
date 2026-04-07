@@ -26,11 +26,11 @@ const ROLE_COLORS = {
 };
 
 const blankCliente = () => ({
-  nomeCliente:'', cpfCliente:'', telefone:'', nomeQuemIndicou:'',
+  nomeCliente:'', cpfCliente:'', telefone:'',
   orgaoPrefeitura:'', produtosInteresse:[], documentoStatus:'Não solicitado',
   statusComercial:'distribuido', observacoes:'', perfilCliente:'',
-  secretariaAtuacao:'', dataEntrada:TODAY, ultimoContato:TODAY,
-  resultado:'Em andamento', activities:[], statusIndicacao:'indicacao_com_nome',
+  dataEntrada:TODAY, ultimoContato:TODAY,
+  resultado:'Em andamento', activities:[],
 });
 
 // ── REDUCER ───────────────────────────────────────────────────────────────────
@@ -57,6 +57,7 @@ function CorbanSidebar({view,setView,profile,onLogout,onAlterarSenha}){
   const r=profile?.role;
   const items=[
     {id:'dashboard',icon:'◈',label:'Dashboard'},
+    {id:'pipeline', icon:'⊞',label:'Pipeline'},
     {id:'clientes', icon:'≡',label:r==='digitalizador'?'Meus Clientes':'Clientes'},
     ...(r!=='digitalizador'?[{id:'arvore',icon:'⎇',label:'Estrutura'}]:[]),
     ...(r==='master'||r==='promotora_principal'?[{id:'estrutura',icon:'＋',label:'Cadastrar'}]:[]),
@@ -68,7 +69,7 @@ function CorbanSidebar({view,setView,profile,onLogout,onAlterarSenha}){
         <div style={{display:'flex',alignItems:'center',gap:10}}>
           <div style={{width:34,height:34,borderRadius:10,background:`linear-gradient(135deg,${G_MID} 0%,#52B788 100%)`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,boxShadow:`0 4px 14px ${G_GLOW}`}}>◈</div>
           <div>
-            <div style={{fontFamily:'var(--font-display)',fontSize:15,fontWeight:600,color:'#FFF'}}>StarFlow</div>
+            <div style={{fontFamily:'var(--font-display)',fontSize:15,fontWeight:600,color:'#FFF'}}>StarNexus</div>
             <div style={{fontSize:10,fontWeight:700,color:G_TEXT,letterSpacing:'.09em',textTransform:'uppercase'}}>Corbans</div>
           </div>
         </div>
@@ -558,7 +559,6 @@ function CorbanDetail({cliente,profile,dispatch,onClose}){
             <div style={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:10,overflow:'hidden',marginBottom:16}}>
               {[
                 ['Telefone',cliente.telefone||'—'],
-                ['Quem indicou',cliente.nomeQuemIndicou||'—'],
                 ['Órgão',cliente.orgaoPrefeitura||'—'],
                 ['CPF',cliente.cpfCliente||'—'],
                 ['Perfil',cliente.perfilCliente||'—'],
@@ -637,6 +637,106 @@ function CorbanDetail({cliente,profile,dispatch,onClose}){
   );
 }
 
+// ── KANBAN CORBANS ────────────────────────────────────────────────────────────
+function CorbanKanban({clientes,profile,dispatch,onSelect}){
+  const [dragId,setDragId]=useState(null);
+  const [search,setSearch]=useState('');
+  const r=profile?.role;
+
+  const filtered=search.trim()
+    ?clientes.filter(c=>
+        c.nomeCliente?.toLowerCase().includes(search.toLowerCase())||
+        c.cpfCliente?.includes(search)||
+        c.orgaoPrefeitura?.toLowerCase().includes(search.toLowerCase()))
+    :clientes;
+
+  const isSearching=search.trim().length>0;
+
+  return(
+    <div style={{padding:'28px 32px',overflowX:'auto'}}>
+      <div className="fu" style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20,gap:16}}>
+        <div style={{flexShrink:0}}>
+          <div className="section-title">Pipeline</div>
+          <div className="section-sub">
+            {isSearching
+              ?`${filtered.length} resultado${filtered.length!==1?'s':''} para "${search}"`
+              :`${clientes.length} clientes · arraste para mover entre estágios`}
+          </div>
+        </div>
+        <div style={{position:'relative',width:260,flexShrink:0}}>
+          <span style={{position:'absolute',left:11,top:'50%',transform:'translateY(-50%)',color:'var(--text-faint)',fontSize:13,pointerEvents:'none'}}>⌕</span>
+          <input className="inp" style={{paddingLeft:32,paddingRight:search?32:12,fontSize:12,height:36}}
+            placeholder="Buscar cliente…" value={search} onChange={e=>setSearch(e.target.value)}/>
+          {search&&(
+            <button onClick={()=>setSearch('')} style={{position:'absolute',right:10,top:'50%',transform:'translateY(-50%)',background:'rgba(90,70,50,.08)',border:'none',borderRadius:'50%',cursor:'pointer',width:18,height:18,display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,color:'var(--text-muted)'}}>×</button>
+          )}
+        </div>
+      </div>
+
+      <div style={{display:'flex',gap:10,alignItems:'flex-start',minWidth:'max-content',paddingBottom:16}}>
+        {STAGES.map((s,si)=>{
+          const sl=filtered.filter(c=>c.statusComercial===s.id);
+          const total=clientes.filter(c=>c.statusComercial===s.id).length;
+          const [over,setOver]=useState(false);
+          return(
+            <div key={s.id} className={`kcol ${over?'dover':''}`} style={{animationDelay:`${si*.04}s`}}
+              onDragOver={e=>{e.preventDefault();setOver(true);}}
+              onDragLeave={()=>setOver(false)}
+              onDrop={()=>{
+                setOver(false);
+                if(dragId) dispatch({type:'MOVE',cid:dragId,st:s.id,user:profile?.nome||'Usuário'});
+                setDragId(null);
+              }}>
+              <div style={{display:'flex',alignItems:'center',gap:7,marginBottom:11,padding:'0 3px'}}>
+                <div style={{width:8,height:8,borderRadius:'50%',background:s.color,boxShadow:`0 0 5px ${s.color}60`,flexShrink:0}}/>
+                <span style={{fontSize:12,fontWeight:600,color:'var(--text-secondary)',flex:1}}>{s.label}</span>
+                <span style={{fontSize:11,fontWeight:700,background:s.bg,color:s.color,borderRadius:99,padding:'1px 6px'}}>
+                  {isSearching?`${sl.length}/${total}`:sl.length}
+                </span>
+              </div>
+              <div style={{minHeight:44}}>
+                {sl.map(c=>(
+                  <div key={c.id} className="kcard fu" draggable
+                    onDragStart={()=>setDragId(c.id)}
+                    onClick={()=>onSelect(c.id)}
+                    style={{position:'relative',zIndex:1}}>
+                    <div style={{fontSize:13,fontWeight:600,color:'var(--text-primary)',lineHeight:1.3,marginBottom:5}}>{c.nomeCliente}</div>
+                    <div style={{fontSize:11,color:'var(--text-muted)',marginBottom:6}}>{c.orgaoPrefeitura||c.cpfCliente}</div>
+                    {(c.produtosInteresse||[]).length>0&&(
+                      <div style={{marginBottom:7}}>
+                        <span style={{fontSize:10,padding:'2px 7px',borderRadius:99,background:G_LIGHT,color:G_MID,fontWeight:600}}>
+                          {c.produtosInteresse[0]}
+                          {c.produtosInteresse.length>1&&` +${c.produtosInteresse.length-1}`}
+                        </span>
+                      </div>
+                    )}
+                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                      <span style={{fontSize:10,color:'var(--text-faint)'}}>{fmtD(c.ultimoContato)}</span>
+                      <span style={{fontSize:10,fontWeight:600,color:c.documentoStatus==='Aprovado'?'var(--success)':c.documentoStatus==='Não solicitado'?'var(--text-faint)':'var(--amber)'}}>
+                        📄 {c.documentoStatus}
+                      </span>
+                    </div>
+                    {r!=='digitalizador'&&c.digitalizadorNome&&(
+                      <div style={{marginTop:6,paddingTop:6,borderTop:'1px solid var(--border)',fontSize:10,color:'var(--text-muted)'}}>
+                        {c.digitalizadorNome}
+                      </div>
+                    )}
+                  </div>
+                ))}
+                {sl.length===0&&(
+                  <div style={{textAlign:'center',padding:'18px 0',fontSize:11,color:'var(--text-faint)',letterSpacing:'.04em'}}>
+                    {isSearching?'Sem resultado':'Solte aqui'}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ── NOVO CLIENTE MODAL ────────────────────────────────────────────────────────
 function NovoClienteField({label,children}){
   return(
@@ -674,7 +774,6 @@ function NovoClienteModal({profile,dispatch,onClose}){
           <NovoClienteField label="Telefone"><input className="inp" value={form.telefone} onChange={e=>set('telefone',e.target.value)} placeholder="(00) 00000-0000"/></NovoClienteField>
           <NovoClienteField label="Órgão / Prefeitura"><input className="inp" value={form.orgaoPrefeitura} onChange={e=>set('orgaoPrefeitura',e.target.value)} placeholder="Prefeitura de…"/></NovoClienteField>
         </div>
-        <div style={{marginBottom:11}}><NovoClienteField label="Nome de quem indicou"><input className="inp" value={form.nomeQuemIndicou} onChange={e=>set('nomeQuemIndicou',e.target.value)} placeholder="Nome do indicador"/></NovoClienteField></div>
         <div style={{marginBottom:14}}>
           <div style={{fontSize:10,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:8}}>Produtos de interesse</div>
           <div style={{display:'flex',flexWrap:'wrap',gap:6}}>
@@ -800,7 +899,6 @@ function CorbanEstrutura({profile,session}){
       setSaving(false);
       setMsg({t:'error',text:'Erro de conexão. Tente novamente.'});
     }
-//   };
   };
 
   const remove=async(u)=>{
@@ -1345,71 +1443,203 @@ export function CorbanApp({profile,session,signOut,onAlterarSenha}){
   const clientesRef=useRef(clientes);
   const [showAS,setShowAS]=useState(false);
 
+  // Hierarquia resolvida do usuário atual (UUIDs + nomes)
+  const hierarchyRef=useRef({
+    digitalizador_id: session?.user?.id||null,
+    digitalizador_nome: profile?.nome||null,
+    promotora_id: profile?.promotora_id||null,
+    promotora_nome: profile?.promotoraNome||null,
+    promotora_principal_id: profile?.promotora_principal_id||null,
+    promotora_principal_nome: profile?.promotoraPrincipalNome||null,
+  });
+
   const setView=useCallback(v=>dispatch({type:'VIEW',v}),[]);
   const selected=clientes.find(c=>c.id===sel);
 
-  // Load clientes from Supabase (RLS filters automatically)
+  // ── Resolver hierarquia completa ao iniciar (garante UUIDs mesmo se profile incompleto) ──
+  useEffect(()=>{
+    if(!session||!profile) return;
+    const resolveHierarchy=async()=>{
+      let h={
+        digitalizador_id: session.user.id,
+        digitalizador_nome: profile.nome,
+        promotora_id: profile.promotora_id||null,
+        promotora_nome: profile.promotoraNome||null,
+        promotora_principal_id: profile.promotora_principal_id||null,
+        promotora_principal_nome: profile.promotoraPrincipalNome||null,
+      };
+
+      // Se faltar IDs, busca via allowed_users → profiles
+      if(!h.promotora_id||!h.promotora_principal_id){
+        const {data:au}=await supabase.from('allowed_users')
+          .select('promotora_email,promotora_principal_email')
+          .ilike('email',session.user.email).single();
+
+        if(au?.promotora_email&&!h.promotora_id){
+          const {data:pp}=await supabase.from('profiles')
+            .select('id,nome').ilike('email',au.promotora_email).single();
+          if(pp){ h.promotora_id=pp.id; h.promotora_nome=pp.nome; }
+          // fallback: busca nome no allowed_users
+          if(!h.promotora_nome){
+            const {data:aup}=await supabase.from('allowed_users')
+              .select('nome').ilike('email',au.promotora_email).single();
+            h.promotora_nome=aup?.nome||null;
+          }
+        }
+        if(au?.promotora_principal_email&&!h.promotora_principal_id){
+          const {data:pp}=await supabase.from('profiles')
+            .select('id,nome').ilike('email',au.promotora_principal_email).single();
+          if(pp){ h.promotora_principal_id=pp.id; h.promotora_principal_nome=pp.nome; }
+          if(!h.promotora_principal_nome){
+            const {data:aup}=await supabase.from('allowed_users')
+              .select('nome').ilike('email',au.promotora_principal_email).single();
+            h.promotora_principal_nome=aup?.nome||null;
+          }
+        }
+      }
+      hierarchyRef.current=h;
+    };
+    resolveHierarchy();
+  },[session,profile]);
+
+  // ── Carregar clientes do Supabase (RLS filtra automaticamente) ──
   useEffect(()=>{
     if(!session) return;
-    supabase.from('corban_clientes').select('*').order('created_at',{ascending:false})
-      .then(({data,error})=>{
-        if(error){console.error('Corban clientes error:',error);setReady(true);return;}
-        const loaded=(data||[]).map(r=>({...r.data,id:r.id,digitalizador_id:r.digitalizador_id,promotora_id:r.promotora_id,promotora_principal_id:r.promotora_principal_id,digitalizadorNome:r.digitalizador_nome,promotoraNome:r.promotora_nome,promotoraPrincipalNome:r.promotora_principal_nome}));
-        dispatch({type:'SET_C',clientes:loaded});
-        setReady(true);
-      });
+    const load=async()=>{
+      const {data,error}=await supabase
+        .from('corban_clientes').select('*').order('created_at',{ascending:false});
+      if(error){ console.error('Corban clientes load error:',error); setReady(true); return; }
+      const loaded=(data||[]).map(r=>({
+        ...r.data, id:r.id,
+        digitalizador_id:r.digitalizador_id,
+        promotora_id:r.promotora_id,
+        promotora_principal_id:r.promotora_principal_id,
+        digitalizadorNome:r.digitalizador_nome,
+        promotoraNome:r.promotora_nome,
+        promotoraPrincipalNome:r.promotora_principal_nome,
+      }));
+      dispatch({type:'SET_C',clientes:loaded});
+      clientesRef.current=loaded;
+      setReady(true);
+    };
+    load();
+
+    // ── Real-time: escuta INSERT e UPDATE em corban_clientes ──
+    const ch=supabase.channel('corban_clientes_rt')
+      .on('postgres_changes',{event:'INSERT',schema:'public',table:'corban_clientes'},
+        payload=>{
+          const r=payload.new;
+          const novo={...r.data,id:r.id,
+            digitalizador_id:r.digitalizador_id,promotora_id:r.promotora_id,
+            promotora_principal_id:r.promotora_principal_id,
+            digitalizadorNome:r.digitalizador_nome,promotoraNome:r.promotora_nome,
+            promotoraPrincipalNome:r.promotora_principal_nome};
+          dispatch(prev=>{
+            // Evitar duplicata
+            if(prev.clientes?.find(c=>c.id===novo.id)) return prev;
+            return{...prev,clientes:[novo,...(prev.clientes||[])]};
+          });
+        })
+      .on('postgres_changes',{event:'UPDATE',schema:'public',table:'corban_clientes'},
+        payload=>{
+          const r=payload.new;
+          const atualizado={...r.data,id:r.id,
+            digitalizador_id:r.digitalizador_id,promotora_id:r.promotora_id,
+            promotora_principal_id:r.promotora_principal_id,
+            digitalizadorNome:r.digitalizador_nome,promotoraNome:r.promotora_nome,
+            promotoraPrincipalNome:r.promotora_principal_nome};
+          dispatch({type:'UPD',c:atualizado});
+        })
+      .subscribe();
+
+    return ()=>supabase.removeChannel(ch);
   },[session]);
 
-  // Load estrutura (only for roles that need it)
+  // ── Carregar estrutura ──
   useEffect(()=>{
     if(!session||profile?.role==='digitalizador') return;
     supabase.from('allowed_users').select('*').eq('modulo','corbans').order('nome')
       .then(({data})=>setEstrutura(data||[]));
   },[session,profile?.role]);
 
-  // Sync clientes changes to Supabase
+  // ── Sync local → Supabase (apenas mudanças, não ADD — ADD é imediato) ──
   useEffect(()=>{
     if(!ready||!session) return;
     const prev=clientesRef.current;
     const changed=clientes.filter(c=>{
       const old=prev.find(p=>p.id===c.id);
-      return !old||JSON.stringify(old)!==JSON.stringify(c);
+      // Só sincroniza UPD e MOVE — ADD já é salvo imediatamente no auditedDispatch
+      return old&&JSON.stringify(old)!==JSON.stringify(c);
     });
     if(changed.length>0){
-      Promise.all(changed.map(c=>{
-        const {id,digitalizador_id,promotora_id,promotora_principal_id,digitalizadorNome,promotoraNome,promotoraPrincipalNome,...data}=c;
-        return supabase.from('corban_clientes').upsert({
-          id,data:{...data,id},
-          digitalizador_id:digitalizador_id||session.user.id,
-          digitalizador_nome:digitalizadorNome||profile?.nome,
-          promotora_id:promotora_id||profile?.promotora_id||null,
-          promotora_nome:promotoraNome||profile?.promotoraNome||null,
-          promotora_principal_id:promotora_principal_id||profile?.promotora_principal_id||null,
-          promotora_principal_nome:promotoraPrincipalNome||profile?.promotoraPrincipalNome||null,
+      const h=hierarchyRef.current;
+      Promise.all(changed.map(async c=>{
+        const {id,digitalizador_id,promotora_id,promotora_principal_id,
+          digitalizadorNome,promotoraNome,promotoraPrincipalNome,...data}=c;
+        const {error}=await supabase.from('corban_clientes').upsert({
+          id,
+          data:{...data,id},
+          digitalizador_id:  digitalizador_id||h.digitalizador_id,
+          digitalizador_nome:digitalizadorNome||h.digitalizador_nome,
+          promotora_id:      promotora_id||h.promotora_id||null,
+          promotora_nome:    promotoraNome||h.promotora_nome||null,
+          promotora_principal_id:   promotora_principal_id||h.promotora_principal_id||null,
+          promotora_principal_nome: promotoraPrincipalNome||h.promotora_principal_nome||null,
         },{onConflict:'id'});
-      }));
+        if(error) console.error('Sync error:',id,error);
+      })).then(()=>{ clientesRef.current=clientes; });
+    } else {
+      clientesRef.current=clientes;
     }
-    clientesRef.current=clientes;
-  },[clientes,ready,session,profile]);
+  },[clientes,ready,session]);
 
-  // Audited dispatch
-  const auditedDispatch=useCallback((action)=>{
+  // ── Audited dispatch — salva ADD imediatamente no Supabase ──
+  const auditedDispatch=useCallback(async(action)=>{
     dispatch(action);
     if(!session||!profile) return;
+
+    // ADD: salva imediatamente com hierarquia completa
+    if(action.type==='ADD'){
+      const h=hierarchyRef.current;
+      const c=action.c;
+      const id=c.id||gid();
+      const clienteComId={...c,id,activities:[{id:gid(),type:'stage_change',date:TODAY,user:profile.nome,text:'Cliente cadastrado'}]};
+
+      const {error}=await supabase.from('corban_clientes').insert({
+        id,
+        data:{...clienteComId},
+        digitalizador_id:  h.digitalizador_id,
+        digitalizador_nome:h.digitalizador_nome,
+        promotora_id:      h.promotora_id||null,
+        promotora_nome:    h.promotora_nome||null,
+        promotora_principal_id:   h.promotora_principal_id||null,
+        promotora_principal_nome: h.promotora_principal_nome||null,
+      });
+      if(error){
+        console.error('ADD error:',error);
+        alert(`Erro ao salvar cliente: ${error.message}`);
+        return;
+      }
+      // Real-time vai propagar para outros usuários
+    }
+
+    // Auditoria
     const auditMap={
       MOVE:()=>({action:'Moveu cliente no pipeline',clienteId:action.cid,details:`Estágio → "${stg(action.st).label}"`}),
       NOTE:()=>({action:'Adicionou nota',clienteId:action.cid,details:action.act?.text||''}),
       UPD: ()=>({action:'Editou informações',clienteId:action.c?.id,details:'Campos atualizados'}),
-      ADD: ()=>({action:'Cadastrou novo cliente',clienteId:null,details:`Nome: ${action.c?.nomeCliente||'—'}`}),
+      ADD: ()=>({action:'Cadastrou novo cliente',clienteId:action.c?.id,details:`Nome: ${action.c?.nomeCliente||'—'}`}),
     };
     const fn=auditMap[action.type];
     if(fn){
       const {action:act,clienteId,details}=fn();
-      const clienteNome=action.type==='ADD'?action.c?.nomeCliente:clientes.find(c=>c.id===clienteId)?.nomeCliente||'—';
+      const clienteNome=action.type==='ADD'
+        ?action.c?.nomeCliente
+        :clientes.find(c=>c.id===clienteId)?.nomeCliente||'—';
       supabase.from('corban_audit_log').insert({
         user_id:session.user.id,user_nome:profile.nome,user_role:profile.role,
         action:act,cliente_id:clienteId||null,cliente_nome:clienteNome,detalhes:details,
-      }).then(({error})=>{ if(error) console.error('Corban audit error:',error); });
+      });
     }
   },[profile,clientes,session]);
 
@@ -1425,6 +1655,7 @@ export function CorbanApp({profile,session,signOut,onAlterarSenha}){
         />
         <main style={{flex:1,minWidth:0,overflowY:'auto',paddingRight:selected?490:0,transition:'padding-right .3s cubic-bezier(.4,0,.2,1)'}}>
           {view==='dashboard' && <CorbanDashboard clientes={clientes} estrutura={estrutura} profile={profile}/>}
+          {view==='pipeline'  && <CorbanKanban clientes={clientes} profile={profile} dispatch={auditedDispatch} onSelect={id=>dispatch({type:'SEL',id})}/>}
           {view==='clientes'  && <CorbanClientes clientes={clientes} profile={profile} estrutura={estrutura} onSelect={id=>dispatch({type:'SEL',id})} onNew={()=>dispatch({type:'TNEW'})}/>}
           {view==='arvore'    && <CorbanArvore estrutura={estrutura} clientes={clientes} profile={profile}/>}
           {view==='estrutura' && <CorbanEstrutura profile={profile} session={session}/>}
