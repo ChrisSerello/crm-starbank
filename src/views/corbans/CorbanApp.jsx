@@ -41,6 +41,8 @@ const blankCliente = () => ({
   statusComercial:'novo_lead', observacoes:'', perfilCliente:'',
   dataEntrada:TODAY, ultimoContato:TODAY,
   resultado:'Em andamento', activities:[],
+  // Proposta
+  proposta_valor:'', proposta_taxa:'', proposta_prazo:'', proposta_anotacao:'',
 });
 
 // ── REDUCER ───────────────────────────────────────────────────────────────────
@@ -63,14 +65,14 @@ function R(s,{type:t,...a}){
 }
 
 // ── SIDEBAR ───────────────────────────────────────────────────────────────────
-function CorbanSidebar({view,setView,profile,onLogout,onAlterarSenha}){
+function CorbanSidebar({view,setView,profile,onLogout,onAlterarSenha,notifCount,onSino}){
   const r=profile?.role;
   const items=[
     {id:'dashboard',icon:'◈',label:'Dashboard'},
     {id:'pipeline', icon:'⊞',label:'Pipeline'},
     {id:'clientes', icon:'≡',label:r==='digitalizador'?'Meus Clientes':'Clientes'},
     ...(r!=='digitalizador'?[{id:'arvore',icon:'⎇',label:'Estrutura'}]:[]),
-    ...(r==='master'||r==='promotora_principal'?[{id:'estrutura',icon:'＋',label:'Cadastrar'}]:[]),
+    ...(r==='master'||r==='promotora_principal'||r==='promotora'?[{id:'estrutura',icon:'＋',label:'Cadastrar'}]:[]),
     ...(r==='master'?[{id:'auditoria',icon:'🔍',label:'Auditoria'}]:[]),
   ];
   return(
@@ -78,10 +80,17 @@ function CorbanSidebar({view,setView,profile,onLogout,onAlterarSenha}){
       <div style={{padding:'20px 18px 16px',borderBottom:'1px solid rgba(45,134,83,0.2)'}}>
         <div style={{display:'flex',alignItems:'center',gap:10}}>
           <div style={{width:34,height:34,borderRadius:10,background:`linear-gradient(135deg,${G_MID} 0%,#52B788 100%)`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,boxShadow:`0 4px 14px ${G_GLOW}`}}>◈</div>
-          <div>
+          <div style={{flex:1}}>
             <div style={{fontFamily:'var(--font-display)',fontSize:15,fontWeight:600,color:'#FFF'}}>StarNexus</div>
             <div style={{fontSize:10,fontWeight:700,color:G_TEXT,letterSpacing:'.09em',textTransform:'uppercase'}}>Corbans</div>
           </div>
+          {/* Sininho */}
+          <button onClick={onSino} style={{position:'relative',background:'none',border:'none',cursor:'pointer',padding:4}}>
+            <span style={{fontSize:18}}>🔔</span>
+            {notifCount>0&&(
+              <span style={{position:'absolute',top:-2,right:-2,width:16,height:16,borderRadius:'50%',background:'var(--danger)',color:'#fff',fontSize:9,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center'}}>{notifCount>9?'9+':notifCount}</span>
+            )}
+          </button>
         </div>
       </div>
       <nav style={{padding:'10px 8px',flex:1}}>
@@ -197,7 +206,76 @@ function CorbanDashboard({clientes,estrutura,profile}){
     return Object.values(map).sort((a,b)=>b.total-a.total).slice(0,8);
   },[clientesComFiltros,r]);
 
-  // Estrutura stats
+  // ── Painel de prioridades (digitalizador) ──
+  const prioridades=useMemo(()=>{
+    if(r!=='digitalizador') return null;
+    const frios7=clientes.filter(c=>sinceD(c.ultimoContato)>=7).slice(0,5);
+    const docPend=clientes.filter(c=>c.documentoStatus==='Solicitado'||c.documentoStatus==='Recebido').slice(0,5);
+    const negoc=clientes.filter(c=>c.statusComercial==='em_negociacao').slice(0,5);
+    return {frios7,docPend,negoc};
+  },[clientes,r]);
+
+  // ── Ranking digitalizadores + inatividade (promotora) ──
+  const rankingDigs=useMemo(()=>{
+    if(r!=='promotora') return null;
+    const semana=new Date(); semana.setDate(semana.getDate()-7);
+    const semStr=semana.toISOString().split('T')[0];
+    const map={};
+    clientes.forEach(c=>{
+      const nome=c.digitalizadorNome||'Sem digitalizador';
+      if(!map[nome]) map[nome]={nome,total:0,semana:0,parados:0,ultimoCad:null};
+      map[nome].total++;
+      if(c.dataEntrada>=semStr) map[nome].semana++;
+      if(sinceD(c.ultimoContato)>=7) map[nome].parados++;
+      if(!map[nome].ultimoCad||c.dataEntrada>map[nome].ultimoCad) map[nome].ultimoCad=c.dataEntrada;
+    });
+    // Adicionar digitalizadores sem clientes (inativos)
+    estrutura.filter(u=>u.role==='digitalizador'&&u.promotora_email===profile?.email).forEach(u=>{
+      if(!map[u.nome]) map[u.nome]={nome:u.nome,total:0,semana:0,parados:0,ultimoCad:null};
+    });
+    return Object.values(map).sort((a,b)=>b.total-a.total);
+  },[clientes,r,estrutura,profile?.email]);
+
+  // ── Comparativo mensal por promotora (PP) ──
+  const comparativoMensal=useMemo(()=>{
+    if(r!=='promotora_principal') return null;
+    const meses={};
+    clientes.forEach(c=>{
+      if(!c.dataEntrada) return;
+      const mes=c.dataEntrada.substring(0,7); // YYYY-MM
+      const prom=c.promotoraNome||'Sem promotora';
+      if(!meses[mes]) meses[mes]={};
+      if(!meses[mes][prom]) meses[mes][prom]=0;
+      meses[mes][prom]++;
+    });
+    const mesesOrdenados=Object.keys(meses).sort().slice(-6); // últimos 6 meses
+    const promotoras=[...new Set(clientes.map(c=>c.promotoraNome).filter(Boolean))];
+    return {meses:mesesOrdenados,promotoras,data:meses};
+  },[clientes,r]);
+
+  // ── Exportação por período (PP) ──
+  const [expDe,setExpDe]=useState('');
+  const [expAte,setExpAte]=useState('');
+  const [expProm,setExpProm]=useState('');
+  const exportarRelatorio=()=>{
+    let dados=clientes;
+    if(expDe) dados=dados.filter(c=>c.dataEntrada>=expDe);
+    if(expAte) dados=dados.filter(c=>c.dataEntrada<=expAte);
+    if(expProm) dados=dados.filter(c=>c.promotoraNome===expProm);
+    const headers=['Nome','CPF','Telefone','Órgão','Estágio','Produto','Documento','Digitalizador','Promotora','Data Entrada','Último Contato'];
+    const rows=dados.map(c=>[
+      c.nomeCliente||'',c.cpfCliente||'',c.telefone||'',c.orgaoPrefeitura||'',
+      c.statusComercial||'',(c.produtosInteresse||[]).join('; '),
+      c.documentoStatus||'',c.digitalizadorNome||'',c.promotoraNome||'',
+      c.dataEntrada||'',c.ultimoContato||''
+    ]);
+    const csv=[headers,...rows].map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+    const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8;'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url;a.download=`relatorio_corbans_${TODAY}.csv`;a.click();
+    URL.revokeObjectURL(url);
+  };
   const pps=estrutura.filter(u=>u.role==='promotora_principal').length;
   const ps=estrutura.filter(u=>u.role==='promotora').length;
   const ds=estrutura.filter(u=>u.role==='digitalizador').length;
@@ -353,6 +431,160 @@ function CorbanDashboard({clientes,estrutura,profile}){
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* ── PAINEL DE PRIORIDADES (digitalizador) ── */}
+      {r==='digitalizador'&&prioridades&&(
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:14,marginTop:14}}>
+          {/* Frios */}
+          <div className="card fu3" style={{padding:'16px 18px'}}>
+            <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:12}}>
+              <div style={{width:8,height:8,borderRadius:'50%',background:'var(--danger)',boxShadow:'0 0 5px var(--danger)'}}/>
+              <div className="eyebrow" style={{color:'var(--danger)'}}>Sem contato +7d</div>
+              <span style={{marginLeft:'auto',fontSize:11,fontWeight:700,background:'var(--danger-dim)',color:'var(--danger)',borderRadius:99,padding:'1px 8px'}}>{clientes.filter(c=>sinceD(c.ultimoContato)>=7).length}</span>
+            </div>
+            {prioridades.frios7.length===0
+              ?<div style={{fontSize:12,color:'var(--success)'}}>✓ Todos em dia!</div>
+              :prioridades.frios7.map((c,i)=>(
+                <div key={c.id} style={{display:'flex',justifyContent:'space-between',padding:'7px 0',borderBottom:i<prioridades.frios7.length-1?'1px solid var(--border)':'none'}}>
+                  <div style={{fontSize:12,fontWeight:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:'65%'}}>{c.nomeCliente}</div>
+                  <span style={{fontSize:11,fontWeight:700,color:'var(--danger)',flexShrink:0}}>{sinceD(c.ultimoContato)}d</span>
+                </div>
+              ))
+            }
+          </div>
+          {/* Docs pendentes */}
+          <div className="card fu3" style={{padding:'16px 18px'}}>
+            <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:12}}>
+              <div style={{width:8,height:8,borderRadius:'50%',background:'var(--amber)',boxShadow:'0 0 5px var(--amber)'}}/>
+              <div className="eyebrow" style={{color:'var(--amber)'}}>Docs pendentes</div>
+              <span style={{marginLeft:'auto',fontSize:11,fontWeight:700,background:'var(--amber-dim)',color:'var(--amber)',borderRadius:99,padding:'1px 8px'}}>{clientes.filter(c=>c.documentoStatus==='Solicitado'||c.documentoStatus==='Recebido').length}</span>
+            </div>
+            {prioridades.docPend.length===0
+              ?<div style={{fontSize:12,color:'var(--success)'}}>✓ Documentação em dia!</div>
+              :prioridades.docPend.map((c,i)=>(
+                <div key={c.id} style={{display:'flex',justifyContent:'space-between',padding:'7px 0',borderBottom:i<prioridades.docPend.length-1?'1px solid var(--border)':'none'}}>
+                  <div style={{fontSize:12,fontWeight:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:'60%'}}>{c.nomeCliente}</div>
+                  <span style={{fontSize:10,fontWeight:600,color:'var(--amber)',flexShrink:0}}>{c.documentoStatus}</span>
+                </div>
+              ))
+            }
+          </div>
+          {/* Em negociação */}
+          <div className="card fu3" style={{padding:'16px 18px'}}>
+            <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:12}}>
+              <div style={{width:8,height:8,borderRadius:'50%',background:'var(--accent)',boxShadow:'0 0 5px var(--accent)'}}/>
+              <div className="eyebrow" style={{color:'var(--accent)'}}>Em negociação ⚡</div>
+              <span style={{marginLeft:'auto',fontSize:11,fontWeight:700,background:'var(--accent-dim)',color:'var(--accent)',borderRadius:99,padding:'1px 8px'}}>{clientes.filter(c=>c.statusComercial==='em_negociacao').length}</span>
+            </div>
+            {prioridades.negoc.length===0
+              ?<div style={{fontSize:12,color:'var(--text-muted)'}}>Nenhum em negociação.</div>
+              :prioridades.negoc.map((c,i)=>(
+                <div key={c.id} style={{display:'flex',justifyContent:'space-between',padding:'7px 0',borderBottom:i<prioridades.negoc.length-1?'1px solid var(--border)':'none'}}>
+                  <div style={{fontSize:12,fontWeight:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',maxWidth:'65%'}}>{c.nomeCliente}</div>
+                  <span style={{fontSize:10,color:'var(--text-faint)',flexShrink:0}}>{fmtD(c.ultimoContato)}</span>
+                </div>
+              ))
+            }
+          </div>
+        </div>
+      )}
+
+      {/* ── RANKING DIGITALIZADORES + INATIVIDADE (promotora) ── */}
+      {r==='promotora'&&rankingDigs&&(
+        <div className="card fu3" style={{padding:'18px 20px',marginTop:14}}>
+          <div className="eyebrow" style={{marginBottom:14}}>Ranking dos seus digitalizadores</div>
+          {rankingDigs.length===0
+            ?<div style={{fontSize:12,color:'var(--text-muted)'}}>Nenhum digitalizador ainda.</div>
+            :rankingDigs.map((d,i)=>{
+              const inativo=!d.ultimoCad||(new Date()-new Date(d.ultimoCad))>10*86400000;
+              const semStr=new Date(Date.now()-7*86400000).toISOString().split('T')[0];
+              return(
+                <div key={d.nome} style={{display:'flex',alignItems:'center',gap:12,padding:'10px 0',borderBottom:i<rankingDigs.length-1?'1px solid var(--border)':'none'}}>
+                  <div style={{width:28,height:28,borderRadius:8,background:inativo?'var(--danger-dim)':i===0?G_LIGHT:'rgba(90,70,50,.06)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,fontWeight:700,color:inativo?'var(--danger)':i===0?G_MID:'var(--text-muted)',flexShrink:0}}>{i+1}</div>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{display:'flex',alignItems:'center',gap:6}}>
+                      <span style={{fontSize:13,fontWeight:600,color:'var(--text-primary)'}}>{d.nome}</span>
+                      {inativo&&<span style={{fontSize:10,fontWeight:700,background:'var(--danger-dim)',color:'var(--danger)',borderRadius:99,padding:'1px 7px'}}>⚠ Inativo +10d</span>}
+                    </div>
+                    <div style={{fontSize:11,color:'var(--text-muted)',marginTop:2}}>
+                      {d.semana} essa semana · {d.parados} parados
+                    </div>
+                  </div>
+                  <div style={{textAlign:'right',flexShrink:0}}>
+                    <div style={{fontSize:18,fontWeight:700,color:inativo?'var(--danger)':G_MID}}>{d.total}</div>
+                    <div style={{fontSize:9,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.06em'}}>clientes</div>
+                  </div>
+                </div>
+              );
+            })
+          }
+        </div>
+      )}
+
+      {/* ── COMPARATIVO MENSAL + EXPORTAÇÃO (promotora_principal) ── */}
+      {r==='promotora_principal'&&comparativoMensal&&(
+        <div style={{display:'grid',gridTemplateColumns:'1fr auto',gap:14,marginTop:14,alignItems:'start'}}>
+          {/* Gráfico de barras por mês */}
+          <div className="card fu3" style={{padding:'18px 20px'}}>
+            <div className="eyebrow" style={{marginBottom:14}}>Cadastros por promotora — últimos 6 meses</div>
+            {comparativoMensal.meses.length===0
+              ?<div style={{fontSize:12,color:'var(--text-muted)'}}>Sem dados ainda.</div>
+              :(()=>{
+                const colors=['#2D8653','#1A9E8A','#5B4FE8','#C4720A','#C4423A','#7B6EA8'];
+                const maxVal=Math.max(...comparativoMensal.meses.map(m=>
+                  Math.max(...comparativoMensal.promotoras.map(p=>comparativoMensal.data[m]?.[p]||0))
+                ),1);
+                return(
+                  <div>
+                    <div style={{display:'flex',gap:8,overflowX:'auto',paddingBottom:8}}>
+                      {comparativoMensal.meses.map(mes=>(
+                        <div key={mes} style={{flex:1,minWidth:64,textAlign:'center'}}>
+                          <div style={{display:'flex',flexDirection:'column-reverse',gap:3,height:120,justifyContent:'flex-start',alignItems:'center',marginBottom:6}}>
+                            {comparativoMensal.promotoras.map((p,pi)=>{
+                              const val=comparativoMensal.data[mes]?.[p]||0;
+                              const h=Math.round(val/maxVal*100);
+                              return val>0?(
+                                <div key={p} title={`${p}: ${val}`} style={{width:24,height:`${h}%`,minHeight:val>0?4:0,background:colors[pi%colors.length],borderRadius:'3px 3px 0 0',transition:'height .5s',cursor:'default'}}/>
+                              ):null;
+                            })}
+                          </div>
+                          <div style={{fontSize:10,color:'var(--text-muted)'}}>{mes.substring(5)}/{mes.substring(2,4)}</div>
+                        </div>
+                      ))}
+                    </div>
+                    {/* Legenda */}
+                    <div style={{display:'flex',flexWrap:'wrap',gap:8,marginTop:8}}>
+                      {comparativoMensal.promotoras.map((p,pi)=>(
+                        <div key={p} style={{display:'flex',alignItems:'center',gap:4,fontSize:11,color:'var(--text-secondary)'}}>
+                          <div style={{width:10,height:10,borderRadius:3,background:colors[pi%colors.length],flexShrink:0}}/>
+                          {p}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()
+            }
+          </div>
+
+          {/* Exportação */}
+          <div className="card fu3" style={{padding:'18px 20px',minWidth:240}}>
+            <div className="eyebrow" style={{marginBottom:14}}>Exportar relatório</div>
+            <label style={{fontSize:11,color:'var(--text-muted)',display:'block',marginBottom:5}}>Promotora</label>
+            <select className="sel" value={expProm} onChange={e=>setExpProm(e.target.value)} style={{marginBottom:8,fontSize:12}}>
+              <option value="">Todas</option>
+              {comparativoMensal.promotoras.map(p=><option key={p} value={p}>{p}</option>)}
+            </select>
+            <label style={{fontSize:11,color:'var(--text-muted)',display:'block',marginBottom:5}}>De</label>
+            <input type="date" className="inp" style={{marginBottom:8,padding:'7px 10px',fontSize:12}} value={expDe} onChange={e=>setExpDe(e.target.value)}/>
+            <label style={{fontSize:11,color:'var(--text-muted)',display:'block',marginBottom:5}}>Até</label>
+            <input type="date" className="inp" style={{marginBottom:14,padding:'7px 10px',fontSize:12}} value={expAte} onChange={e=>setExpAte(e.target.value)}/>
+            <button className="btn" style={{width:'100%',justifyContent:'center',background:G_MID,color:'#fff',fontSize:12}} onClick={exportarRelatorio}>
+              ⬇ Exportar CSV
+            </button>
+          </div>
         </div>
       )}
     </div>
@@ -524,7 +756,7 @@ function CorbanClientes({clientes,profile,estrutura,onSelect,onNew}){
 }
 
 // ── DETAIL PANEL ──────────────────────────────────────────────────────────────
-function CorbanDetail({cliente,profile,dispatch,onClose}){
+function CorbanDetail({cliente,profile,session,dispatch,onClose}){
   const [tab,setTab]=useState('info');
   const [note,setNote]=useState('');
   const [es,setEs]=useState(cliente.statusComercial);
@@ -532,13 +764,65 @@ function CorbanDetail({cliente,profile,dispatch,onClose}){
   const [docs,setDocs]=useState(cliente.documentos||[]);
   const [uploading,setUploading]=useState(false);
   const [uploadMsg,setUploadMsg]=useState(null);
-  const days=sinceD(cliente.ultimoContato);
+  // Proposta
+  const [propValor,setPropValor]=useState(cliente.proposta_valor||'');
+  const [propTaxa,setPropTaxa]=useState(cliente.proposta_taxa||'');
+  const [propPrazo,setPropPrazo]=useState(cliente.proposta_prazo||'');
+  const [propAnotacao,setPropAnotacao]=useState(cliente.proposta_anotacao||'');
+  // Proteção de edição
+  const [bloqueioModal,setBloqueioModal]=useState(null); // null | {tipo, novoValor}
+  const [enviandoNotif,setEnviandoNotif]=useState(false);
+  const [notifEnviada,setNotifEnviada]=useState(false);
 
-  const save=()=>{
-    const upd={...cliente,documentoStatus:ed,documentos:docs};
-    if(es!==cliente.statusComercial) dispatch({type:'MOVE',cid:cliente.id,st:es,user:profile?.nome||'Usuário'});
-    dispatch({type:'UPD',c:upd});
-    onClose();
+  const days=sinceD(cliente.ultimoContato);
+  const r=profile?.role;
+  // Promotora e PP não podem editar diretamente clientes de digitalizadores
+  const isRestrito=(r==='promotora'||r==='promotora_principal')&&!!cliente.digitalizador_id;
+
+  const salvarProposta=()=>{
+    dispatch({type:'UPD',c:{...cliente,proposta_valor:propValor,proposta_taxa:propTaxa,proposta_prazo:propPrazo,proposta_anotacao:propAnotacao}});
+  };
+
+  // Bloqueio: ao tentar mover estágio ou alterar documento, pede confirmação via notificação
+  const tentarSalvar=async()=>{
+    if(!isRestrito){
+      // Digitalizador e master podem salvar diretamente
+      const upd={...cliente,documentoStatus:ed,documentos:docs};
+      if(es!==cliente.statusComercial) dispatch({type:'MOVE',cid:cliente.id,st:es,user:profile?.nome||'Usuário'});
+      dispatch({type:'UPD',c:upd});
+      onClose();
+      return;
+    }
+    // Verificar se houve mudança
+    const mudouEstagio=es!==cliente.statusComercial;
+    const mudouDoc=ed!==cliente.documentoStatus;
+    if(!mudouEstagio&&!mudouDoc){onClose();return;}
+    // Mostrar modal de bloqueio
+    setBloqueioModal({
+      mudouEstagio,mudouDoc,
+      novoEstagio:es,novoDoc:ed,
+    });
+  };
+
+  const enviarSolicitacao=async()=>{
+    if(!bloqueioModal||!cliente.digitalizador_id) return;
+    setEnviandoNotif(true);
+    const partes=[];
+    if(bloqueioModal.mudouEstagio) partes.push(`mover para estágio "${CORBAN_STAGES.find(s=>s.id===bloqueioModal.novoEstagio)?.label||bloqueioModal.novoEstagio}"`);
+    if(bloqueioModal.mudouDoc) partes.push(`alterar documento para "${bloqueioModal.novoDoc}"`);
+    const msg=`${profile.nome} (${ROLE_LABELS[r]}) solicitou: ${partes.join(' e ')} no cliente "${cliente.nomeCliente}". Confirme ou ignore.`;
+    await supabase.from('corban_notificacoes').insert({
+      de_user_id:session?.user?.id,
+      de_nome:profile.nome,
+      de_role:profile.role,
+      para_user_id:cliente.digitalizador_id,
+      para_nome:cliente.digitalizadorNome||'Digitalizador',
+      para_role:'digitalizador',
+      mensagem:msg,
+    });
+    setEnviandoNotif(false);
+    setNotifEnviada(true);
+    setTimeout(()=>{setBloqueioModal(null);setNotifEnviada(false);onClose();},2500);
   };
 
   const handleUpload=async(e)=>{
@@ -581,7 +865,10 @@ function CorbanDetail({cliente,profile,dispatch,onClose}){
     return '📎';
   };
 
+  const hasProposta=propValor||propTaxa||propPrazo;
+
   return(
+    <>
     <div className="spanel">
       <div style={{padding:'18px 22px 14px',borderBottom:'1px solid var(--border)',background:'var(--bg-card)'}}>
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:12}}>
@@ -594,15 +881,21 @@ function CorbanDetail({cliente,profile,dispatch,onClose}){
             <div style={{marginTop:8,display:'flex',gap:6,flexWrap:'wrap'}}>
               <StageTag stageId={cliente.statusComercial}/>
               {cliente.digitalizadorNome&&<span style={{fontSize:10,padding:'2px 8px',borderRadius:99,background:G_LIGHT,color:G_MID,fontWeight:600}}>{cliente.digitalizadorNome}</span>}
+              {isRestrito&&<span style={{fontSize:10,padding:'2px 8px',borderRadius:99,background:'var(--amber-dim)',color:'var(--amber)',fontWeight:600}}>👁 Somente leitura</span>}
             </div>
           </div>
           <button onClick={onClose} style={{background:'rgba(90,70,50,.08)',border:'1px solid var(--border-mid)',borderRadius:8,color:'var(--text-secondary)',cursor:'pointer',width:30,height:30,display:'flex',alignItems:'center',justifyContent:'center',fontSize:18}}>×</button>
         </div>
       </div>
 
-      <div style={{display:'flex',borderBottom:'1px solid var(--border)',background:'var(--bg-card)'}}>
-        {[['info','Informações'],['activity','Atividades'],['docs',`Documentos${docs.length>0?` (${docs.length})`:''}`]].map(([id,lb])=>(
-          <button key={id} className={`ptab ${tab===id?'on':''}`} onClick={()=>setTab(id)}>{lb}</button>
+      <div style={{display:'flex',borderBottom:'1px solid var(--border)',background:'var(--bg-card)',overflowX:'auto'}}>
+        {[
+          ['info','Informações'],
+          ['proposta',`Proposta${hasProposta?' ✓':''}`],
+          ['activity','Atividades'],
+          ['docs',`Documentos${docs.length>0?` (${docs.length})`:''}`],
+        ].map(([id,lb])=>(
+          <button key={id} className={`ptab ${tab===id?'on':''}`} onClick={()=>setTab(id)} style={{whiteSpace:'nowrap'}}>{lb}</button>
         ))}
       </div>
 
@@ -638,6 +931,11 @@ function CorbanDetail({cliente,profile,dispatch,onClose}){
 
             <div style={{borderTop:'1px solid var(--border)',paddingTop:16}}>
               <div className="eyebrow" style={{marginBottom:10}}>Atualizar status</div>
+              {isRestrito&&(
+                <div style={{padding:'8px 12px',borderRadius:8,marginBottom:10,background:'var(--amber-dim)',border:'1px solid rgba(196,114,10,.2)',fontSize:12,color:'var(--amber)'}}>
+                  ⚠ Alterações precisam ser confirmadas pelo digitalizador responsável.
+                </div>
+              )}
               <label style={{fontSize:12,color:'var(--text-muted)',display:'block',marginBottom:5}}>Estágio</label>
               <select className="sel" value={es} onChange={e=>setEs(e.target.value)} style={{marginBottom:10}}>
                 {CORBAN_STAGES.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}
@@ -646,8 +944,69 @@ function CorbanDetail({cliente,profile,dispatch,onClose}){
               <select className="sel" value={ed} onChange={e=>setEd(e.target.value)} style={{marginBottom:14}}>
                 {DOC_STATUS.map(s=><option key={s} value={s}>{s}</option>)}
               </select>
-              <button className="btn" style={{width:'100%',justifyContent:'center',background:G_MID,color:'#fff',boxShadow:`0 3px 12px ${G_GLOW}`}} onClick={save}>Salvar alterações</button>
+              <button className="btn" style={{width:'100%',justifyContent:'center',background:isRestrito?'var(--amber)':G_MID,color:'#fff',boxShadow:`0 3px 12px ${isRestrito?'rgba(196,114,10,.35)':G_GLOW}`}} onClick={tentarSalvar}>
+                {isRestrito?'📣 Solicitar alteração':'Salvar alterações'}
+              </button>
             </div>
+          </div>
+        )}
+
+        {tab==='proposta'&&(
+          <div>
+            <div style={{padding:'12px 14px',background:G_LIGHT,borderRadius:10,border:`1px solid ${G_MID}25`,marginBottom:16}}>
+              <div style={{fontSize:11,color:G_MID,fontWeight:600,marginBottom:2}}>💰 Dados da Proposta</div>
+              <div style={{fontSize:11,color:'var(--text-muted)'}}>Informações financeiras do cliente</div>
+            </div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:12}}>
+              <div>
+                <label style={{display:'block',fontSize:10,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:6}}>Valor desejado</label>
+                <input className="inp" value={propValor} onChange={e=>setPropValor(e.target.value)} placeholder="R$ 0,00"
+                  readOnly={isRestrito} style={{background:isRestrito?'var(--bg-base)':'',cursor:isRestrito?'not-allowed':''}}/>
+              </div>
+              <div>
+                <label style={{display:'block',fontSize:10,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:6}}>Taxa (% ao mês)</label>
+                <input className="inp" value={propTaxa} onChange={e=>setPropTaxa(e.target.value)} placeholder="0,00%"
+                  readOnly={isRestrito} style={{background:isRestrito?'var(--bg-base)':'',cursor:isRestrito?'not-allowed':''}}/>
+              </div>
+              <div>
+                <label style={{display:'block',fontSize:10,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:6}}>Prazo (meses)</label>
+                <input className="inp" type="number" value={propPrazo} onChange={e=>setPropPrazo(e.target.value)} placeholder="Ex: 48"
+                  readOnly={isRestrito} style={{background:isRestrito?'var(--bg-base)':'',cursor:isRestrito?'not-allowed':''}}/>
+              </div>
+              {propValor&&propPrazo&&(
+                <div style={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:9,padding:'12px',display:'flex',flexDirection:'column',justifyContent:'center'}}>
+                  <div style={{fontSize:9,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:4}}>Parcela estimada</div>
+                  <div style={{fontSize:18,fontWeight:700,color:G_MID}}>
+                    {(()=>{
+                      const v=parseFloat(propValor.replace(/[^0-9,.]/g,'').replace(',','.'));
+                      const n=parseInt(propPrazo);
+                      const t=parseFloat(propTaxa.replace(/[^0-9,.]/g,'').replace(',','.'))/100;
+                      if(!v||!n) return '—';
+                      if(!t) return `R$ ${(v/n).toFixed(2).replace('.',',')}`;
+                      const p=v*(t*Math.pow(1+t,n))/(Math.pow(1+t,n)-1);
+                      return `R$ ${p.toFixed(2).replace('.',',')}`;
+                    })()}
+                  </div>
+                </div>
+              )}
+            </div>
+            <div style={{marginBottom:16}}>
+              <label style={{display:'block',fontSize:10,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:6}}>Anotação</label>
+              <textarea className="inp" value={propAnotacao} onChange={e=>setPropAnotacao(e.target.value)}
+                placeholder="Observações sobre a proposta, condições especiais, negociações…"
+                style={{resize:'vertical',minHeight:80,fontFamily:'var(--font)',lineHeight:1.5}}
+                readOnly={isRestrito}/>
+            </div>
+            {!isRestrito&&(
+              <button className="btn" style={{width:'100%',justifyContent:'center',background:G_MID,color:'#fff',boxShadow:`0 3px 12px ${G_GLOW}`}} onClick={salvarProposta}>
+                Salvar proposta
+              </button>
+            )}
+            {isRestrito&&(
+              <div style={{padding:'9px 12px',borderRadius:8,background:'var(--amber-dim)',border:'1px solid rgba(196,114,10,.2)',fontSize:12,color:'var(--amber)'}}>
+                👁 Você está visualizando a proposta. Apenas o digitalizador pode editar.
+              </div>
+            )}
           </div>
         )}
 
@@ -680,73 +1039,41 @@ function CorbanDetail({cliente,profile,dispatch,onClose}){
 
         {tab==='docs'&&(
           <div>
-            {/* Área de upload */}
             <div style={{marginBottom:16}}>
               <div className="eyebrow" style={{marginBottom:10}}>Enviar documento</div>
-              <label style={{
-                display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',
-                gap:8,padding:'22px 16px',borderRadius:12,cursor:'pointer',
-                border:`2px dashed ${uploading?G_MID:'var(--border-mid)'}`,
-                background:uploading?G_LIGHT:'rgba(90,70,50,.03)',
-                transition:'all .15s',
-              }}
+              <label style={{display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:8,padding:'22px 16px',borderRadius:12,cursor:'pointer',border:`2px dashed ${uploading?G_MID:'var(--border-mid)'}`,background:uploading?G_LIGHT:'rgba(90,70,50,.03)',transition:'all .15s'}}
                 onMouseEnter={e=>{if(!uploading){e.currentTarget.style.background=G_LIGHT;e.currentTarget.style.borderColor=G_MID;}}}
                 onMouseLeave={e=>{if(!uploading){e.currentTarget.style.background='rgba(90,70,50,.03)';e.currentTarget.style.borderColor='var(--border-mid)';}}}
               >
                 <input type="file" style={{display:'none'}} onChange={handleUpload} disabled={uploading}
                   accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.webp"/>
                 <div style={{fontSize:26}}>{uploading?'⏳':'📤'}</div>
-                <div style={{fontSize:13,fontWeight:600,color:'var(--text-primary)'}}>
-                  {uploading?'Enviando…':'Clique para enviar arquivo'}
-                </div>
+                <div style={{fontSize:13,fontWeight:600,color:'var(--text-primary)'}}>{uploading?'Enviando…':'Clique para enviar arquivo'}</div>
                 <div style={{fontSize:11,color:'var(--text-muted)'}}>PDF, Word, Excel, Imagens · Máx. 10MB</div>
               </label>
-
               {uploadMsg&&(
-                <div style={{
-                  marginTop:10,padding:'9px 12px',borderRadius:8,fontSize:12,fontWeight:500,
-                  background:uploadMsg.t==='success'?'var(--success-dim)':'var(--danger-dim)',
-                  color:uploadMsg.t==='success'?'var(--success)':'var(--danger)',
-                  border:`1px solid ${uploadMsg.t==='success'?'rgba(30,143,94,.2)':'rgba(196,66,58,.2)'}`,
-                }}>
+                <div style={{marginTop:10,padding:'9px 12px',borderRadius:8,fontSize:12,fontWeight:500,background:uploadMsg.t==='success'?'var(--success-dim)':'var(--danger-dim)',color:uploadMsg.t==='success'?'var(--success)':'var(--danger)',border:`1px solid ${uploadMsg.t==='success'?'rgba(30,143,94,.2)':'rgba(196,66,58,.2)'}`}}>
                   {uploadMsg.t==='success'?'✓':'⚠'} {uploadMsg.text}
                 </div>
               )}
             </div>
-
-            {/* Lista de documentos */}
-            <div className="eyebrow" style={{marginBottom:10}}>
-              Documentos {docs.length>0&&<span style={{fontWeight:400,color:'var(--text-faint)'}}>({docs.length})</span>}
-            </div>
+            <div className="eyebrow" style={{marginBottom:10}}>Documentos {docs.length>0&&<span style={{fontWeight:400,color:'var(--text-faint)'}}>({docs.length})</span>}</div>
             {docs.length===0?(
               <div style={{textAlign:'center',padding:'28px 0',fontSize:13,color:'var(--text-muted)'}}>
-                <div style={{fontSize:28,marginBottom:8}}>📁</div>
-                Nenhum documento enviado ainda.
+                <div style={{fontSize:28,marginBottom:8}}>📁</div>Nenhum documento enviado ainda.
               </div>
             ):(
               <div style={{display:'flex',flexDirection:'column',gap:8}}>
                 {docs.map((doc,i)=>(
-                  <div key={i} style={{
-                    display:'flex',alignItems:'center',gap:10,padding:'11px 14px',
-                    background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:10,
-                    transition:'all .15s',
-                  }}>
+                  <div key={i} style={{display:'flex',alignItems:'center',gap:10,padding:'11px 14px',background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:10,transition:'all .15s'}}>
                     <div style={{fontSize:22,flexShrink:0}}>{fileIcon(doc.nome)}</div>
                     <div style={{flex:1,minWidth:0}}>
                       <div style={{fontSize:13,fontWeight:600,color:'var(--text-primary)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{doc.nome}</div>
-                      <div style={{fontSize:11,color:'var(--text-muted)',marginTop:1}}>
-                        {fmtD(doc.data)} · {doc.enviadoPor}
-                      </div>
+                      <div style={{fontSize:11,color:'var(--text-muted)',marginTop:1}}>{fmtD(doc.data)} · {doc.enviadoPor}</div>
                     </div>
                     <div style={{display:'flex',gap:6,flexShrink:0}}>
-                      <button className="btn btn-ghost" style={{padding:'5px 10px',fontSize:11}} onClick={()=>openDoc(doc.path)}>
-                        ↓ Abrir
-                      </button>
-                      <button onClick={()=>handleDelete(doc)} style={{
-                        padding:'5px 10px',borderRadius:7,fontSize:11,fontWeight:600,cursor:'pointer',
-                        background:'var(--danger-dim)',color:'var(--danger)',
-                        border:'1px solid rgba(196,66,58,.2)',
-                      }}>✕</button>
+                      <button className="btn btn-ghost" style={{padding:'5px 10px',fontSize:11}} onClick={()=>openDoc(doc.path)}>↓ Abrir</button>
+                      <button onClick={()=>handleDelete(doc)} style={{padding:'5px 10px',borderRadius:7,fontSize:11,fontWeight:600,cursor:'pointer',background:'var(--danger-dim)',color:'var(--danger)',border:'1px solid rgba(196,66,58,.2)'}}>✕</button>
                     </div>
                   </div>
                 ))}
@@ -756,8 +1083,48 @@ function CorbanDetail({cliente,profile,dispatch,onClose}){
         )}
       </div>
     </div>
+
+    {/* Modal de bloqueio — solicitar confirmação ao digitalizador */}
+    {bloqueioModal&&(
+      <div className="mbk" style={{zIndex:9999}} onClick={e=>{if(e.target===e.currentTarget){setBloqueioModal(null);}}}>
+        <div className="mbox" style={{maxWidth:400}}>
+          {notifEnviada?(
+            <div style={{textAlign:'center',padding:'24px 0'}}>
+              <div style={{fontSize:40,marginBottom:12}}>✅</div>
+              <div style={{fontFamily:'var(--font-display)',fontSize:18,fontWeight:600,color:'var(--text-primary)',marginBottom:8}}>Solicitação enviada!</div>
+              <div style={{fontSize:13,color:'var(--text-muted)',lineHeight:1.6}}>
+                O digitalizador <strong>{cliente.digitalizadorNome}</strong> recebeu uma notificação e poderá confirmar a alteração.
+              </div>
+            </div>
+          ):(
+            <>
+              <div style={{textAlign:'center',marginBottom:20}}>
+                <div style={{fontSize:36,marginBottom:12}}>🔒</div>
+                <div style={{fontFamily:'var(--font-display)',fontSize:18,fontWeight:600,color:'var(--text-primary)',marginBottom:8}}>Alteração restrita</div>
+                <div style={{fontSize:13,color:'var(--text-muted)',lineHeight:1.6}}>
+                  Você não pode editar diretamente clientes de digitalizadores.<br/>
+                  Deseja enviar uma solicitação para <strong>{cliente.digitalizadorNome}</strong> confirmar?
+                </div>
+              </div>
+              <div style={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:9,padding:'12px 14px',marginBottom:16,fontSize:12,color:'var(--text-secondary)',lineHeight:1.7}}>
+                {bloqueioModal.mudouEstagio&&<div>📌 Mover para: <strong>{CORBAN_STAGES.find(s=>s.id===bloqueioModal.novoEstagio)?.label}</strong></div>}
+                {bloqueioModal.mudouDoc&&<div>📄 Documento: <strong>{bloqueioModal.novoDoc}</strong></div>}
+              </div>
+              <div style={{display:'flex',gap:8}}>
+                <button className="btn btn-ghost" style={{flex:1,justifyContent:'center'}} onClick={()=>setBloqueioModal(null)}>Cancelar</button>
+                <button className="btn" style={{flex:1,justifyContent:'center',background:'var(--amber)',color:'#fff'}} onClick={enviarSolicitacao} disabled={enviandoNotif}>
+                  {enviandoNotif?'Enviando…':'📣 Enviar solicitação'}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    )}
+    </>
   );
 }
+
 
 // ── KANBAN CORBANS ────────────────────────────────────────────────────────────
 function CorbanKanban({clientes,profile,dispatch,onSelect}){
@@ -859,7 +1226,119 @@ function CorbanKanban({clientes,profile,dispatch,onSelect}){
   );
 }
 
-// ── NOVO CLIENTE MODAL ────────────────────────────────────────────────────────
+// ── SINO — NOTIFICAÇÕES ───────────────────────────────────────────────────────
+function SinoModal({profile,session,estrutura,notifs,onClose,onLer,onEnviar}){
+  const [aba,setAba]=useState('recebidas'); // 'recebidas' | 'enviar'
+  const r=profile?.role;
+
+  // Quem esse perfil pode notificar
+  const destinatarios=useMemo(()=>{
+    if(r==='master') return estrutura.filter(u=>u.role!=='master'&&u.modulo==='corbans');
+    if(r==='promotora_principal') return estrutura.filter(u=>u.promotora_principal_email===profile?.email);
+    if(r==='promotora') return estrutura.filter(u=>u.promotora_email===profile?.email);
+    return [];
+  },[estrutura,r,profile?.email]);
+
+  const [dest,setDest]=useState('');
+  const [msg,setMsg]=useState('');
+  const [enviando,setEnviando]=useState(false);
+  const [enviado,setEnviado]=useState(false);
+
+  const naoLidas=notifs.filter(n=>!n.lida);
+  const lidas=notifs.filter(n=>n.lida);
+
+  const fmtTs=ts=>new Date(ts).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+
+  const enviar=async()=>{
+    if(!dest||!msg.trim()) return;
+    setEnviando(true);
+    const destUser=estrutura.find(u=>u.email===dest);
+    // Buscar profile do destinatário para ter o user_id
+    const {data:destProfile}=await supabase.from('profiles').select('id,nome').ilike('email',dest).single();
+    if(!destProfile){setEnviando(false);alert('Usuário não encontrado.');return;}
+    await supabase.from('corban_notificacoes').insert({
+      de_user_id:session.user.id,
+      de_nome:profile.nome,
+      de_role:profile.role,
+      para_user_id:destProfile.id,
+      para_nome:destProfile.nome,
+      para_role:destUser?.role||'',
+      mensagem:msg.trim(),
+    });
+    setEnviando(false);setEnviado(true);setMsg('');setDest('');
+    setTimeout(()=>setEnviado(false),3000);
+    if(onEnviar) onEnviar();
+  };
+
+  return(
+    <div className="mbk" onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
+      <div className="mbox" style={{maxWidth:480}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16}}>
+          <div>
+            <div style={{fontFamily:'var(--font-display)',fontSize:20,fontWeight:600,color:'var(--text-primary)'}}>🔔 Notificações</div>
+            {naoLidas.length>0&&<div style={{fontSize:12,color:'var(--danger)',marginTop:2}}>{naoLidas.length} não lida{naoLidas.length!==1?'s':''}</div>}
+          </div>
+          <button onClick={onClose} style={{background:'rgba(90,70,50,.08)',border:'1px solid var(--border-mid)',borderRadius:9,color:'var(--text-secondary)',cursor:'pointer',width:32,height:32,display:'flex',alignItems:'center',justifyContent:'center',fontSize:18}}>×</button>
+        </div>
+
+        <div style={{display:'flex',gap:4,marginBottom:16,background:'rgba(90,70,50,.06)',borderRadius:9,padding:3}}>
+          {([['recebidas','Recebidas'],...(destinatarios.length>0?[['enviar','Enviar alerta']]:[])])
+            .map(([v,l])=>(
+            <button key={v} onClick={()=>setAba(v)} style={{flex:1,padding:'7px 0',borderRadius:7,fontSize:12,fontWeight:600,cursor:'pointer',border:'none',fontFamily:'var(--font)',background:aba===v?'var(--bg-elevated)':'transparent',color:aba===v?'var(--text-primary)':'var(--text-muted)',transition:'all .15s'}}>{l}</button>
+          ))}
+        </div>
+
+        {aba==='recebidas'&&(
+          <div style={{maxHeight:360,overflowY:'auto'}}>
+            {notifs.length===0?(
+              <div style={{textAlign:'center',padding:'32px 0',fontSize:13,color:'var(--text-muted)'}}>
+                <div style={{fontSize:28,marginBottom:8}}>🔕</div>
+                Nenhuma notificação ainda.
+              </div>
+            ):[...naoLidas,...lidas].map(n=>(
+              <div key={n.id} style={{
+                display:'flex',gap:12,padding:'12px 0',borderBottom:'1px solid var(--border)',
+                opacity:n.lida?.8:1,
+              }}>
+                <div style={{width:36,height:36,borderRadius:10,background:n.lida?'rgba(90,70,50,.06)':G_LIGHT,color:n.lida?'var(--text-muted)':G_MID,display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,flexShrink:0}}>📣</div>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{display:'flex',justifyContent:'space-between',marginBottom:3}}>
+                    <span style={{fontSize:12,fontWeight:600,color:'var(--text-primary)'}}>{n.de_nome}</span>
+                    <span style={{fontSize:10,color:'var(--text-faint)'}}>{fmtTs(n.created_at)}</span>
+                  </div>
+                  <div style={{fontSize:12,color:'var(--text-secondary)',lineHeight:1.5}}>{n.mensagem}</div>
+                  {!n.lida&&(
+                    <button onClick={()=>onLer(n.id)} style={{marginTop:5,fontSize:11,color:G_MID,background:'none',border:'none',cursor:'pointer',fontFamily:'var(--font)',padding:0,fontWeight:600}}>Marcar como lida ✓</button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {aba==='enviar'&&(
+          <div>
+            {enviado&&<div style={{padding:'10px 14px',background:'var(--success-dim)',borderRadius:8,marginBottom:14,fontSize:13,color:'var(--success)',fontWeight:500}}>✓ Alerta enviado com sucesso!</div>}
+            <label style={{display:'block',fontSize:10,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:6}}>Destinatário</label>
+            <select className="sel" value={dest} onChange={e=>setDest(e.target.value)} style={{marginBottom:12}}>
+              <option value="">— Selecionar —</option>
+              {destinatarios.map(u=>(
+                <option key={u.email} value={u.email}>{u.nome} ({ROLE_LABELS[u.role]})</option>
+              ))}
+            </select>
+            <label style={{display:'block',fontSize:10,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:6}}>Mensagem</label>
+            <textarea className="inp" value={msg} onChange={e=>setMsg(e.target.value)} placeholder="Digite o alerta ou mensagem…" style={{resize:'vertical',minHeight:80,fontFamily:'var(--font)',lineHeight:1.5,marginBottom:14}}/>
+            <button className="btn" style={{width:'100%',justifyContent:'center',background:G_MID,color:'#fff',boxShadow:`0 3px 12px ${G_GLOW}`}} onClick={enviar} disabled={enviando||!dest||!msg.trim()}>
+              {enviando?'Enviando…':'📣 Enviar alerta'}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── NOVO CLIENTE MODAL (com autocomplete CPF) ─────────────────────────────────
 function NovoClienteField({label,children}){
   return(
     <div>
@@ -869,10 +1348,34 @@ function NovoClienteField({label,children}){
   );
 }
 
-function NovoClienteModal({profile,dispatch,onClose}){
+function NovoClienteModal({profile,dispatch,onClose,todosClientes}){
   const [form,setForm]=useState(blankCliente());
+  const [cpfAviso,setCpfAviso]=useState(null); // null | 'duplicado' | 'encontrado'
   const set=(k,v)=>setForm(f=>({...f,[k]:v}));
   const tp=p=>set('produtosInteresse',form.produtosInteresse.includes(p)?form.produtosInteresse.filter(x=>x!==p):[...form.produtosInteresse,p]);
+
+  // Autocomplete CPF
+  const handleCpf=(val)=>{
+    set('cpfCliente',val);
+    if(val.replace(/\D/g,'').length>=11){
+      const cpfClean=val.replace(/\D/g,'');
+      const existe=todosClientes?.find(c=>c.cpfCliente?.replace(/\D/g,'')===cpfClean);
+      if(existe){
+        // CPF já existe — autocompletar e avisar
+        setCpfAviso('duplicado');
+        setForm(f=>({...f,
+          cpfCliente:val,
+          nomeCliente:existe.nomeCliente||f.nomeCliente,
+          telefone:existe.telefone||f.telefone,
+          orgaoPrefeitura:existe.orgaoPrefeitura||f.orgaoPrefeitura,
+        }));
+      } else {
+        setCpfAviso(null);
+      }
+    } else {
+      setCpfAviso(null);
+    }
+  };
 
   const save=()=>{
     if(!form.nomeCliente.trim()||!form.cpfCliente.trim()){alert('Nome e CPF são obrigatórios.');return;}
@@ -890,9 +1393,21 @@ function NovoClienteModal({profile,dispatch,onClose}){
           </div>
           <button onClick={onClose} style={{background:'rgba(90,70,50,.08)',border:'1px solid var(--border-mid)',borderRadius:9,color:'var(--text-secondary)',cursor:'pointer',width:32,height:32,display:'flex',alignItems:'center',justifyContent:'center',fontSize:18}}>×</button>
         </div>
+
+        {/* Aviso CPF duplicado */}
+        {cpfAviso==='duplicado'&&(
+          <div style={{padding:'9px 12px',borderRadius:8,marginBottom:12,background:'var(--amber-dim)',border:'1px solid rgba(196,114,10,.25)',fontSize:12,color:'var(--amber)',fontWeight:500}}>
+            ⚠ CPF já cadastrado na base. Dados preenchidos automaticamente — verifique antes de salvar.
+          </div>
+        )}
+
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:11,marginBottom:11}}>
-          <NovoClienteField label="Nome do cliente *"><input className="inp" value={form.nomeCliente} onChange={e=>set('nomeCliente',e.target.value)} placeholder="Nome completo"/></NovoClienteField>
-          <NovoClienteField label="CPF *"><input className="inp" value={form.cpfCliente} onChange={e=>set('cpfCliente',e.target.value)} placeholder="000.000.000-00"/></NovoClienteField>
+          <NovoClienteField label="CPF *">
+            <input className="inp" value={form.cpfCliente} onChange={e=>handleCpf(e.target.value)} placeholder="000.000.000-00" style={{borderColor:cpfAviso==='duplicado'?'var(--amber)':'var(--border-mid)'}}/>
+          </NovoClienteField>
+          <NovoClienteField label="Nome do cliente *">
+            <input className="inp" value={form.nomeCliente} onChange={e=>set('nomeCliente',e.target.value)} placeholder="Nome completo"/>
+          </NovoClienteField>
           <NovoClienteField label="Telefone"><input className="inp" value={form.telefone} onChange={e=>set('telefone',e.target.value)} placeholder="(00) 00000-0000"/></NovoClienteField>
           <NovoClienteField label="Órgão / Prefeitura"><input className="inp" value={form.orgaoPrefeitura} onChange={e=>set('orgaoPrefeitura',e.target.value)} placeholder="Prefeitura de…"/></NovoClienteField>
         </div>
@@ -902,6 +1417,23 @@ function NovoClienteModal({profile,dispatch,onClose}){
             {CORBAN_PRODUCTS.map(p=>{const sel=form.produtosInteresse.includes(p);return(<button key={p} onClick={()=>tp(p)} style={{padding:'5px 11px',borderRadius:99,fontSize:12,fontWeight:600,cursor:'pointer',background:sel?G_LIGHT:'rgba(90,70,50,.07)',color:sel?G_MID:'var(--text-muted)',border:sel?`1px solid ${G_MID}40`:'1px solid var(--border)',transition:'all .15s'}}>{p}</button>);})}
           </div>
         </div>
+
+        {/* Dados da proposta */}
+        <div style={{padding:'12px 14px',background:G_LIGHT,borderRadius:10,border:`1px solid ${G_MID}25`,marginBottom:12}}>
+          <div style={{fontSize:10,fontWeight:700,color:G_MID,textTransform:'uppercase',letterSpacing:'.07em',marginBottom:10}}>💰 Proposta</div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:10}}>
+            <NovoClienteField label="Valor desejado">
+              <input className="inp" value={form.proposta_valor} onChange={e=>set('proposta_valor',e.target.value)} placeholder="R$ 0,00"/>
+            </NovoClienteField>
+            <NovoClienteField label="Taxa (% ao mês)">
+              <input className="inp" value={form.proposta_taxa} onChange={e=>set('proposta_taxa',e.target.value)} placeholder="0,00%"/>
+            </NovoClienteField>
+            <NovoClienteField label="Prazo (meses)">
+              <input className="inp" type="number" min="1" max="120" value={form.proposta_prazo} onChange={e=>set('proposta_prazo',e.target.value)} placeholder="Ex: 48"/>
+            </NovoClienteField>
+          </div>
+        </div>
+
         <div style={{marginBottom:20}}><NovoClienteField label="Observações"><textarea className="inp" value={form.observacoes} onChange={e=>set('observacoes',e.target.value)} style={{resize:'vertical',minHeight:64,fontFamily:'var(--font)',lineHeight:1.5}} placeholder="Detalhes relevantes…"/></NovoClienteField></div>
         <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
           <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
@@ -1564,6 +2096,11 @@ export function CorbanApp({profile,session,signOut,onAlterarSenha}){
   const [ready,setReady]=useState(false);
   const clientesRef=useRef(clientes);
   const [showAS,setShowAS]=useState(false);
+  const [showSino,setShowSino]=useState(false);
+  const [notifs,setNotifs]=useState([]);
+
+  // notifCount = não lidas
+  const notifCount=notifs.filter(n=>!n.lida).length;
 
   // Hierarquia resolvida do usuário atual (UUIDs + nomes)
   const hierarchyRef=useRef({
@@ -1684,6 +2221,28 @@ export function CorbanApp({profile,session,signOut,onAlterarSenha}){
       .then(({data})=>setEstrutura(data||[]));
   },[session,profile?.role]);
 
+  // ── Carregar e escutar notificações ──
+  useEffect(()=>{
+    if(!session) return;
+    // Carregar notificações para este usuário
+    supabase.from('corban_notificacoes')
+      .select('*').eq('para_user_id',session.user.id)
+      .order('created_at',{ascending:false}).limit(50)
+      .then(({data})=>setNotifs(data||[]));
+    // Real-time
+    const ch=supabase.channel('corban_notif_rt')
+      .on('postgres_changes',{event:'INSERT',schema:'public',table:'corban_notificacoes',
+        filter:`para_user_id=eq.${session.user.id}`},
+        payload=>setNotifs(prev=>[payload.new,...prev]))
+      .subscribe();
+    return ()=>supabase.removeChannel(ch);
+  },[session]);
+
+  const marcarLida=async(id)=>{
+    await supabase.from('corban_notificacoes').update({lida:true}).eq('id',id);
+    setNotifs(prev=>prev.map(n=>n.id===id?{...n,lida:true}:n));
+  };
+
   // ── Sync local → Supabase (apenas mudanças, não ADD — ADD é imediato) ──
   useEffect(()=>{
     if(!ready||!session) return;
@@ -1774,6 +2333,8 @@ export function CorbanApp({profile,session,signOut,onAlterarSenha}){
           profile={profile}
           onLogout={signOut}
           onAlterarSenha={()=>setShowAS(true)}
+          notifCount={notifCount}
+          onSino={()=>setShowSino(true)}
         />
         <main style={{flex:1,minWidth:0,overflowY:'auto',paddingRight:selected?490:0,transition:'padding-right .3s cubic-bezier(.4,0,.2,1)'}}>
           {view==='dashboard' && <CorbanDashboard clientes={clientes} estrutura={estrutura} profile={profile}/>}
@@ -1783,10 +2344,21 @@ export function CorbanApp({profile,session,signOut,onAlterarSenha}){
           {view==='estrutura' && <CorbanEstrutura profile={profile} session={session}/>}
           {view==='auditoria' && <CorbanAuditoria/>}
         </main>
-        {selected&&<CorbanDetail key={selected.id} cliente={selected} profile={profile} dispatch={auditedDispatch} onClose={()=>dispatch({type:'CLOSE'})}/>}
-        {newOpen&&<NovoClienteModal profile={profile} dispatch={auditedDispatch} onClose={()=>dispatch({type:'TNEW'})}/>}
+        {selected&&<CorbanDetail key={selected.id} cliente={selected} profile={profile} session={session} dispatch={auditedDispatch} onClose={()=>dispatch({type:'CLOSE'})}/>}
+        {newOpen&&<NovoClienteModal profile={profile} dispatch={auditedDispatch} onClose={()=>dispatch({type:'TNEW'})} todosClientes={clientes}/>}
       </div>
       {showAS&&<AlterarSenha onClose={()=>setShowAS(false)}/>}
+      {showSino&&(
+        <SinoModal
+          profile={profile}
+          session={session}
+          estrutura={estrutura}
+          notifs={notifs}
+          onClose={()=>setShowSino(false)}
+          onLer={marcarLida}
+          onEnviar={()=>{}}
+        />
+      )}
     </>
   );
 }
