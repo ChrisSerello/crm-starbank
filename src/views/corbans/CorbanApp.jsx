@@ -1566,13 +1566,18 @@ function CorbanEstrutura({profile,session}){
     :r==='promotora_principal'?['promotora','digitalizador']
     :['digitalizador'];
 
-  // Group by role
+  // Group by role — filtra grupos visíveis por papel
   const groups=[
     {role:'master',label:'Corban Master'},
     {role:'promotora_principal',label:'Promotoras Principais'},
     {role:'promotora',label:'Promotoras'},
     {role:'digitalizador',label:'Digitalizadores'},
-  ].filter(g=>r==='master'||g.role!=='master');
+  ].filter(g=>{
+    if(r==='master') return g.role!=='master'; // master vê todos exceto ele mesmo
+    if(r==='promotora_principal') return g.role==='promotora'||g.role==='digitalizador';
+    if(r==='promotora') return g.role==='digitalizador'; // promotora só vê seus digs
+    return false;
+  });
 
   return(
     <div style={{padding:'28px 32px'}}>
@@ -1581,7 +1586,16 @@ function CorbanEstrutura({profile,session}){
           <div className="section-title">Estrutura</div>
           <div className="section-sub">Hierarquia do módulo Corbans</div>
         </div>
-        <button className="btn" style={{background:G_MID,color:'#fff',boxShadow:`0 3px 12px ${G_GLOW}`}} onClick={()=>{setForm({email:'',nome:'',role:creatableRoles[creatableRoles.length-1],promotora_principal_email:'',promotora_email:''});setShowModal(true);}}>
+        <button className="btn" style={{background:G_MID,color:'#fff',boxShadow:`0 3px 12px ${G_GLOW}`}} onClick={()=>{
+          setForm({
+            email:'',senha:'',role:creatableRoles[creatableRoles.length-1],
+            promotora_principal_email:'',promotora_email:'',
+            cnpj:'',razaoSocial:'',nomeFantasia:'',telefone:'',
+            nome:'',dataNasc:'',cpf:'',telefoneDig:'',
+          });
+          setMsg(null);
+          setShowModal(true);
+        }}>
           + Adicionar usuário
         </button>
       </div>
@@ -2114,8 +2128,9 @@ export function CorbanApp({profile,session,signOut,onAlterarSenha}){
 
   const setView=useCallback(v=>dispatch({type:'VIEW',v}),[]);
   const selected=clientes.find(c=>c.id===sel);
+  const [hierarchyReady,setHierarchyReady]=useState(false);
 
-  // ── Resolver hierarquia completa ao iniciar (garante UUIDs mesmo se profile incompleto) ──
+  // ── Resolver hierarquia completa ao iniciar ANTES de carregar clientes ──
   useEffect(()=>{
     if(!session||!profile) return;
     const resolveHierarchy=async()=>{
@@ -2128,35 +2143,44 @@ export function CorbanApp({profile,session,signOut,onAlterarSenha}){
         promotora_principal_nome: profile.promotoraPrincipalNome||null,
       };
 
-      // Se faltar IDs, busca via allowed_users → profiles
-      if(!h.promotora_id||!h.promotora_principal_id){
-        const {data:au}=await supabase.from('allowed_users')
-          .select('promotora_email,promotora_principal_email')
-          .ilike('email',session.user.email).single();
+      // Sempre busca via allowed_users para garantir dados frescos
+      const {data:au}=await supabase.from('allowed_users')
+        .select('promotora_email,promotora_principal_email,nome')
+        .ilike('email',session.user.email).single();
 
-        if(au?.promotora_email&&!h.promotora_id){
-          const {data:pp}=await supabase.from('profiles')
-            .select('id,nome').ilike('email',au.promotora_email).single();
-          if(pp){ h.promotora_id=pp.id; h.promotora_nome=pp.nome; }
-          // fallback: busca nome no allowed_users
-          if(!h.promotora_nome){
-            const {data:aup}=await supabase.from('allowed_users')
-              .select('nome').ilike('email',au.promotora_email).single();
-            h.promotora_nome=aup?.nome||null;
-          }
-        }
-        if(au?.promotora_principal_email&&!h.promotora_principal_id){
-          const {data:pp}=await supabase.from('profiles')
-            .select('id,nome').ilike('email',au.promotora_principal_email).single();
-          if(pp){ h.promotora_principal_id=pp.id; h.promotora_principal_nome=pp.nome; }
-          if(!h.promotora_principal_nome){
-            const {data:aup}=await supabase.from('allowed_users')
-              .select('nome').ilike('email',au.promotora_principal_email).single();
-            h.promotora_principal_nome=aup?.nome||null;
-          }
+      if(au?.promotora_email){
+        // Busca UUID da promotora no profiles
+        const {data:pProf}=await supabase.from('profiles')
+          .select('id,nome').ilike('email',au.promotora_email).single();
+        if(pProf){ h.promotora_id=pProf.id; h.promotora_nome=pProf.nome; }
+        else {
+          // Fallback: usa nome do allowed_users
+          const {data:pAU}=await supabase.from('allowed_users')
+            .select('nome').ilike('email',au.promotora_email).single();
+          if(pAU) h.promotora_nome=pAU.nome;
         }
       }
+      if(au?.promotora_principal_email){
+        const {data:ppProf}=await supabase.from('profiles')
+          .select('id,nome').ilike('email',au.promotora_principal_email).single();
+        if(ppProf){ h.promotora_principal_id=ppProf.id; h.promotora_principal_nome=ppProf.nome; }
+        else {
+          const {data:ppAU}=await supabase.from('allowed_users')
+            .select('nome').ilike('email',au.promotora_principal_email).single();
+          if(ppAU) h.promotora_principal_nome=ppAU.nome;
+        }
+      }
+
+      // Atualiza profile no banco se IDs estavam faltando
+      if(h.promotora_id&&!profile.promotora_id){
+        await supabase.from('profiles').update({
+          promotora_id:h.promotora_id,
+          promotora_principal_id:h.promotora_principal_id,
+        }).eq('id',session.user.id);
+      }
+
       hierarchyRef.current=h;
+      setHierarchyReady(true);
     };
     resolveHierarchy();
   },[session,profile]);
