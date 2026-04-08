@@ -30,12 +30,20 @@ export function Login(){
   };
 
   const Logo=()=>(
-    <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:32}}>
-      <div style={{width:44,height:44,borderRadius:13,background:"linear-gradient(135deg,#5B4FE8 0%,#9B8FF5 100%)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,boxShadow:"0 4px 16px rgba(91,79,232,.35)"}}>◈</div>
-      <div>
-        <div style={{fontFamily:"var(--font-display)",fontSize:18,fontWeight:600,color:"var(--text-primary)"}}>Starbank</div>
-        <div style={{fontSize:11,fontWeight:700,color:"var(--accent)",letterSpacing:".09em",textTransform:"uppercase"}}>CRM Indicações</div>
-      </div>
+    <div style={{display:"flex",justifyContent:"center",marginBottom:28}}>
+      <img
+        src="/starflow.gif"
+        alt="StarFlow"
+        style={{
+          width:"100%",
+          maxWidth:220,
+          height:"auto",
+          maxHeight:100,
+          objectFit:"contain",
+          objectPosition:"center",
+          display:"block",
+        }}
+      />
     </div>
   );
 

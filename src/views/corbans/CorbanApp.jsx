@@ -77,15 +77,26 @@ function CorbanSidebar({view,setView,profile,onLogout,onAlterarSenha,notifCount,
   ];
   return(
     <div style={{width:228,background:G_DARK,borderRight:'1px solid rgba(45,134,83,0.25)',display:'flex',flexDirection:'column',flexShrink:0,height:'100vh',position:'sticky',top:0}}>
-      <div style={{padding:'20px 18px 16px',borderBottom:'1px solid rgba(45,134,83,0.2)'}}>
-        <div style={{display:'flex',alignItems:'center',gap:10}}>
-          <div style={{width:34,height:34,borderRadius:10,background:`linear-gradient(135deg,${G_MID} 0%,#52B788 100%)`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,boxShadow:`0 4px 14px ${G_GLOW}`}}>◈</div>
-          <div style={{flex:1}}>
-            <div style={{fontFamily:'var(--font-display)',fontSize:15,fontWeight:600,color:'#FFF'}}>StarNexus</div>
-            <div style={{fontSize:10,fontWeight:700,color:G_TEXT,letterSpacing:'.09em',textTransform:'uppercase'}}>Corbans</div>
+      <div style={{padding:'14px 12px 12px',borderBottom:'1px solid rgba(45,134,83,0.2)'}}>
+        <div style={{display:'flex',alignItems:'center',gap:8}}>
+          {/* GIF logo — ocupa toda a largura disponível, altura proporcional */}
+          <div style={{flex:1,minWidth:0,overflow:'hidden',borderRadius:8}}>
+            <img
+              src="/starflow.gif"
+              alt="StarFlow"
+              style={{
+                display:'block',
+                width:'100%',
+                height:'auto',
+                maxHeight:48,
+                objectFit:'cover',
+                objectPosition:'center center',
+                borderRadius:8,
+              }}
+            />
           </div>
           {/* Sininho */}
-          <button onClick={onSino} style={{position:'relative',background:'none',border:'none',cursor:'pointer',padding:4}}>
+          <button onClick={onSino} style={{position:'relative',background:'none',border:'none',cursor:'pointer',padding:4,flexShrink:0}}>
             <span style={{fontSize:18}}>🔔</span>
             {notifCount>0&&(
               <span style={{position:'absolute',top:-2,right:-2,width:16,height:16,borderRadius:'50%',background:'var(--danger)',color:'#fff',fontSize:9,fontWeight:700,display:'flex',alignItems:'center',justifyContent:'center'}}>{notifCount>9?'9+':notifCount}</span>
