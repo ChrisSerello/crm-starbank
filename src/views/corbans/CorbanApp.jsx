@@ -21,9 +21,6 @@ const CORBAN_PRODUCTS = [
 
 // Estágios do Corbans — sem "Distribuído"
 const CORBAN_STAGES = STAGES.filter(s => s.id !== 'distribuido');
-const G_LIGHT = 'rgba(45,134,83,0.12)';
-const G_GLOW  = 'rgba(45,134,83,0.35)';
-const G_TEXT  = '#52B788';
 
 const ROLE_LABELS = {
   master: 'Corban Master',
