@@ -1,13 +1,26 @@
 import { useState, useEffect, useReducer, useMemo, useCallback, useRef } from 'react';
 import { supabase } from '../../supabase';
 import { gid, TODAY, fmtD, sinceD, stg } from '../../utils';
-import { STAGES, PRODUCTS, DOC_STATUS, INDICATION_TYPES, OPERATORS, OPERADORES_REPASSADOS } from '../../constants';
+import { DOC_STATUS, STAGES } from '../../constants';
 import { Avatar, StageTag, AlertDot } from '../../components/shared';
 import { AlterarSenha } from '../../components/AlterarSenha';
 
 // ── CORBAN CONSTANTS ──────────────────────────────────────────────────────────
 const G_DARK  = '#1A3D2B';
 const G_MID   = '#2D8653';
+const G_LIGHT = 'rgba(45,134,83,0.12)';
+const G_GLOW  = 'rgba(45,134,83,0.35)';
+const G_TEXT  = '#52B788';
+
+// Produtos específicos do módulo Corbans
+const CORBAN_PRODUCTS = [
+  'Empréstimo Consignado',
+  'Cartão Consignado',
+  'Cartão Benefício',
+];
+
+// Estágios do Corbans — sem "Distribuído"
+const CORBAN_STAGES = STAGES.filter(s => s.id !== 'distribuido');
 const G_LIGHT = 'rgba(45,134,83,0.12)';
 const G_GLOW  = 'rgba(45,134,83,0.35)';
 const G_TEXT  = '#52B788';
@@ -28,7 +41,7 @@ const ROLE_COLORS = {
 const blankCliente = () => ({
   nomeCliente:'', cpfCliente:'', telefone:'',
   orgaoPrefeitura:'', produtosInteresse:[], documentoStatus:'Não solicitado',
-  statusComercial:'distribuido', observacoes:'', perfilCliente:'',
+  statusComercial:'novo_lead', observacoes:'', perfilCliente:'',
   dataEntrada:TODAY, ultimoContato:TODAY,
   resultado:'Em andamento', activities:[],
 });
@@ -170,7 +183,7 @@ function CorbanDashboard({clientes,estrutura,profile}){
   const emNeg=clientesComFiltros.filter(c=>c.statusComercial==='em_negociacao').length;
   const frios=clientesComFiltros.filter(c=>sinceD(c.ultimoContato)>=7).length;
   const taxa=total>0?Math.round(ganhos/total*100):0;
-  const byStage=STAGES.map(s=>({...s,count:clientesComFiltros.filter(c=>c.statusComercial===s.id).length}));
+  const byStage=CORBAN_STAGES.map(s=>({...s,count:clientesComFiltros.filter(c=>c.statusComercial===s.id).length}));
   const recent=clientesComFiltros.flatMap(c=>(c.activities||[]).map(a=>({...a,clienteName:c.nomeCliente}))).sort((a,b)=>(b.date||'').localeCompare(a.date||'')).slice(0,8);
 
   // ── Ranking de promotoras ── (só master/pp)
@@ -261,7 +274,7 @@ function CorbanDashboard({clientes,estrutura,profile}){
         {/* Produto */}
         <select className="sel" style={{width:190,height:34,fontSize:12}} value={filtroProduto} onChange={e=>setFiltroProduto(e.target.value)}>
           <option value="">Todos os produtos</option>
-          {PRODUCTS.map(p=><option key={p} value={p}>{p}</option>)}
+          {CORBAN_PRODUCTS.map(p=><option key={p} value={p}>{p}</option>)}
         </select>
         {(periodo!=='todos'||filtroProduto)&&(
           <button className="btn btn-ghost" style={{fontSize:11,padding:'6px 10px'}} onClick={()=>{setPeriodo('todos');setFiltroProduto('');}}>✕ Limpar</button>
@@ -427,16 +440,16 @@ function CorbanClientes({clientes,profile,estrutura,onSelect,onNew}){
         </div>
         <select className="sel" style={{width:150}} value={stage} onChange={e=>{setStage(e.target.value);setPage(1);}}>
           <option value="">Todos estágios</option>
-          {STAGES.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}
+          {CORBAN_STAGES.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}
         </select>
         <select className="sel" style={{width:150}} value={produto} onChange={e=>{setProduto(e.target.value);setPage(1);}}>
           <option value="">Todos produtos</option>
-          {PRODUCTS.map(p=><option key={p} value={p}>{p}</option>)}
+          {CORBAN_PRODUCTS.map(p=><option key={p} value={p}>{p}</option>)}
         </select>
       </div>
 
-      {/* Filtros linha 2 — só para master/pp */}
-      {(r==='master'||r==='promotora_principal')&&(
+      {/* Filtros linha 2 — para master, pp e promotora */}
+      {(r==='master'||r==='promotora_principal'||r==='promotora')&&(
         <div style={{display:'flex',gap:8,marginBottom:8,flexWrap:'wrap'}}>
           {r==='master'&&(
             <select className="sel" style={{width:180}} value={promotora} onChange={e=>{setPromotora(e.target.value);setPage(1);}}>
@@ -444,7 +457,7 @@ function CorbanClientes({clientes,profile,estrutura,onSelect,onNew}){
               {proms.map(p=><option key={p} value={p}>{p}</option>)}
             </select>
           )}
-          <select className="sel" style={{width:180}} value={digitalizador} onChange={e=>{setDigitalizador(e.target.value);setPage(1);}}>
+          <select className="sel" style={{width:200}} value={digitalizador} onChange={e=>{setDigitalizador(e.target.value);setPage(1);}}>
             <option value="">Todos digitalizadores</option>
             {digs.map(d=><option key={d} value={d}>{d}</option>)}
           </select>
@@ -519,13 +532,56 @@ function CorbanDetail({cliente,profile,dispatch,onClose}){
   const [note,setNote]=useState('');
   const [es,setEs]=useState(cliente.statusComercial);
   const [ed,setEd]=useState(cliente.documentoStatus);
+  const [docs,setDocs]=useState(cliente.documentos||[]);
+  const [uploading,setUploading]=useState(false);
+  const [uploadMsg,setUploadMsg]=useState(null);
   const days=sinceD(cliente.ultimoContato);
 
   const save=()=>{
-    const upd={...cliente,documentoStatus:ed};
+    const upd={...cliente,documentoStatus:ed,documentos:docs};
     if(es!==cliente.statusComercial) dispatch({type:'MOVE',cid:cliente.id,st:es,user:profile?.nome||'Usuário'});
     dispatch({type:'UPD',c:upd});
     onClose();
+  };
+
+  const handleUpload=async(e)=>{
+    const file=e.target.files[0];
+    if(!file) return;
+    if(file.size>10*1024*1024){setUploadMsg({t:'error',text:'Arquivo muito grande. Máximo 10MB.'});return;}
+    setUploading(true);setUploadMsg(null);
+    const path=`corbans/${cliente.id}/${Date.now()}_${file.name}`;
+    const {error}=await supabase.storage.from('documentos').upload(path,file);
+    if(error){setUploadMsg({t:'error',text:'Erro ao enviar. Tente novamente.'});setUploading(false);return;}
+    const {data:{publicUrl}}=supabase.storage.from('documentos').getPublicUrl(path);
+    const novoDoc={nome:file.name,path,url:publicUrl,data:TODAY,enviadoPor:profile?.nome||'Usuário'};
+    const novos=[...docs,novoDoc];
+    setDocs(novos);
+    dispatch({type:'UPD',c:{...cliente,documentos:novos,documentoStatus:ed}});
+    setUploadMsg({t:'success',text:`"${file.name}" enviado com sucesso!`});
+    setUploading(false);
+    e.target.value='';
+  };
+
+  const handleDelete=async(doc)=>{
+    if(!confirm(`Remover "${doc.nome}"?`)) return;
+    await supabase.storage.from('documentos').remove([doc.path]);
+    const novos=docs.filter(d=>d.path!==doc.path);
+    setDocs(novos);
+    dispatch({type:'UPD',c:{...cliente,documentos:novos}});
+  };
+
+  const openDoc=async(path)=>{
+    const {data}=await supabase.storage.from('documentos').createSignedUrl(path,3600);
+    if(data?.signedUrl) window.open(data.signedUrl,'_blank');
+  };
+
+  const fileIcon=(nome)=>{
+    const ext=nome.split('.').pop().toLowerCase();
+    if(['jpg','jpeg','png','gif','webp'].includes(ext)) return '🖼️';
+    if(ext==='pdf') return '📄';
+    if(['doc','docx'].includes(ext)) return '📝';
+    if(['xls','xlsx'].includes(ext)) return '📊';
+    return '📎';
   };
 
   return(
@@ -548,7 +604,7 @@ function CorbanDetail({cliente,profile,dispatch,onClose}){
       </div>
 
       <div style={{display:'flex',borderBottom:'1px solid var(--border)',background:'var(--bg-card)'}}>
-        {[['info','Informações'],['activity','Atividades'],['docs','Documentos']].map(([id,lb])=>(
+        {[['info','Informações'],['activity','Atividades'],['docs',`Documentos${docs.length>0?` (${docs.length})`:''}`]].map(([id,lb])=>(
           <button key={id} className={`ptab ${tab===id?'on':''}`} onClick={()=>setTab(id)}>{lb}</button>
         ))}
       </div>
@@ -587,7 +643,7 @@ function CorbanDetail({cliente,profile,dispatch,onClose}){
               <div className="eyebrow" style={{marginBottom:10}}>Atualizar status</div>
               <label style={{fontSize:12,color:'var(--text-muted)',display:'block',marginBottom:5}}>Estágio</label>
               <select className="sel" value={es} onChange={e=>setEs(e.target.value)} style={{marginBottom:10}}>
-                {STAGES.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}
+                {CORBAN_STAGES.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}
               </select>
               <label style={{fontSize:12,color:'var(--text-muted)',display:'block',marginBottom:5}}>Documento</label>
               <select className="sel" value={ed} onChange={e=>setEd(e.target.value)} style={{marginBottom:14}}>
@@ -626,10 +682,79 @@ function CorbanDetail({cliente,profile,dispatch,onClose}){
         )}
 
         {tab==='docs'&&(
-          <div style={{textAlign:'center',padding:'32px 0'}}>
-            <div style={{fontSize:32,marginBottom:12}}>📁</div>
-            <div style={{fontSize:13,fontWeight:600,color:'var(--text-primary)',marginBottom:4}}>Upload de documentos</div>
-            <div style={{fontSize:12,color:'var(--text-muted)'}}>Disponível em breve</div>
+          <div>
+            {/* Área de upload */}
+            <div style={{marginBottom:16}}>
+              <div className="eyebrow" style={{marginBottom:10}}>Enviar documento</div>
+              <label style={{
+                display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',
+                gap:8,padding:'22px 16px',borderRadius:12,cursor:'pointer',
+                border:`2px dashed ${uploading?G_MID:'var(--border-mid)'}`,
+                background:uploading?G_LIGHT:'rgba(90,70,50,.03)',
+                transition:'all .15s',
+              }}
+                onMouseEnter={e=>{if(!uploading){e.currentTarget.style.background=G_LIGHT;e.currentTarget.style.borderColor=G_MID;}}}
+                onMouseLeave={e=>{if(!uploading){e.currentTarget.style.background='rgba(90,70,50,.03)';e.currentTarget.style.borderColor='var(--border-mid)';}}}
+              >
+                <input type="file" style={{display:'none'}} onChange={handleUpload} disabled={uploading}
+                  accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.webp"/>
+                <div style={{fontSize:26}}>{uploading?'⏳':'📤'}</div>
+                <div style={{fontSize:13,fontWeight:600,color:'var(--text-primary)'}}>
+                  {uploading?'Enviando…':'Clique para enviar arquivo'}
+                </div>
+                <div style={{fontSize:11,color:'var(--text-muted)'}}>PDF, Word, Excel, Imagens · Máx. 10MB</div>
+              </label>
+
+              {uploadMsg&&(
+                <div style={{
+                  marginTop:10,padding:'9px 12px',borderRadius:8,fontSize:12,fontWeight:500,
+                  background:uploadMsg.t==='success'?'var(--success-dim)':'var(--danger-dim)',
+                  color:uploadMsg.t==='success'?'var(--success)':'var(--danger)',
+                  border:`1px solid ${uploadMsg.t==='success'?'rgba(30,143,94,.2)':'rgba(196,66,58,.2)'}`,
+                }}>
+                  {uploadMsg.t==='success'?'✓':'⚠'} {uploadMsg.text}
+                </div>
+              )}
+            </div>
+
+            {/* Lista de documentos */}
+            <div className="eyebrow" style={{marginBottom:10}}>
+              Documentos {docs.length>0&&<span style={{fontWeight:400,color:'var(--text-faint)'}}>({docs.length})</span>}
+            </div>
+            {docs.length===0?(
+              <div style={{textAlign:'center',padding:'28px 0',fontSize:13,color:'var(--text-muted)'}}>
+                <div style={{fontSize:28,marginBottom:8}}>📁</div>
+                Nenhum documento enviado ainda.
+              </div>
+            ):(
+              <div style={{display:'flex',flexDirection:'column',gap:8}}>
+                {docs.map((doc,i)=>(
+                  <div key={i} style={{
+                    display:'flex',alignItems:'center',gap:10,padding:'11px 14px',
+                    background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:10,
+                    transition:'all .15s',
+                  }}>
+                    <div style={{fontSize:22,flexShrink:0}}>{fileIcon(doc.nome)}</div>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:13,fontWeight:600,color:'var(--text-primary)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{doc.nome}</div>
+                      <div style={{fontSize:11,color:'var(--text-muted)',marginTop:1}}>
+                        {fmtD(doc.data)} · {doc.enviadoPor}
+                      </div>
+                    </div>
+                    <div style={{display:'flex',gap:6,flexShrink:0}}>
+                      <button className="btn btn-ghost" style={{padding:'5px 10px',fontSize:11}} onClick={()=>openDoc(doc.path)}>
+                        ↓ Abrir
+                      </button>
+                      <button onClick={()=>handleDelete(doc)} style={{
+                        padding:'5px 10px',borderRadius:7,fontSize:11,fontWeight:600,cursor:'pointer',
+                        background:'var(--danger-dim)',color:'var(--danger)',
+                        border:'1px solid rgba(196,66,58,.2)',
+                      }}>✕</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -674,7 +799,7 @@ function CorbanKanban({clientes,profile,dispatch,onSelect}){
       </div>
 
       <div style={{display:'flex',gap:10,alignItems:'flex-start',minWidth:'max-content',paddingBottom:16}}>
-        {STAGES.map((s,si)=>{
+        {CORBAN_STAGES.map((s,si)=>{
           const sl=filtered.filter(c=>c.statusComercial===s.id);
           const total=clientes.filter(c=>c.statusComercial===s.id).length;
           const [over,setOver]=useState(false);
@@ -777,7 +902,7 @@ function NovoClienteModal({profile,dispatch,onClose}){
         <div style={{marginBottom:14}}>
           <div style={{fontSize:10,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:8}}>Produtos de interesse</div>
           <div style={{display:'flex',flexWrap:'wrap',gap:6}}>
-            {PRODUCTS.map(p=>{const sel=form.produtosInteresse.includes(p);return(<button key={p} onClick={()=>tp(p)} style={{padding:'5px 11px',borderRadius:99,fontSize:12,fontWeight:600,cursor:'pointer',background:sel?G_LIGHT:'rgba(90,70,50,.07)',color:sel?G_MID:'var(--text-muted)',border:sel?`1px solid ${G_MID}40`:'1px solid var(--border)',transition:'all .15s'}}>{p}</button>);})}
+            {CORBAN_PRODUCTS.map(p=>{const sel=form.produtosInteresse.includes(p);return(<button key={p} onClick={()=>tp(p)} style={{padding:'5px 11px',borderRadius:99,fontSize:12,fontWeight:600,cursor:'pointer',background:sel?G_LIGHT:'rgba(90,70,50,.07)',color:sel?G_MID:'var(--text-muted)',border:sel?`1px solid ${G_MID}40`:'1px solid var(--border)',transition:'all .15s'}}>{p}</button>);})}
           </div>
         </div>
         <div style={{marginBottom:20}}><NovoClienteField label="Observações"><textarea className="inp" value={form.observacoes} onChange={e=>set('observacoes',e.target.value)} style={{resize:'vertical',minHeight:64,fontFamily:'var(--font)',lineHeight:1.5}} placeholder="Detalhes relevantes…"/></NovoClienteField></div>
