@@ -6,11 +6,11 @@ import { Avatar, StageTag, AlertDot } from '../../components/shared';
 import { AlterarSenha } from '../../components/AlterarSenha';
 
 // ── CORBAN CONSTANTS ──────────────────────────────────────────────────────────
-const G_DARK  = '#1A3D2B';
-const G_MID   = '#2D8653';
-const G_LIGHT = 'rgba(45,134,83,0.12)';
-const G_GLOW  = 'rgba(45,134,83,0.35)';
-const G_TEXT  = '#52B788';
+const G_DARK  = '#1C2E1A';   // sage-900 — sidebar
+const G_MID   = '#4A7346';   // sage-600 — acento principal
+const G_LIGHT = 'rgba(74,115,70,0.10)';
+const G_GLOW  = 'rgba(74,115,70,0.28)';
+const G_TEXT  = '#A8C2A5';   // sage-300 — texto claro na sidebar
 
 // Produtos específicos do módulo Corbans
 const CORBAN_PRODUCTS = [
@@ -130,13 +130,27 @@ function CorbanSidebar({view,setView,profile,onLogout,onAlterarSenha,notifCount,
 }
 
 // ── DASHBOARD ─────────────────────────────────────────────────────────────────
-function StatCard({label,value,sub,color,icon}){
+function StatCard({label,value,sub,color,icon,onClick,clickable}){
   return(
-    <div className="mcard" style={{position:'relative',overflow:'hidden'}}>
+    <div
+      className="mcard"
+      onClick={onClick}
+      style={{
+        position:'relative',overflow:'hidden',
+        cursor:clickable?'pointer':'default',
+        transition:'transform .15s, box-shadow .15s',
+        userSelect:'none',
+      }}
+      onMouseEnter={e=>{if(clickable){e.currentTarget.style.transform='translateY(-2px)';e.currentTarget.style.boxShadow=`0 8px 28px ${color}22`;}}}
+      onMouseLeave={e=>{if(clickable){e.currentTarget.style.transform='translateY(0)';e.currentTarget.style.boxShadow='';}}}
+    >
       <div style={{position:'absolute',top:-20,right:-20,width:80,height:80,borderRadius:'50%',background:color,filter:'blur(32px)',opacity:.2,pointerEvents:'none'}}/>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:12}}>
         <span className="eyebrow">{label}</span>
-        <div style={{width:32,height:32,borderRadius:9,background:`${color}18`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,border:`1px solid ${color}25`}}>{icon}</div>
+        <div style={{display:'flex',alignItems:'center',gap:6}}>
+          {clickable&&<span style={{fontSize:9,fontWeight:700,color:color,background:`${color}15`,borderRadius:99,padding:'2px 6px',letterSpacing:'.05em'}}>VER</span>}
+          <div style={{width:32,height:32,borderRadius:9,background:`${color}18`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,border:`1px solid ${color}25`}}>{icon}</div>
+        </div>
       </div>
       <div style={{fontSize:30,fontWeight:600,fontFamily:'var(--font-display)',color:'var(--text-primary)',lineHeight:1}}>{value}</div>
       {sub&&<div style={{fontSize:12,color:'var(--text-muted)',marginTop:6}}>{sub}</div>}
@@ -144,8 +158,178 @@ function StatCard({label,value,sub,color,icon}){
   );
 }
 
+// ── DRILL-DOWN PANEL ──────────────────────────────────────────────────────────
+function DrillDown({tipo,dados,clientes,estrutura,profile,onClose}){
+  const r=profile?.role;
+  const [search,setSearch]=useState('');
+
+  const title={
+    'total':'Total de Clientes',
+    'convertidos':'Clientes Convertidos',
+    'negociacao':'Em Negociação',
+    'frios':'Leads Frios (+7 dias)',
+    'pps':'Promotoras Principais',
+    'promotoras':'Promotoras',
+    'digs':'Digitalizadores',
+  }[tipo]||tipo;
+
+  const isClientes=['total','convertidos','negociacao','frios'].includes(tipo);
+  const isEstrutura=['pps','promotoras','digs'].includes(tipo);
+
+  // Filtra dados pelo search
+  const filtered=useMemo(()=>{
+    const s=search.toLowerCase().trim();
+    if(!s) return dados;
+    if(isClientes) return dados.filter(c=>
+      c.nomeCliente?.toLowerCase().includes(s)||
+      c.cpfCliente?.includes(s)||
+      c.orgaoPrefeitura?.toLowerCase().includes(s)||
+      c.digitalizadorNome?.toLowerCase().includes(s)
+    );
+    if(isEstrutura) return dados.filter(u=>
+      u.nome?.toLowerCase().includes(s)||
+      u.email?.toLowerCase().includes(s)
+    );
+    return dados;
+  },[dados,search,isClientes,isEstrutura]);
+
+  // Métricas de um usuário da estrutura
+  const metricasUsuario=(u)=>{
+    let cs=clientes;
+    if(u.role==='promotora_principal') cs=clientes.filter(c=>c.promotoraPrincipalNome===u.nome);
+    else if(u.role==='promotora') cs=clientes.filter(c=>c.promotoraNome===u.nome);
+    else if(u.role==='digitalizador') cs=clientes.filter(c=>c.digitalizadorNome===u.nome);
+    return {
+      total:cs.length,
+      ganhos:cs.filter(c=>c.statusComercial==='ganho'||c.statusComercial==='pedido').length,
+      frios:cs.filter(c=>sinceD(c.ultimoContato)>=7).length,
+    };
+  };
+
+  const stgLabel=id=>CORBAN_STAGES.find(s=>s.id===id)?.label||id;
+  const stgColor=id=>CORBAN_STAGES.find(s=>s.id===id)?.color||G_MID;
+
+  return(
+    <div style={{
+      position:'fixed',top:0,right:0,bottom:0,width:460,
+      background:'var(--bg-elevated)',borderLeft:'1px solid var(--border-mid)',
+      boxShadow:'-8px 0 40px rgba(60,40,20,.12)',
+      display:'flex',flexDirection:'column',zIndex:200,
+      animation:'slideInRight .25s cubic-bezier(.4,0,.2,1)',
+    }}>
+      <style>{`@keyframes slideInRight{from{transform:translateX(100%)}to{transform:translateX(0)}}`}</style>
+
+      {/* Header */}
+      <div style={{padding:'20px 24px 16px',borderBottom:'1px solid var(--border)',flexShrink:0}}>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
+          <div>
+            <div style={{fontFamily:'var(--font-display)',fontSize:18,fontWeight:600,color:'var(--text-primary)'}}>{title}</div>
+            <div style={{fontSize:12,color:'var(--text-muted)',marginTop:2}}>{filtered.length} {isClientes?'clientes':'usuários'}</div>
+          </div>
+          <button onClick={onClose} style={{background:'rgba(90,70,50,.08)',border:'1px solid var(--border-mid)',borderRadius:9,color:'var(--text-secondary)',cursor:'pointer',width:32,height:32,display:'flex',alignItems:'center',justifyContent:'center',fontSize:18}}>×</button>
+        </div>
+        <div style={{position:'relative'}}>
+          <span style={{position:'absolute',left:11,top:'50%',transform:'translateY(-50%)',color:'var(--text-faint)',fontSize:13}}>⌕</span>
+          <input className="inp" style={{paddingLeft:32,fontSize:12,height:36}}
+            placeholder={`Buscar ${isClientes?'cliente':'usuário'}…`}
+            value={search} onChange={e=>setSearch(e.target.value)}/>
+        </div>
+      </div>
+
+      {/* Lista */}
+      <div style={{flex:1,overflowY:'auto',padding:'8px 0'}}>
+        {filtered.length===0&&(
+          <div style={{textAlign:'center',padding:'48px 24px',fontSize:13,color:'var(--text-muted)'}}>
+            <div style={{fontSize:32,marginBottom:8}}>🔍</div>
+            Nenhum resultado encontrado.
+          </div>
+        )}
+
+        {/* Lista de clientes */}
+        {isClientes&&filtered.map((c,i)=>(
+          <div key={c.id||i} style={{
+            display:'flex',alignItems:'center',gap:12,
+            padding:'12px 24px',
+            borderBottom:'1px solid var(--border)',
+            transition:'background .1s',
+          }}
+            onMouseEnter={e=>e.currentTarget.style.background='var(--bg-hover)'}
+            onMouseLeave={e=>e.currentTarget.style.background='transparent'}
+          >
+            <Avatar name={c.nomeCliente||'?'} size={36} color={stgColor(c.statusComercial)}/>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontSize:13,fontWeight:600,color:'var(--text-primary)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{c.nomeCliente}</div>
+              <div style={{fontSize:11,color:'var(--text-muted)',marginTop:1}}>{c.orgaoPrefeitura||c.cpfCliente}</div>
+              <div style={{display:'flex',gap:6,marginTop:4,flexWrap:'wrap'}}>
+                <StageTag stageId={c.statusComercial}/>
+                {c.digitalizadorNome&&<span style={{fontSize:10,padding:'1px 6px',borderRadius:99,background:G_LIGHT,color:G_MID,fontWeight:600}}>{c.digitalizadorNome}</span>}
+                {tipo==='frios'&&<span style={{fontSize:10,padding:'1px 6px',borderRadius:99,background:'var(--danger-dim)',color:'var(--danger)',fontWeight:600}}>❄ {sinceD(c.ultimoContato)}d</span>}
+              </div>
+            </div>
+            {(c.proposta_valor)&&(
+              <div style={{textAlign:'right',flexShrink:0}}>
+                <div style={{fontSize:12,fontWeight:700,color:G_MID}}>{c.proposta_valor}</div>
+                {c.proposta_prazo&&<div style={{fontSize:10,color:'var(--text-muted)'}}>{c.proposta_prazo}x</div>}
+              </div>
+            )}
+          </div>
+        ))}
+
+        {/* Lista de usuários da estrutura */}
+        {isEstrutura&&filtered.map((u,i)=>{
+          const m=metricasUsuario(u);
+          const inativo=tipo==='digs'&&(!u.extra_data?.ultimoCad||(new Date()-new Date(u.extra_data?.ultimoCad||0))>10*86400000)&&m.total===0;
+          return(
+            <div key={u.email} style={{
+              display:'flex',alignItems:'center',gap:12,
+              padding:'14px 24px',
+              borderBottom:'1px solid var(--border)',
+              transition:'background .1s',
+            }}
+              onMouseEnter={e=>e.currentTarget.style.background='var(--bg-hover)'}
+              onMouseLeave={e=>e.currentTarget.style.background='transparent'}
+            >
+              <Avatar name={u.nome||'?'} size={38} color={ROLE_COLORS[u.role]||G_MID}/>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{display:'flex',alignItems:'center',gap:6}}>
+                  <span style={{fontSize:13,fontWeight:600,color:'var(--text-primary)'}}>{u.nome}</span>
+                  {inativo&&<span style={{fontSize:9,fontWeight:700,background:'var(--danger-dim)',color:'var(--danger)',borderRadius:99,padding:'2px 6px'}}>⚠ Inativo</span>}
+                </div>
+                <div style={{fontSize:11,color:'var(--text-muted)',marginTop:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{u.email}</div>
+                {u.extra_data?.cnpj&&<div style={{fontSize:10,color:'var(--text-faint)',marginTop:1}}>CNPJ: {u.extra_data.cnpj}</div>}
+                {u.extra_data?.cpf&&<div style={{fontSize:10,color:'var(--text-faint)',marginTop:1}}>CPF: {u.extra_data.cpf}</div>}
+              </div>
+              {/* Métricas */}
+              <div style={{display:'flex',gap:12,flexShrink:0}}>
+                <div style={{textAlign:'center'}}>
+                  <div style={{fontSize:16,fontWeight:700,color:G_MID}}>{m.total}</div>
+                  <div style={{fontSize:9,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.06em'}}>clientes</div>
+                </div>
+                <div style={{textAlign:'center'}}>
+                  <div style={{fontSize:16,fontWeight:700,color:'var(--success)'}}>{m.ganhos}</div>
+                  <div style={{fontSize:9,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.06em'}}>ganhos</div>
+                </div>
+                {m.frios>0&&(
+                  <div style={{textAlign:'center'}}>
+                    <div style={{fontSize:16,fontWeight:700,color:'var(--danger)'}}>{m.frios}</div>
+                    <div style={{fontSize:9,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.06em'}}>frios</div>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function CorbanDashboard({clientes,estrutura,profile}){
   const r=profile?.role;
+  const [drillDown,setDrillDown]=useState(null); // null | {tipo, dados}
+
+  const openDrill=(tipo,dados)=>setDrillDown({tipo,dados});
+  const closeDrill=()=>setDrillDown(null);
 
   // ── Filtro por promotora (Master only) ──
   const [filtroTipo,setFiltroTipo]=useState('todos'); // 'todos' | 'promotora_principal' | 'promotora'
@@ -297,6 +481,7 @@ function CorbanDashboard({clientes,estrutura,profile}){
     :'Visão geral — todos os clientes';
 
   return(
+  <>
     <div style={{padding:'28px 32px'}}>
       <div className="fu" style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:20,gap:16}}>
         <div>
@@ -372,18 +557,34 @@ function CorbanDashboard({clientes,estrutura,profile}){
 
       {/* Stats grid */}
       <div style={{display:'grid',gridTemplateColumns:'repeat(4,minmax(0,1fr))',gap:14,marginBottom:20}}>
-        <StatCard label="Total Clientes" value={total}  sub={isFiltrado?labelFiltro:'No seu escopo'}     color={G_MID}    icon="◈"/>
-        <StatCard label="Convertidos"    value={ganhos} sub={`${taxa}% conversão`}                        color="#1E8F5E" icon="✓"/>
-        <StatCard label="Em Negociação"  value={emNeg}  sub="Estágio ativo"                               color="#5B4FE8" icon="⟳"/>
-        <StatCard label="Leads Frios"    value={frios}  sub="Sem contato +7 dias"                         color="#C4423A" icon="❄"/>
+        <StatCard clickable label="Total Clientes" value={total}  sub={isFiltrado?labelFiltro:'No seu escopo'}     color={G_MID}    icon="◈" onClick={()=>openDrill('total',clientesComFiltros)}/>
+        <StatCard clickable label="Convertidos"    value={ganhos} sub={`${taxa}% conversão`}                        color="#1E8F5E" icon="✓" onClick={()=>openDrill('convertidos',clientesComFiltros.filter(c=>c.statusComercial==='ganho'||c.statusComercial==='pedido'))}/>
+        <StatCard clickable label="Em Negociação"  value={emNeg}  sub="Estágio ativo"                               color="#5B4FE8" icon="⟳" onClick={()=>openDrill('negociacao',clientesComFiltros.filter(c=>c.statusComercial==='em_negociacao'))}/>
+        <StatCard clickable label="Leads Frios"    value={frios}  sub="Sem contato +7 dias"                         color="#C4423A" icon="❄" onClick={()=>openDrill('frios',clientesComFiltros.filter(c=>sinceD(c.ultimoContato)>=7))}/>
       </div>
 
       {/* Estrutura stats — só para Master e PP (apenas quando não há filtro ativo) */}
       {(r==='master'||r==='promotora_principal')&&!isFiltrado&&(
         <div style={{display:'grid',gridTemplateColumns:'repeat(3,minmax(0,1fr))',gap:14,marginBottom:20}}>
-          {r==='master'&&<StatCard label="Promotoras Principais" value={pps} sub="Cadastradas" color={G_MID}    icon="⎇"/>}
-          <StatCard label="Promotoras"      value={ps} sub="Vinculadas" color="#1A9E8A" icon="⎇"/>
-          <StatCard label="Digitalizadores" value={ds} sub="Ativos"     color="#5B4FE8" icon="⎇"/>
+          {r==='master'&&<StatCard clickable label="Promotoras Principais" value={pps} sub="Cadastradas" color={G_MID}    icon="⎇" onClick={()=>openDrill('pps',estrutura.filter(u=>u.role==='promotora_principal'))}/>}
+          <StatCard clickable label="Promotoras"      value={ps} sub="Vinculadas" color="#1A9E8A" icon="⎇"
+            onClick={()=>openDrill('promotoras',r==='master'
+              ?estrutura.filter(u=>u.role==='promotora')
+              :estrutura.filter(u=>u.role==='promotora'&&u.promotora_principal_email===profile?.email)
+            )}/>
+          <StatCard clickable label="Digitalizadores" value={ds} sub="Ativos"     color="#5B4FE8" icon="⎇"
+            onClick={()=>openDrill('digs',r==='master'
+              ?estrutura.filter(u=>u.role==='digitalizador')
+              :estrutura.filter(u=>u.role==='digitalizador'&&u.promotora_principal_email===profile?.email)
+            )}/>
+        </div>
+      )}
+
+      {/* Promotora — card de digitalizadores */}
+      {r==='promotora'&&(
+        <div style={{display:'grid',gridTemplateColumns:'repeat(1,minmax(0,1fr))',gap:14,marginBottom:20}}>
+          <StatCard clickable label="Digitalizadores" value={estrutura.filter(u=>u.role==='digitalizador'&&u.promotora_email===profile?.email).length} sub="Vinculados a você" color="#5B4FE8" icon="⎇"
+            onClick={()=>openDrill('digs',estrutura.filter(u=>u.role==='digitalizador'&&u.promotora_email===profile?.email))}/>
         </div>
       )}
 
@@ -599,6 +800,25 @@ function CorbanDashboard({clientes,estrutura,profile}){
         </div>
       )}
     </div>
+
+    {/* Backdrop ao abrir drill-down */}
+    {drillDown&&(
+      <>
+        <div
+          onClick={closeDrill}
+          style={{position:'fixed',inset:0,background:'rgba(20,15,10,.35)',zIndex:199,backdropFilter:'blur(2px)'}}
+        />
+        <DrillDown
+          tipo={drillDown.tipo}
+          dados={drillDown.dados}
+          clientes={clientes}
+          estrutura={estrutura}
+          profile={profile}
+          onClose={closeDrill}
+        />
+      </>
+    )}
+  </>
   );
 }
 function CorbanClientes({clientes,profile,estrutura,onSelect,onNew}){
@@ -1138,10 +1358,95 @@ function CorbanDetail({cliente,profile,session,dispatch,onClose}){
 
 
 // ── KANBAN CORBANS ────────────────────────────────────────────────────────────
-function CorbanKanban({clientes,profile,dispatch,onSelect}){
+function KanbanColuna({s,filtered,clientes,isSearching,dragId,setDragId,dispatch,onSelect,profile}){
+  const [over,setOver]=useState(false);
+  const r=profile?.role;
+  const sl=filtered.filter(c=>c.statusComercial===s.id);
+  const total=clientes.filter(c=>c.statusComercial===s.id).length;
+
+  return(
+    <div className={`kcol ${over?'dover':''}`}
+      onDragOver={e=>{e.preventDefault();setOver(true);}}
+      onDragLeave={()=>setOver(false)}
+      onDrop={()=>{
+        setOver(false);
+        if(dragId) dispatch({type:'MOVE',cid:dragId,st:s.id,user:profile?.nome||'Usuário'});
+        setDragId(null);
+      }}>
+      <div style={{display:'flex',alignItems:'center',gap:7,marginBottom:11,padding:'0 3px'}}>
+        <div style={{width:8,height:8,borderRadius:'50%',background:s.color,boxShadow:`0 0 5px ${s.color}60`,flexShrink:0}}/>
+        <span style={{fontSize:12,fontWeight:600,color:'var(--text-secondary)',flex:1}}>{s.label}</span>
+        <span style={{fontSize:11,fontWeight:700,background:s.bg,color:s.color,borderRadius:99,padding:'1px 6px'}}>
+          {isSearching?`${sl.length}/${total}`:sl.length}
+        </span>
+      </div>
+      <div style={{minHeight:44}}>
+        {sl.map(c=>(
+          <div key={c.id} className="kcard fu" draggable
+            onDragStart={()=>setDragId(c.id)}
+            onClick={()=>onSelect(c.id)}
+            style={{position:'relative',zIndex:1}}>
+            <div style={{fontSize:13,fontWeight:600,color:'var(--text-primary)',lineHeight:1.3,marginBottom:5}}>{c.nomeCliente}</div>
+            <div style={{fontSize:11,color:'var(--text-muted)',marginBottom:6}}>{c.orgaoPrefeitura||c.cpfCliente}</div>
+            {(c.produtosInteresse||[]).length>0&&(
+              <div style={{marginBottom:7}}>
+                <span style={{fontSize:10,padding:'2px 7px',borderRadius:99,background:G_LIGHT,color:G_MID,fontWeight:600}}>
+                  {c.produtosInteresse[0]}
+                  {c.produtosInteresse.length>1&&` +${c.produtosInteresse.length-1}`}
+                </span>
+              </div>
+            )}
+            {c.proposta_valor&&(
+              <div style={{marginBottom:6}}>
+                <span style={{fontSize:10,padding:'2px 7px',borderRadius:99,background:'rgba(30,143,94,.1)',color:'var(--success)',fontWeight:700}}>
+                  💰 {c.proposta_valor}
+                </span>
+              </div>
+            )}
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+              <span style={{fontSize:10,color:'var(--text-faint)'}}>{fmtD(c.ultimoContato)}</span>
+              <span style={{fontSize:10,fontWeight:600,color:c.documentoStatus==='Aprovado'?'var(--success)':c.documentoStatus==='Não solicitado'?'var(--text-faint)':'var(--amber)'}}>
+                📄 {c.documentoStatus}
+              </span>
+            </div>
+            {r!=='digitalizador'&&c.digitalizadorNome&&(
+              <div style={{marginTop:6,paddingTop:6,borderTop:'1px solid var(--border)',fontSize:10,color:'var(--text-muted)'}}>
+                {c.digitalizadorNome}
+              </div>
+            )}
+          </div>
+        ))}
+        {sl.length===0&&(
+          <div style={{textAlign:'center',padding:'18px 0',fontSize:11,color:'var(--text-faint)',letterSpacing:'.04em'}}>
+            {isSearching?'Sem resultado':'Solte aqui'}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CorbanKanban({clientes,profile,dispatch,onSelect,session}){
   const [dragId,setDragId]=useState(null);
   const [search,setSearch]=useState('');
+  const [rtPulse,setRtPulse]=useState(false);
   const r=profile?.role;
+
+  // ── Real-time: escuta mudanças em corban_clientes e pulsa o indicador ──
+  useEffect(()=>{
+    if(!session) return;
+    const ch=supabase.channel('kanban_rt_indicator')
+      .on('postgres_changes',{event:'UPDATE',schema:'public',table:'corban_clientes'},
+        ()=>{
+          // Pulsa o indicador de tempo real por 2s
+          setRtPulse(true);
+          setTimeout(()=>setRtPulse(false),2000);
+        })
+      .on('postgres_changes',{event:'INSERT',schema:'public',table:'corban_clientes'},
+        ()=>{ setRtPulse(true); setTimeout(()=>setRtPulse(false),2000); })
+      .subscribe();
+    return ()=>supabase.removeChannel(ch);
+  },[session]);
 
   const filtered=search.trim()
     ?clientes.filter(c=>
@@ -1157,10 +1462,17 @@ function CorbanKanban({clientes,profile,dispatch,onSelect}){
       <div className="fu" style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20,gap:16}}>
         <div style={{flexShrink:0}}>
           <div className="section-title">Pipeline</div>
-          <div className="section-sub">
-            {isSearching
-              ?`${filtered.length} resultado${filtered.length!==1?'s':''} para "${search}"`
-              :`${clientes.length} clientes · arraste para mover entre estágios`}
+          <div style={{display:'flex',alignItems:'center',gap:8,marginTop:3}}>
+            <div style={{fontSize:12,color:'var(--text-muted)'}}>
+              {isSearching
+                ?`${filtered.length} resultado${filtered.length!==1?'s':''} para "${search}"`
+                :`${clientes.length} clientes · arraste para mover entre estágios`}
+            </div>
+            {/* Indicador real-time */}
+            <div style={{display:'flex',alignItems:'center',gap:4,fontSize:11,color:rtPulse?G_MID:'var(--text-faint)',transition:'color .3s'}}>
+              <div style={{width:7,height:7,borderRadius:'50%',background:rtPulse?G_MID:'var(--text-faint)',boxShadow:rtPulse?`0 0 8px ${G_MID}`:'none',transition:'all .3s'}}/>
+              {rtPulse?'Atualizado':'Tempo real'}
+            </div>
           </div>
         </div>
         <div style={{position:'relative',width:260,flexShrink:0}}>
@@ -1174,64 +1486,20 @@ function CorbanKanban({clientes,profile,dispatch,onSelect}){
       </div>
 
       <div style={{display:'flex',gap:10,alignItems:'flex-start',minWidth:'max-content',paddingBottom:16}}>
-        {CORBAN_STAGES.map((s,si)=>{
-          const sl=filtered.filter(c=>c.statusComercial===s.id);
-          const total=clientes.filter(c=>c.statusComercial===s.id).length;
-          const [over,setOver]=useState(false);
-          return(
-            <div key={s.id} className={`kcol ${over?'dover':''}`} style={{animationDelay:`${si*.04}s`}}
-              onDragOver={e=>{e.preventDefault();setOver(true);}}
-              onDragLeave={()=>setOver(false)}
-              onDrop={()=>{
-                setOver(false);
-                if(dragId) dispatch({type:'MOVE',cid:dragId,st:s.id,user:profile?.nome||'Usuário'});
-                setDragId(null);
-              }}>
-              <div style={{display:'flex',alignItems:'center',gap:7,marginBottom:11,padding:'0 3px'}}>
-                <div style={{width:8,height:8,borderRadius:'50%',background:s.color,boxShadow:`0 0 5px ${s.color}60`,flexShrink:0}}/>
-                <span style={{fontSize:12,fontWeight:600,color:'var(--text-secondary)',flex:1}}>{s.label}</span>
-                <span style={{fontSize:11,fontWeight:700,background:s.bg,color:s.color,borderRadius:99,padding:'1px 6px'}}>
-                  {isSearching?`${sl.length}/${total}`:sl.length}
-                </span>
-              </div>
-              <div style={{minHeight:44}}>
-                {sl.map(c=>(
-                  <div key={c.id} className="kcard fu" draggable
-                    onDragStart={()=>setDragId(c.id)}
-                    onClick={()=>onSelect(c.id)}
-                    style={{position:'relative',zIndex:1}}>
-                    <div style={{fontSize:13,fontWeight:600,color:'var(--text-primary)',lineHeight:1.3,marginBottom:5}}>{c.nomeCliente}</div>
-                    <div style={{fontSize:11,color:'var(--text-muted)',marginBottom:6}}>{c.orgaoPrefeitura||c.cpfCliente}</div>
-                    {(c.produtosInteresse||[]).length>0&&(
-                      <div style={{marginBottom:7}}>
-                        <span style={{fontSize:10,padding:'2px 7px',borderRadius:99,background:G_LIGHT,color:G_MID,fontWeight:600}}>
-                          {c.produtosInteresse[0]}
-                          {c.produtosInteresse.length>1&&` +${c.produtosInteresse.length-1}`}
-                        </span>
-                      </div>
-                    )}
-                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                      <span style={{fontSize:10,color:'var(--text-faint)'}}>{fmtD(c.ultimoContato)}</span>
-                      <span style={{fontSize:10,fontWeight:600,color:c.documentoStatus==='Aprovado'?'var(--success)':c.documentoStatus==='Não solicitado'?'var(--text-faint)':'var(--amber)'}}>
-                        📄 {c.documentoStatus}
-                      </span>
-                    </div>
-                    {r!=='digitalizador'&&c.digitalizadorNome&&(
-                      <div style={{marginTop:6,paddingTop:6,borderTop:'1px solid var(--border)',fontSize:10,color:'var(--text-muted)'}}>
-                        {c.digitalizadorNome}
-                      </div>
-                    )}
-                  </div>
-                ))}
-                {sl.length===0&&(
-                  <div style={{textAlign:'center',padding:'18px 0',fontSize:11,color:'var(--text-faint)',letterSpacing:'.04em'}}>
-                    {isSearching?'Sem resultado':'Solte aqui'}
-                  </div>
-                )}
-              </div>
-            </div>
-          );
-        })}
+        {CORBAN_STAGES.map((s,si)=>(
+          <KanbanColuna
+            key={s.id}
+            s={s}
+            filtered={filtered}
+            clientes={clientes}
+            isSearching={isSearching}
+            dragId={dragId}
+            setDragId={setDragId}
+            dispatch={dispatch}
+            onSelect={onSelect}
+            profile={profile}
+          />
+        ))}
       </div>
     </div>
   );
@@ -2373,7 +2641,7 @@ export function CorbanApp({profile,session,signOut,onAlterarSenha}){
         />
         <main style={{flex:1,minWidth:0,overflowY:'auto',paddingRight:selected?490:0,transition:'padding-right .3s cubic-bezier(.4,0,.2,1)'}}>
           {view==='dashboard' && <CorbanDashboard clientes={clientes} estrutura={estrutura} profile={profile}/>}
-          {view==='pipeline'  && <CorbanKanban clientes={clientes} profile={profile} dispatch={auditedDispatch} onSelect={id=>dispatch({type:'SEL',id})}/>}
+          {view==='pipeline'  && <CorbanKanban clientes={clientes} profile={profile} dispatch={auditedDispatch} onSelect={id=>dispatch({type:'SEL',id})} session={session}/>}
           {view==='clientes'  && <CorbanClientes clientes={clientes} profile={profile} estrutura={estrutura} onSelect={id=>dispatch({type:'SEL',id})} onNew={()=>dispatch({type:'TNEW'})}/>}
           {view==='arvore'    && <CorbanArvore estrutura={estrutura} clientes={clientes} profile={profile}/>}
           {view==='estrutura' && <CorbanEstrutura profile={profile} session={session}/>}

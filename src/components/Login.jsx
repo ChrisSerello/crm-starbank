@@ -38,7 +38,7 @@ export function Login(){
           width:"100%",
           maxWidth:220,
           height:"auto",
-          maxHeight:100,
+          maxHeight:56,
           objectFit:"contain",
           objectPosition:"center",
           display:"block",
@@ -50,8 +50,8 @@ export function Login(){
   return(
     <div style={{minHeight:"100vh",background:"var(--bg-base)",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"var(--font)",padding:16}}>
       <style>{`@keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}}.shake{animation:shake .45s both;}`}</style>
-      <div style={{position:"fixed",top:-100,right:-100,width:400,height:400,borderRadius:"50%",background:"rgba(91,79,232,0.07)",filter:"blur(80px)",pointerEvents:"none"}}/>
-      <div style={{position:"fixed",bottom:-80,left:-80,width:320,height:320,borderRadius:"50%",background:"rgba(26,158,138,0.07)",filter:"blur(60px)",pointerEvents:"none"}}/>
+      <div style={{position:"fixed",top:-100,right:-100,width:400,height:400,borderRadius:"50%",background:"rgba(74,115,70,0.08)",filter:"blur(80px)",pointerEvents:"none"}}/>
+      <div style={{position:"fixed",bottom:-80,left:-80,width:320,height:320,borderRadius:"50%",background:"rgba(61,155,107,0.07)",filter:"blur(60px)",pointerEvents:"none"}}/>
 
       {/* ── Login ── */}
       {screen==='login'&&(
