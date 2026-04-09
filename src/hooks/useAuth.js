@@ -13,10 +13,16 @@ export function useAuth(){
     try {
       const emailLower=email.toLowerCase().trim();
 
-      // 1. Profile já existe → retorna direto
+      // 1. Profile já existe
       let {data:existing}=await supabase.from('profiles').select('*').eq('id',uid).single();
       if(existing){
-        // Enriquecer com nomes de hierarquia corbans se necessário
+        // Verificar se modulo está correto cruzando com allowed_users
+        const {data:au}=await supabase.from('allowed_users').select('modulo,role').ilike('email',emailLower).single();
+        if(au&&au.modulo&&au.modulo!==existing.modulo){
+          // Corrigir modulo e role desatualizados
+          await supabase.from('profiles').update({modulo:au.modulo,role:au.role}).eq('id',uid);
+          existing={...existing,modulo:au.modulo,role:au.role};
+        }
         if(existing.modulo==='corbans'){
           existing=await enrichCorbanProfile(existing);
         }
@@ -59,6 +65,7 @@ export function useAuth(){
       if(modulo==='corbans'){
         finalProfile=await enrichCorbanProfile(finalProfile,allowed);
       }
+      // BKO não precisa de enriquecimento adicional
       setProfile(finalProfile);
 
     } catch(e){

@@ -22,6 +22,7 @@ import { Auditoria } from "./views/Auditoria";
 import { GestaoEquipe } from "./views/GestaoEquipe";
 import { OperadorApp } from "./views/OperadorApp";
 import { CorbanApp } from "./views/corbans/CorbanApp";
+import { BKOApp } from "./views/bko/BKOApp";
 
 // ─── ROOT ─────────────────────────────────────────────────────────────────────
 
@@ -206,6 +207,20 @@ export default function App(){
         onAlterarSenha={()=>setShowAlterarSenha(true)}
       />
       {showAlterarSenha && <AlterarSenha onClose={()=>setShowAlterarSenha(false)}/>}
+    </>
+  );
+
+  // ── BKO — módulo totalmente isolado ──
+  if(profile.modulo==='bko') return(
+    <>
+      <GlobalStyles/>
+      <BKOApp
+        profile={profile}
+        session={session}
+        signOut={signOut}
+        onAlterarSenha={()=>setShowAlterarSenha(true)}
+      />
+      {showAlterarSenha&&<AlterarSenha onClose={()=>setShowAlterarSenha(false)}/>}
     </>
   );
 
