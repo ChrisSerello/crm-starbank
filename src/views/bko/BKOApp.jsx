@@ -569,7 +569,7 @@ function BKODetail({cliente,profile,session,dispatch,onClose}){
             <div style={{marginBottom:14}}>
               <div className="eyebrow" style={{marginBottom:8}}>Checklist para avançar</div>
               {[
-                {key:'cnh',label:'CNH'},
+                {key:'cnh',label:'Documento de identificação (RG ou CNH)'},
                 {key:'holerite1',label:'Último holerite (obrigatório)'},
                 {key:'holerite2',label:'2º holerite (opcional)'},
                 {key:'holerite3',label:'3º holerite (opcional)'},
