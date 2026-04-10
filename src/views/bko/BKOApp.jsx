@@ -373,15 +373,14 @@ function BKODetail({cliente,profile,session,dispatch,onClose}){
   const isBko=r==='bko';
   const isComercial=r==='comercial';
 
-  // Busca corbans com UUID real (do profiles, não do allowed_users)
+  // Busca corbans via função SECURITY DEFINER (bypassa RLS)
   useEffect(()=>{
     if(!isComercial) return;
-    supabase.from('profiles')
-      .select('id,nome,email')
-      .eq('modulo','bko')
-      .eq('role','corban_bko')
-      .order('nome')
-      .then(({data})=>setCorbans(data||[]));
+    supabase.rpc('get_bko_corbans')
+      .then(({data,error})=>{
+        if(error) console.error('get_bko_corbans error:',error);
+        setCorbans(data||[]);
+      });
   },[isComercial]);
 
   // Salva atribuição diretamente no banco com UUID real
