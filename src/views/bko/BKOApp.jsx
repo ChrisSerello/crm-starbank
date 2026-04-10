@@ -24,13 +24,13 @@ const ROLE_COLORS = {
 };
 
 const BKO_STAGES = [
-  { id:'clientes_novos',     label:'Clientes Novos',              color:'#3B5BDB', bg:'rgba(59,91,219,.1)'  },
-  { id:'saldo_andamento',    label:'Saldo em Andamento - BKO',    color:'#7C3AED', bg:'rgba(124,58,237,.1)' },
+  { id:'clientes_novos',     label:'Clientes Novos',     color:'#3B5BDB', bg:'rgba(59,91,219,.1)'  },
+  { id:'saldo_andamento',    label:'Saldo em Andamento - BKO', color:'#7C3AED', bg:'rgba(124,58,237,.1)' },
   { id:'em_negociacao',      label:'Em Negociação - Corban',      color:'#0EA5E9', bg:'rgba(14,165,233,.1)' },
   { id:'abertura_conta',     label:'Abertura de Conta - Corban',  color:'#10B981', bg:'rgba(16,185,129,.1)' },
   { id:'digitar_proposta',   label:'Digitar Proposta - Corban',   color:'#F59E0B', bg:'rgba(245,158,11,.1)' },
-  { id:'integrado',          label:'Integrado',                   color:'#22C55E', bg:'rgba(34,197,94,.1)'  },
-  { id:'perdido',            label:'Perdido',                     color:'#EF4444', bg:'rgba(239,68,68,.1)'  },
+  { id:'integrado',          label:'Integrado',          color:'#22C55E', bg:'rgba(34,197,94,.1)'  },
+  { id:'perdido',            label:'Perdido',            color:'#EF4444', bg:'rgba(239,68,68,.1)'  },
 ];
 
 const blankCliente = () => ({
@@ -271,22 +271,30 @@ function BKOPipeline({clientes,profile,dispatch,onSelect,filtroEstagio,setFiltro
 function BKOClientes({clientes,profile,onSelect,onNew}){
   const [search,setSearch]=useState('');
   const [estagio,setEstagio]=useState('');
+  const [prefeitura,setPrefeitura]=useState('');
   const [page,setPage]=useState(1);
   const PER=50;
+
+  // Lista de prefeituras únicas
+  const prefeituras=useMemo(()=>[...new Set(clientes.map(c=>c.prefeitura||c.orgaoPrefeitura).filter(Boolean))].sort(),[clientes]);
+
   const filtered=useMemo(()=>clientes.filter(c=>{
     if(estagio&&c.estagio!==estagio) return false;
+    if(prefeitura&&(c.prefeitura||c.orgaoPrefeitura)!==prefeitura) return false;
     if(search){
       const s=search.toLowerCase();
       if(!c.nomeCliente?.toLowerCase().includes(s)&&!c.cpfCliente?.includes(s)) return false;
     }
     return true;
-  }),[clientes,search,estagio]);
+  }),[clientes,search,estagio,prefeitura]);
+
   const totalPages=Math.max(1,Math.ceil(filtered.length/PER));
   const paged=filtered.slice((page-1)*PER,page*PER);
   const stgStyle=(id)=>{
     const s=BKO_STAGES.find(x=>x.id===id);
     return s?{background:s.bg,color:s.color,borderRadius:99,padding:'2px 8px',fontSize:10,fontWeight:700}:{};
   };
+  const hasFilter=search||estagio||prefeitura;
   return(
     <div style={{padding:'28px 32px'}}>
       <div className="fu" style={{display:'flex',justifyContent:'space-between',alignItems:'flex-end',marginBottom:16}}>
@@ -301,11 +309,15 @@ function BKOClientes({clientes,profile,onSelect,onNew}){
           <span className="search-icon">⌕</span>
           <input className="inp" placeholder="Nome ou CPF…" value={search} onChange={e=>{setSearch(e.target.value);setPage(1);}}/>
         </div>
-        <select className="sel" style={{width:180}} value={estagio} onChange={e=>{setEstagio(e.target.value);setPage(1);}}>
+        <select className="sel" style={{width:170}} value={estagio} onChange={e=>{setEstagio(e.target.value);setPage(1);}}>
           <option value="">Todos os estágios</option>
           {BKO_STAGES.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}
         </select>
-        {(search||estagio)&&<button className="btn btn-ghost" onClick={()=>{setSearch('');setEstagio('');setPage(1);}}>✕ Limpar</button>}
+        <select className="sel" style={{width:170}} value={prefeitura} onChange={e=>{setPrefeitura(e.target.value);setPage(1);}}>
+          <option value="">Todas as prefeituras</option>
+          {prefeituras.map(p=><option key={p} value={p}>{p}</option>)}
+        </select>
+        {hasFilter&&<button className="btn btn-ghost" onClick={()=>{setSearch('');setEstagio('');setPrefeitura('');setPage(1);}}>✕ Limpar</button>}
       </div>
       <div className="fu2 card" style={{overflow:'hidden',marginBottom:14}}>
         <div style={{overflowX:'auto'}}>
@@ -360,20 +372,30 @@ function BKODetail({cliente,profile,session,dispatch,onClose}){
   const [ed,setEd]=useState(cliente.documentoStatus||'Não solicitado');
   const [saldo,setSaldo]=useState(cliente.saldoDevedor||'');
   const [obsBko,setObsBko]=useState(cliente.observacoesBko||'');
-  const [note,setNote]=useState('');
   const [docs,setDocs]=useState(cliente.documentos||[]);
   const [uploading,setUploading]=useState(false);
   const [uploadMsg,setUploadMsg]=useState(null);
-  // ── ATRIBUIÇÃO (corrigido: usa UUID do profiles) ──
-  const [corbans,setCorbans]=useState([]); // [{id:UUID, nome, email}]
+  // ── ATRIBUIÇÃO comercial → corban ──
+  const [corbans,setCorbans]=useState([]);
   const [atribuidoId,setAtribuidoId]=useState(cliente.atribuido_a_id||'');
   const [atribuindo,setAtribuindo]=useState(false);
   const [atribMsg,setAtribMsg]=useState(null);
+  // ── RESPONSÁVEL BKO ──
+  const [respMsg,setRespMsg]=useState(null);
+  const [salvandoResp,setSalvandoResp]=useState(false);
+  // ── CHAT ──
+  const [chatMsgs,setChatMsgs]=useState([]);
+  const [chatInput,setChatInput]=useState('');
+  const [chatLoading,setChatLoading]=useState(false);
+  const chatEndRef=useRef(null);
+
   const r=profile?.role;
   const isBko=r==='bko';
   const isComercial=r==='comercial';
+  const euSouResponsavel=isBko&&cliente.responsavel_bko_id===profile?.id;
+  const temResponsavel=!!cliente.responsavel_bko_id;
 
-  // Busca corbans via função SECURITY DEFINER (bypassa RLS)
+  // Carregar corbans para atribuição
   useEffect(()=>{
     if(!isComercial) return;
     supabase.rpc('get_bko_corbans')
@@ -383,13 +405,56 @@ function BKODetail({cliente,profile,session,dispatch,onClose}){
       });
   },[isComercial]);
 
-  // Salva atribuição diretamente no banco com UUID real
+  // Carregar mensagens do chat
+  useEffect(()=>{
+    supabase.from('bko_chat').select('*').eq('cliente_id',cliente.id).order('created_at',{ascending:true})
+      .then(({data})=>setChatMsgs(data||[]));
+    const ch=supabase.channel(`chat_${cliente.id}`)
+      .on('postgres_changes',{event:'INSERT',schema:'public',table:'bko_chat',filter:`cliente_id=eq.${cliente.id}`},
+        p=>setChatMsgs(prev=>[...prev,p.new]))
+      .subscribe();
+    return ()=>supabase.removeChannel(ch);
+  },[cliente.id]);
+
+  useEffect(()=>{ chatEndRef.current?.scrollIntoView({behavior:'smooth'}); },[chatMsgs,tab]);
+
+  const enviarChat=async()=>{
+    if(!chatInput.trim()) return;
+    setChatLoading(true);
+    const msg={cliente_id:cliente.id,user_id:profile?.id,user_nome:profile?.nome||'Usuário',user_role:r,mensagem:chatInput.trim()};
+    await supabase.from('bko_chat').insert(msg);
+    setChatInput('');setChatLoading(false);
+  };
+
+  // Assumir responsabilidade (BKO)
+  const assumirResponsabilidade=async()=>{
+    setSalvandoResp(true);setRespMsg(null);
+    const {error}=await supabase.from('bko_clientes').update({
+      responsavel_bko_id:profile?.id,
+      responsavel_bko_nome:profile?.nome,
+    }).eq('id',cliente.id);
+    setSalvandoResp(false);
+    if(error){setRespMsg({t:'error',text:'Erro ao assumir.'});return;}
+    dispatch({type:'UPD',c:{...cliente,responsavel_bko_id:profile?.id,responsavel_bko_nome:profile?.nome}});
+    setRespMsg({t:'success',text:'Você é o responsável por este cliente.'});
+  };
+
+  // Liberar responsabilidade
+  const liberarResponsabilidade=async()=>{
+    if(!confirm('Liberar responsabilidade deste cliente?')) return;
+    setSalvandoResp(true);
+    await supabase.from('bko_clientes').update({responsavel_bko_id:null,responsavel_bko_nome:null}).eq('id',cliente.id);
+    setSalvandoResp(false);
+    dispatch({type:'UPD',c:{...cliente,responsavel_bko_id:null,responsavel_bko_nome:null}});
+    setRespMsg(null);
+  };
+
   const salvarAtribuicao=async()=>{
     const corbanSel=corbans.find(c=>c.id===atribuidoId);
     setAtribuindo(true);setAtribMsg(null);
     const {error}=await supabase.from('bko_clientes').update({
-      atribuido_a_id: atribuidoId||null,
-      atribuido_a_nome: corbanSel?.nome||null,
+      atribuido_a_id:atribuidoId||null,
+      atribuido_a_nome:corbanSel?.nome||null,
     }).eq('id',cliente.id);
     setAtribuindo(false);
     if(error){setAtribMsg({t:'error',text:'Erro ao atribuir.'});return;}
@@ -445,6 +510,7 @@ function BKODetail({cliente,profile,session,dispatch,onClose}){
             <div style={{marginTop:7,display:'flex',gap:5,flexWrap:'wrap'}}>
               {stg&&<span style={{fontSize:10,padding:'2px 8px',borderRadius:99,background:stg.bg,color:stg.color,fontWeight:700}}>{stg.label}</span>}
               {cliente.atribuido_a_nome&&<span style={{fontSize:10,padding:'2px 8px',borderRadius:99,background:B_LIGHT,color:B_MID,fontWeight:700}}>→ {cliente.atribuido_a_nome}</span>}
+              {cliente.responsavel_bko_nome&&<span style={{fontSize:10,padding:'2px 8px',borderRadius:99,background:'rgba(124,58,237,.1)',color:'#7C3AED',fontWeight:700}}>🔒 {cliente.responsavel_bko_nome}</span>}
               {cliente.saldoDevedor&&<span style={{fontSize:10,padding:'2px 8px',borderRadius:99,background:'rgba(16,185,129,.1)',color:'#10B981',fontWeight:700}}>💰 {cliente.saldoDevedor}</span>}
             </div>
           </div>
@@ -453,7 +519,13 @@ function BKODetail({cliente,profile,session,dispatch,onClose}){
       </div>
 
       <div style={{display:'flex',borderBottom:'1px solid var(--border)',background:'var(--bg-card)',flexShrink:0,overflowX:'auto'}}>
-        {[['info','Informações'],['bko','BKO'],['activity','Atividades'],['docs',`Documentos${docs.length>0?` (${docs.length})`:''}`]].map(([id,lb])=>(
+        {[
+          ['info','Informações'],
+          ['bko','BKO'],
+          ['activity','Atividades'],
+          ['chat','Chat'],
+          ['docs',`Documentos${docs.length>0?` (${docs.length})`:''}`],
+        ].map(([id,lb])=>(
           <button key={id} className={`ptab ${tab===id?'on':''}`} onClick={()=>setTab(id)} style={{whiteSpace:'nowrap',fontSize:12}}>{lb}</button>
         ))}
       </div>
@@ -469,6 +541,7 @@ function BKODetail({cliente,profile,session,dispatch,onClose}){
                 ['Data entrada',fmtD(cliente.dataEntrada)],
                 ['Criado por',cliente.criado_por_nome||'—'],
                 ['Atribuído a',cliente.atribuido_a_nome||'Não atribuído'],
+                ['Responsável BKO',cliente.responsavel_bko_nome||'Sem responsável'],
                 ['Último contato',fmtD(cliente.ultimoContato)],
               ].map(([k,v])=>(
                 <div key={k} style={{display:'flex',justifyContent:'space-between',padding:'8px 12px',borderBottom:'1px solid var(--border)'}}>
@@ -517,19 +590,59 @@ function BKODetail({cliente,profile,session,dispatch,onClose}){
 
         {tab==='bko'&&(
           <div>
+            {/* ── RESPONSÁVEL BKO ── */}
+            <div style={{marginBottom:16,padding:'14px',background:'rgba(124,58,237,.06)',borderRadius:10,border:'1px solid rgba(124,58,237,.2)'}}>
+              <div style={{fontSize:11,fontWeight:700,color:'#7C3AED',marginBottom:8}}>🔒 Responsável BKO</div>
+              {temResponsavel?(
+                <div>
+                  <div style={{fontSize:12,color:'var(--text-primary)',fontWeight:600,marginBottom:6}}>
+                    {cliente.responsavel_bko_nome}
+                    {euSouResponsavel&&<span style={{fontSize:9,marginLeft:6,padding:'1px 6px',borderRadius:99,background:'rgba(124,58,237,.1)',color:'#7C3AED',fontWeight:700}}>Você</span>}
+                  </div>
+                  {euSouResponsavel&&(
+                    <button onClick={liberarResponsabilidade} disabled={salvandoResp}
+                      style={{padding:'6px 12px',borderRadius:7,background:'var(--danger-dim)',color:'var(--danger)',border:'none',fontSize:11,fontWeight:600,cursor:'pointer'}}>
+                      Liberar responsabilidade
+                    </button>
+                  )}
+                  {!euSouResponsavel&&isBko&&(
+                    <div style={{fontSize:10,color:'var(--text-muted)'}}>Somente {cliente.responsavel_bko_nome} pode editar os campos BKO.</div>
+                  )}
+                </div>
+              ):(
+                isBko?(
+                  <div>
+                    <div style={{fontSize:11,color:'var(--text-muted)',marginBottom:8}}>Nenhum responsável ainda. Assuma este cliente para editar os campos BKO.</div>
+                    <button onClick={assumirResponsabilidade} disabled={salvandoResp}
+                      style={{width:'100%',padding:'8px 0',borderRadius:8,background:'#7C3AED',color:'#fff',fontSize:12,fontWeight:600,cursor:'pointer',border:'none',opacity:salvandoResp?0.7:1}}>
+                      {salvandoResp?'Salvando…':'Assumir responsabilidade'}
+                    </button>
+                  </div>
+                ):(
+                  <div style={{fontSize:11,color:'var(--text-muted)'}}>Sem responsável BKO atribuído.</div>
+                )
+              )}
+              {respMsg&&<div style={{fontSize:11,marginTop:8,padding:'6px 10px',borderRadius:7,background:respMsg.t==='success'?'var(--success-dim)':'var(--danger-dim)',color:respMsg.t==='success'?'var(--success)':'var(--danger)'}}>{respMsg.text}</div>}
+            </div>
+
             <div style={{padding:'10px 12px',background:B_LIGHT,borderRadius:9,border:`1px solid ${B_MID}25`,marginBottom:14,fontSize:11,color:B_MID,fontWeight:600}}>
-              💼 Campo exclusivo do BKO — visível para todos os papéis
+              💼 Campos BKO — visível para todos, editável apenas pelo responsável
             </div>
             <div style={{marginBottom:12}}>
               <label style={{display:'block',fontSize:10,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:6}}>Saldo Devedor</label>
-              <input className="inp" value={saldo} onChange={e=>setSaldo(e.target.value)} placeholder="R$ 0,00" readOnly={!isBko} style={{background:!isBko?'var(--bg-surface)':'',cursor:!isBko?'not-allowed':''}}/>
+              <input className="inp" value={saldo} onChange={e=>setSaldo(e.target.value)} placeholder="R$ 0,00"
+                readOnly={!euSouResponsavel&&temResponsavel||(!isBko)}
+                style={{background:(!euSouResponsavel&&temResponsavel)||!isBko?'var(--bg-surface)':'',cursor:(!euSouResponsavel&&temResponsavel)||!isBko?'not-allowed':''}}/>
             </div>
             <div style={{marginBottom:14}}>
               <label style={{display:'block',fontSize:10,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:6}}>Observações BKO</label>
-              <textarea className="inp" value={obsBko} onChange={e=>setObsBko(e.target.value)} placeholder="Observações do backoffice…" style={{resize:'vertical',minHeight:100,fontFamily:'var(--font)',lineHeight:1.5}} readOnly={!isBko}/>
-              {!isBko&&<div style={{fontSize:10,color:'var(--text-muted)',marginTop:4}}>👁 Somente o BKO pode editar este campo.</div>}
+              <textarea className="inp" value={obsBko} onChange={e=>setObsBko(e.target.value)} placeholder="Observações do backoffice…"
+                style={{resize:'vertical',minHeight:100,fontFamily:'var(--font)',lineHeight:1.5,
+                  background:(!euSouResponsavel&&temResponsavel)||!isBko?'var(--bg-surface)':'',
+                  cursor:(!euSouResponsavel&&temResponsavel)||!isBko?'not-allowed':''}}
+                readOnly={(!euSouResponsavel&&temResponsavel)||!isBko}/>
             </div>
-            {isBko&&(
+            {(euSouResponsavel||(!temResponsavel&&isBko))&&(
               <button className="btn" style={{width:'100%',justifyContent:'center',background:'#7C3AED',color:'#fff',boxShadow:'0 3px 12px rgba(124,58,237,.3)'}} onClick={save}>
                 Salvar campos BKO
               </button>
@@ -537,16 +650,12 @@ function BKODetail({cliente,profile,session,dispatch,onClose}){
           </div>
         )}
 
+        {/* ── ATIVIDADES — só leitura, sem input ── */}
         {tab==='activity'&&(
           <div>
-            <div style={{marginBottom:14}}>
-              <textarea className="inp" value={note} onChange={e=>setNote(e.target.value)} placeholder="Registrar ligação, reunião, observação…" style={{resize:'vertical',minHeight:64,fontFamily:'var(--font)',lineHeight:1.5,marginBottom:8}}/>
-              <button className="btn" style={{width:'100%',justifyContent:'center',background:B_MID,color:'#fff'}} onClick={()=>{
-                if(!note.trim()) return;
-                dispatch({type:'UPD',c:{...cliente,ultimoContato:TODAY,activities:[...(cliente.activities||[]),{id:gid(),type:'note',date:TODAY,user:profile?.nome||'Usuário',text:note.trim()}]}});
-                setNote('');
-              }}>+ Registrar atividade</button>
-            </div>
+            {(cliente.activities||[]).length===0&&(
+              <div style={{textAlign:'center',padding:'32px 0',fontSize:12,color:'var(--text-muted)'}}>Nenhuma atividade registrada.</div>
+            )}
             {[...(cliente.activities||[])].reverse().map((a,i)=>(
               <div key={a.id||i} style={{display:'flex',gap:9,marginBottom:8}}>
                 <div style={{width:28,height:28,borderRadius:8,background:B_LIGHT,color:B_MID,display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,flexShrink:0}}>
@@ -564,12 +673,58 @@ function BKODetail({cliente,profile,session,dispatch,onClose}){
           </div>
         )}
 
+        {/* ── CHAT ── */}
+        {tab==='chat'&&(
+          <div style={{display:'flex',flexDirection:'column',height:'100%',minHeight:300}}>
+            <div style={{flex:1,overflowY:'auto',marginBottom:12,display:'flex',flexDirection:'column',gap:10}}>
+              {chatMsgs.length===0&&(
+                <div style={{textAlign:'center',padding:'32px 0',fontSize:12,color:'var(--text-muted)'}}>Nenhuma mensagem ainda. Inicie a conversa!</div>
+              )}
+              {chatMsgs.map((m,i)=>{
+                const isMe=m.user_id===profile?.id;
+                const roleColor=ROLE_COLORS[m.user_role]||B_MID;
+                return(
+                  <div key={m.id||i} style={{display:'flex',flexDirection:'column',alignItems:isMe?'flex-end':'flex-start'}}>
+                    <div style={{display:'flex',alignItems:'center',gap:5,marginBottom:3}}>
+                      <Avatar name={m.user_nome||'?'} size={18} color={roleColor}/>
+                      <span style={{fontSize:10,fontWeight:700,color:roleColor}}>{m.user_nome}</span>
+                      <span style={{fontSize:9,color:'var(--text-faint)'}}>{new Date(m.created_at).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</span>
+                    </div>
+                    <div style={{
+                      maxWidth:'80%',padding:'8px 12px',borderRadius:isMe?'12px 12px 4px 12px':'12px 12px 12px 4px',
+                      background:isMe?B_MID:'var(--bg-surface)',
+                      color:isMe?'#fff':'var(--text-primary)',
+                      fontSize:12,lineHeight:1.5,
+                      border:isMe?'none':'1px solid var(--border)',
+                    }}>
+                      {m.mensagem}
+                    </div>
+                  </div>
+                );
+              })}
+              <div ref={chatEndRef}/>
+            </div>
+            <div style={{display:'flex',gap:8,paddingTop:10,borderTop:'1px solid var(--border)',flexShrink:0}}>
+              <input className="inp" style={{flex:1,height:38,fontSize:12}}
+                placeholder="Digite uma mensagem…"
+                value={chatInput}
+                onChange={e=>setChatInput(e.target.value)}
+                onKeyDown={e=>e.key==='Enter'&&!e.shiftKey&&enviarChat()}
+              />
+              <button onClick={enviarChat} disabled={chatLoading||!chatInput.trim()}
+                style={{padding:'0 16px',height:38,borderRadius:8,background:B_MID,color:'#fff',border:'none',fontSize:12,fontWeight:600,cursor:'pointer',opacity:chatLoading||!chatInput.trim()?0.6:1,flexShrink:0}}>
+                Enviar
+              </button>
+            </div>
+          </div>
+        )}
+
         {tab==='docs'&&(
           <div>
             <div style={{marginBottom:14}}>
               <div className="eyebrow" style={{marginBottom:8}}>Checklist para avançar</div>
               {[
-                {key:'cnh',label:'Documento de identificação (RG ou CNH)'},
+                {key:'cnh',label:'CNH'},
                 {key:'holerite1',label:'Último holerite (obrigatório)'},
                 {key:'holerite2',label:'2º holerite (opcional)'},
                 {key:'holerite3',label:'3º holerite (opcional)'},
@@ -917,6 +1072,7 @@ export function BKOApp({profile,session,signOut,onAlterarSenha}){
           ...r.data,id:r.id,estagio:r.estagio,
           criado_por_id:r.criado_por_id,criado_por_nome:r.criado_por_nome,criado_por_role:r.criado_por_role,
           atribuido_a_id:r.atribuido_a_id||null,atribuido_a_nome:r.atribuido_a_nome||null,
+          responsavel_bko_id:r.responsavel_bko_id||null,responsavel_bko_nome:r.responsavel_bko_nome||null,
         }));
         dispatch({type:'SET_C',clientes:loaded});
         clientesRef.current=loaded;
@@ -925,12 +1081,12 @@ export function BKOApp({profile,session,signOut,onAlterarSenha}){
     const ch=supabase.channel('bko_clientes_rt')
       .on('postgres_changes',{event:'INSERT',schema:'public',table:'bko_clientes'},payload=>{
         const r=payload.new;
-        const novo={...r.data,id:r.id,estagio:r.estagio,criado_por_id:r.criado_por_id,criado_por_nome:r.criado_por_nome,criado_por_role:r.criado_por_role,atribuido_a_id:r.atribuido_a_id||null,atribuido_a_nome:r.atribuido_a_nome||null};
+        const novo={...r.data,id:r.id,estagio:r.estagio,criado_por_id:r.criado_por_id,criado_por_nome:r.criado_por_nome,criado_por_role:r.criado_por_role,atribuido_a_id:r.atribuido_a_id||null,atribuido_a_nome:r.atribuido_a_nome||null,responsavel_bko_id:r.responsavel_bko_id||null,responsavel_bko_nome:r.responsavel_bko_nome||null};
         dispatch(prev=>prev.clientes?.find(c=>c.id===novo.id)?prev:{...prev,clientes:[novo,...(prev.clientes||[])]});
       })
       .on('postgres_changes',{event:'UPDATE',schema:'public',table:'bko_clientes'},payload=>{
         const r=payload.new;
-        dispatch({type:'UPD',c:{...r.data,id:r.id,estagio:r.estagio,criado_por_id:r.criado_por_id,criado_por_nome:r.criado_por_nome,criado_por_role:r.criado_por_role,atribuido_a_id:r.atribuido_a_id||null,atribuido_a_nome:r.atribuido_a_nome||null}});
+        dispatch({type:'UPD',c:{...r.data,id:r.id,estagio:r.estagio,criado_por_id:r.criado_por_id,criado_por_nome:r.criado_por_nome,criado_por_role:r.criado_por_role,atribuido_a_id:r.atribuido_a_id||null,atribuido_a_nome:r.atribuido_a_nome||null,responsavel_bko_id:r.responsavel_bko_id||null,responsavel_bko_nome:r.responsavel_bko_nome||null}});
       })
       .subscribe();
     return ()=>supabase.removeChannel(ch);
@@ -945,7 +1101,7 @@ export function BKOApp({profile,session,signOut,onAlterarSenha}){
     });
     if(changed.length>0){
       Promise.all(changed.map(async c=>{
-        const {id,estagio,criado_por_id,criado_por_nome,criado_por_role,atribuido_a_id,atribuido_a_nome,...data}=c;
+        const {id,estagio,criado_por_id,criado_por_nome,criado_por_role,atribuido_a_id,atribuido_a_nome,responsavel_bko_id,responsavel_bko_nome,...data}=c;
         await supabase.from('bko_clientes').upsert({
           id,data:{...data,id},
           estagio:estagio||'clientes_novos',
@@ -954,6 +1110,8 @@ export function BKOApp({profile,session,signOut,onAlterarSenha}){
           criado_por_role:criado_por_role||profile?.role,
           atribuido_a_id:atribuido_a_id||null,
           atribuido_a_nome:atribuido_a_nome||null,
+          responsavel_bko_id:responsavel_bko_id||null,
+          responsavel_bko_nome:responsavel_bko_nome||null,
         },{onConflict:'id'});
       })).then(()=>{clientesRef.current=clientes;});
     } else {
