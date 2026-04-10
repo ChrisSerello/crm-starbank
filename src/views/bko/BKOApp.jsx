@@ -352,7 +352,7 @@ function BKOClientes({clientes,profile,onSelect,onNew}){
           <table style={{width:'100%',borderCollapse:'collapse',fontSize:13}}>
             <thead>
               <tr style={{background:'rgba(0,0,0,.03)',borderBottom:'1px solid var(--border)'}}>
-                {['Nome / CPF','Estágio','Documento','Saldo Devedor','Criado por','Entrada',''].map(h=>(
+                {['Nome / CPF','Estágio','Documento','Saldo Devedor','Criado por','Atribuído a','Entrada',''].map(h=>(
                   <th key={h} style={{padding:'10px 14px',textAlign:'left',fontSize:9,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.08em',whiteSpace:'nowrap'}}>{h}</th>
                 ))}
               </tr>
@@ -365,11 +365,17 @@ function BKOClientes({clientes,profile,onSelect,onNew}){
                   <td style={{padding:'11px 14px'}}><span style={{fontSize:11,fontWeight:600,color:c.documentoStatus==='Aprovado'?'var(--success)':c.documentoStatus==='Não solicitado'?'var(--text-faint)':'var(--amber)'}}>{c.documentoStatus}</span></td>
                   <td style={{padding:'11px 14px',fontSize:12,fontWeight:600,color:'#10B981'}}>{c.saldoDevedor||'—'}</td>
                   <td style={{padding:'11px 14px',fontSize:12,color:'var(--text-secondary)'}}>{c.criado_por_nome||'—'}</td>
+                  <td style={{padding:'11px 14px'}}>
+                    {c.atribuido_a_nome
+                      ?<span style={{fontSize:10,fontWeight:700,padding:'2px 8px',borderRadius:99,background:'rgba(37,99,235,.1)',color:'#2563EB'}}>{c.atribuido_a_nome}</span>
+                      :<span style={{fontSize:11,color:'var(--text-faint)'}}>—</span>
+                    }
+                  </td>
                   <td style={{padding:'11px 14px',fontSize:11,color:'var(--text-secondary)'}}>{fmtD(c.dataEntrada)}</td>
                   <td style={{padding:'11px 14px',color:'var(--text-muted)',fontSize:15}}>›</td>
                 </tr>
               ))}
-              {paged.length===0&&<tr><td colSpan={7} style={{padding:'36px 0',textAlign:'center',color:'var(--text-muted)',fontSize:13}}>Nenhum cliente encontrado</td></tr>}
+              {paged.length===0&&<tr><td colSpan={8} style={{padding:'36px 0',textAlign:'center',color:'var(--text-muted)',fontSize:13}}>Nenhum cliente encontrado</td></tr>}
             </tbody>
           </table>
         </div>
@@ -399,22 +405,45 @@ function BKODetail({cliente,profile,session,dispatch,onClose}){
   const [docs,setDocs]=useState(cliente.documentos||[]);
   const [uploading,setUploading]=useState(false);
   const [uploadMsg,setUploadMsg]=useState(null);
-  const [corbans,setCorbans]=useState([]);
+  const [corbans,setCorbans]=useState([]); // [{id, nome, email}]
   const [atribuidoId,setAtribuidoId]=useState(cliente.atribuido_a_id||'');
+  const [atribuindo,setAtribuindo]=useState(false);
+  const [atribMsg,setAtribMsg]=useState(null);
   const r=profile?.role;
   const isBko=r==='bko';
   const isComercial=r==='comercial';
 
-  // Carregar lista de corbans para atribuição (só comercial precisa)
+  // Carregar corbans com UUID real do profiles
   useEffect(()=>{
     if(!isComercial) return;
-    supabase.from('allowed_users').select('email,nome').eq('modulo','bko').eq('role','corban_bko').order('nome')
+    supabase.from('profiles')
+      .select('id,nome,email')
+      .eq('modulo','bko')
+      .eq('role','corban_bko')
+      .order('nome')
       .then(({data})=>setCorbans(data||[]));
   },[isComercial]);
 
+  const salvarAtribuicao=async()=>{
+    const corbanSel=corbans.find(c=>c.id===atribuidoId);
+    setAtribuindo(true);setAtribMsg(null);
+    const upd={
+      ...cliente,
+      atribuido_a_id:atribuidoId||null,
+      atribuido_a_nome:corbanSel?.nome||null,
+    };
+    // Salva imediatamente no banco
+    const {error}=await supabase.from('bko_clientes').update({
+      atribuido_a_id:atribuidoId||null,
+      atribuido_a_nome:corbanSel?.nome||null,
+    }).eq('id',cliente.id);
+    setAtribuindo(false);
+    if(error){ setAtribMsg({t:'error',text:'Erro ao atribuir.'}); return; }
+    dispatch({type:'UPD',c:upd});
+    setAtribMsg({t:'success',text:`Atribuído a ${corbanSel?.nome||'ninguém'} com sucesso!`});
+  };
+
   const save=()=>{
-    // Resolver nome do corban atribuído
-    const corbanSel=corbans.find(c=>c.email===atribuidoId);
     const upd={
       ...cliente,
       estagio:es,
@@ -423,7 +452,7 @@ function BKODetail({cliente,profile,session,dispatch,onClose}){
       observacoesBko:obsBko,
       documentos:docs,
       atribuido_a_id:atribuidoId||null,
-      atribuido_a_nome:corbanSel?.nome||cliente.atribuido_a_nome||null,
+      atribuido_a_nome:corbans.find(c=>c.id===atribuidoId)?.nome||cliente.atribuido_a_nome||null,
     };
     if(es!==cliente.estagio) dispatch({type:'MOVE',cid:cliente.id,st:es,user:profile?.nome||'Usuário'});
     dispatch({type:'UPD',c:upd});
@@ -510,17 +539,38 @@ function BKODetail({cliente,profile,session,dispatch,onClose}){
             <div style={{borderTop:'1px solid var(--border)',paddingTop:14}}>
               <div className="eyebrow" style={{marginBottom:10}}>Atualizar status</div>
 
-              {/* Atribuição — só Comercial vê e edita */}
+              {/* ── ATRIBUIÇÃO — só Comercial vê ── */}
               {isComercial&&(
-                <div style={{marginBottom:12}}>
-                  <label style={{fontSize:11,color:'var(--text-muted)',display:'block',marginBottom:5}}>
-                    Atribuir a Corban
-                    <span style={{fontSize:9,marginLeft:6,padding:'1px 6px',borderRadius:99,background:B_LIGHT,color:B_MID,fontWeight:700}}>Só você vê</span>
-                  </label>
-                  <select className="sel" value={atribuidoId} onChange={e=>setAtribuidoId(e.target.value)} style={{marginBottom:0}}>
-                    <option value="">— Nenhum —</option>
-                    {corbans.map(c=><option key={c.email} value={c.email}>{c.nome}</option>)}
+                <div style={{marginBottom:16,padding:'14px',background:B_LIGHT,borderRadius:10,border:`1px solid ${B_MID}25`}}>
+                  <div style={{fontSize:11,fontWeight:700,color:B_MID,marginBottom:8,display:'flex',alignItems:'center',gap:6}}>
+                    <span>👤</span> Atribuir cliente a Corban
+                  </div>
+                  <select className="sel" style={{marginBottom:8}}
+                    value={atribuidoId}
+                    onChange={e=>setAtribuidoId(e.target.value)}>
+                    <option value="">— Sem atribuição —</option>
+                    {corbans.map(c=>(
+                      <option key={c.id} value={c.id}>{c.nome}</option>
+                    ))}
                   </select>
+                  {atribMsg&&(
+                    <div style={{fontSize:11,fontWeight:500,padding:'6px 10px',borderRadius:7,marginBottom:8,
+                      background:atribMsg.t==='success'?'var(--success-dim)':'var(--danger-dim)',
+                      color:atribMsg.t==='success'?'var(--success)':'var(--danger)',
+                      border:`1px solid ${atribMsg.t==='success'?'rgba(16,185,129,.2)':'rgba(239,68,68,.2)'}`
+                    }}>{atribMsg.text}</div>
+                  )}
+                  <button
+                    style={{width:'100%',padding:'8px 0',borderRadius:8,background:B_MID,color:'#fff',fontSize:12,fontWeight:600,cursor:'pointer',border:'none',opacity:atribuindo?0.7:1}}
+                    onClick={salvarAtribuicao}
+                    disabled={atribuindo}>
+                    {atribuindo?'Salvando…':'✓ Confirmar atribuição'}
+                  </button>
+                  {cliente.atribuido_a_nome&&(
+                    <div style={{fontSize:10,color:B_MID,marginTop:7,textAlign:'center'}}>
+                      Atualmente: <strong>{cliente.atribuido_a_nome}</strong>
+                    </div>
+                  )}
                 </div>
               )}
               <label style={{fontSize:11,color:'var(--text-muted)',display:'block',marginBottom:5}}>Estágio</label>
