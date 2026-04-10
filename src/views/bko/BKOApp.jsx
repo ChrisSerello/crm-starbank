@@ -5,12 +5,33 @@ import { DOC_STATUS } from '../../constants';
 import { Avatar, StageTag } from '../../components/shared';
 import { AlterarSenha } from '../../components/AlterarSenha';
 
-// ── CONSTANTES BKO ────────────────────────────────────────────────────────────
-const B_DARK  = '#1C2033';
-const B_MID   = '#3B5BDB';
-const B_LIGHT = 'rgba(59,91,219,0.10)';
-const B_GLOW  = 'rgba(59,91,219,0.28)';
-const B_TEXT  = '#A5B4FC';
+// ── CONSTANTES BKO — NAVY ROYAL ──────────────────────────────────────────────
+const B_DARK  = '#0D1C3D';   // navy-900 sidebar
+const B_MID   = '#2563EB';   // navy-500 acento
+const B_LIGHT = 'rgba(37,99,235,0.10)';
+const B_GLOW  = 'rgba(37,99,235,0.28)';
+const B_TEXT  = '#93C5FD';   // azul claro sidebar
+
+// Fontes exclusivas do BKO injetadas via <style> no root do módulo
+const BKO_FONTS = `
+  @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Playfair+Display:wght@400;500;600&display=swap');
+  .bko-root { font-family: 'Plus Jakarta Sans', sans-serif !important; }
+  .bko-root .section-title { font-family: 'Playfair Display', serif !important; font-weight: 500 !important; }
+  .bko-root .mcard .card-value, .bko-root .font-display { font-family: 'Playfair Display', serif !important; }
+  .bko-root .card, .bko-root .mcard, .bko-root .kcard, .bko-root .inp, .bko-root .sel, .bko-root .btn {
+    font-family: 'Plus Jakarta Sans', sans-serif !important;
+  }
+  /* Navy Royal overrides para o módulo BKO */
+  .bko-root { background: #F0F3FA !important; }
+  .bko-root .card, .bko-root .mcard { border-color: rgba(13,28,61,0.09) !important; }
+  .bko-root .inp:focus, .bko-root .sel:focus { border-color: #2563EB !important; box-shadow: 0 0 0 3px rgba(37,99,235,0.10) !important; }
+  .bko-root .nav-item.active { background: rgba(37,99,235,0.10) !important; color: #2563EB !important; }
+  .bko-root .nav-item.active::before { background: #2563EB !important; }
+  .bko-root .prod-pill { background: rgba(37,99,235,0.10) !important; color: #2563EB !important; border-color: rgba(37,99,235,0.18) !important; }
+  .bko-root .kcol.dover { background: rgba(37,99,235,0.10) !important; border-color: rgba(37,99,235,0.35) !important; }
+  .bko-root .ptab.on { color: #2563EB !important; border-bottom-color: #2563EB !important; }
+  .bko-root .trow:hover { background: #E8EDF8 !important; }
+`;
 
 const ROLE_LABELS = {
   comercial:  'Comercial',
@@ -990,7 +1011,8 @@ export function BKOApp({profile,session,signOut,onAlterarSenha}){
 
   return(
     <>
-      <div style={{display:'flex',minHeight:'100vh',background:'var(--bg-base)',fontFamily:'var(--font)'}}>
+      <style>{BKO_FONTS}</style>
+      <div className="bko-root" style={{display:'flex',minHeight:'100vh',background:'#F0F3FA',fontFamily:"'Plus Jakarta Sans',sans-serif"}}>
         <BKOSidebar
           view={view}
           setView={v=>{setView(v);if(v!=='pipeline')setFiltroEstagio(null);}}
