@@ -5,46 +5,35 @@ import { DOC_STATUS } from '../../constants';
 import { Avatar, StageTag } from '../../components/shared';
 import { AlterarSenha } from '../../components/AlterarSenha';
 
-// ── CONSTANTES BKO ────────────────────────────────────────────────────────────
 const B_DARK  = '#1C2033';
 const B_MID   = '#3B5BDB';
 const B_LIGHT = 'rgba(59,91,219,0.10)';
 const B_GLOW  = 'rgba(59,91,219,0.28)';
 const B_TEXT  = '#A5B4FC';
 
-const ROLE_LABELS = {
-  comercial:  'Comercial',
-  corban_bko: 'Corban',
-  bko:        'BKO',
-};
-const ROLE_COLORS = {
-  comercial:  '#3B5BDB',
-  corban_bko: '#0EA5E9',
-  bko:        '#7C3AED',
-};
+const ROLE_LABELS = { comercial:'Comercial', corban_bko:'Corban', bko:'BKO' };
+const ROLE_COLORS = { comercial:'#3B5BDB', corban_bko:'#0EA5E9', bko:'#7C3AED' };
 
 const BKO_STAGES = [
-  { id:'clientes_novos',     label:'Clientes Novos',     color:'#3B5BDB', bg:'rgba(59,91,219,.1)'  },
-  { id:'saldo_andamento',    label:'Saldo em Andamento - BKO', color:'#7C3AED', bg:'rgba(124,58,237,.1)' },
-  { id:'em_negociacao',      label:'Em Negociação - Corban',      color:'#0EA5E9', bg:'rgba(14,165,233,.1)' },
-  { id:'abertura_conta',     label:'Abertura de Conta - Corban',  color:'#10B981', bg:'rgba(16,185,129,.1)' },
-  { id:'digitar_proposta',   label:'Digitar Proposta - Corban',   color:'#F59E0B', bg:'rgba(245,158,11,.1)' },
-  { id:'integrado',          label:'Integrado',          color:'#22C55E', bg:'rgba(34,197,94,.1)'  },
-  { id:'perdido',            label:'Perdido',            color:'#EF4444', bg:'rgba(239,68,68,.1)'  },
+  { id:'clientes_novos',   label:'Clientes Novos',              color:'#3B5BDB', bg:'rgba(59,91,219,.1)'  },
+  { id:'saldo_andamento',  label:'Saldo em Andamento - BKO',    color:'#7C3AED', bg:'rgba(124,58,237,.1)' },
+  { id:'em_negociacao',    label:'Em Negociação - Corban',      color:'#0EA5E9', bg:'rgba(14,165,233,.1)' },
+  { id:'abertura_conta',   label:'Abertura de Conta - Corban',  color:'#10B981', bg:'rgba(16,185,129,.1)' },
+  { id:'digitar_proposta', label:'Digitar Proposta - Corban',   color:'#F59E0B', bg:'rgba(245,158,11,.1)' },
+  { id:'integrado',        label:'Integrado',                   color:'#22C55E', bg:'rgba(34,197,94,.1)'  },
+  { id:'perdido',          label:'Perdido',                     color:'#EF4444', bg:'rgba(239,68,68,.1)'  },
 ];
 
+// ── 1. blankCliente com prefeitura ──
 const blankCliente = () => ({
-  nomeCliente:'', cpfCliente:'', telefone:'',
+  nomeCliente:'', cpfCliente:'', telefone:'', prefeitura:'',
   estagio:'clientes_novos',
   documentoStatus:'Não solicitado',
-  observacoesBko:'',
-  saldoDevedor:'',
-  activities:[],
-  documentos:[],
+  observacoesBko:'', saldoDevedor:'',
+  activities:[], documentos:[],
   dataEntrada:TODAY, ultimoContato:TODAY,
 });
 
-// ── REDUCER ───────────────────────────────────────────────────────────────────
 const INIT = { clientes:[], view:'dashboard', sel:null, newOpen:false };
 
 function R(s,{type:t,...a}){
@@ -61,23 +50,20 @@ function R(s,{type:t,...a}){
   }
 }
 
-// ── SIDEBAR ───────────────────────────────────────────────────────────────────
 function BKOSidebar({view,setView,profile,onLogout,onAlterarSenha}){
   const r=profile?.role;
   const items=[
-    {id:'dashboard', icon:'◈', label:'Dashboard'},
-    {id:'pipeline',  icon:'⊞', label:'Pipeline'},
-    {id:'clientes',  icon:'≡', label:'Clientes'},
+    {id:'dashboard',icon:'◈',label:'Dashboard'},
+    {id:'pipeline', icon:'⊞',label:'Pipeline'},
+    {id:'clientes', icon:'≡',label:'Clientes'},
     ...(r==='comercial'||r==='corban_bko'?[{id:'cadastrar',icon:'＋',label:'Cadastrar'}]:[]),
     ...(r==='comercial'?[{id:'auditoria',icon:'🔍',label:'Auditoria'}]:[]),
   ];
   return(
     <div style={{width:220,background:B_DARK,borderRight:'1px solid rgba(59,91,219,.2)',display:'flex',flexDirection:'column',flexShrink:0,height:'100vh',position:'sticky',top:0}}>
       <div style={{padding:'18px 16px 14px',borderBottom:'1px solid rgba(59,91,219,.15)'}}>
-        <div style={{display:'flex',alignItems:'center',gap:10}}>
-          <div style={{flex:1,overflow:'hidden',borderRadius:8}}>
-            <img src="/starflow.gif" alt="StarFlow" style={{display:'block',width:'100%',height:'auto',maxHeight:44,objectFit:'cover',objectPosition:'center',borderRadius:8}}/>
-          </div>
+        <div style={{flex:1,overflow:'hidden',borderRadius:8}}>
+          <img src="/starflow.gif" alt="StarFlow" style={{display:'block',width:'100%',height:'auto',maxHeight:44,objectFit:'cover',objectPosition:'center',borderRadius:8}}/>
         </div>
         <div style={{marginTop:8,fontSize:9,fontWeight:700,color:B_TEXT,letterSpacing:'.12em',textTransform:'uppercase'}}>BKO — Backoffice</div>
       </div>
@@ -106,7 +92,6 @@ function BKOSidebar({view,setView,profile,onLogout,onAlterarSenha}){
   );
 }
 
-// ── STAT CARD ─────────────────────────────────────────────────────────────────
 function StatCard({label,value,color,icon,onClick}){
   return(
     <div onClick={onClick} style={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:14,padding:'18px 20px',position:'relative',overflow:'hidden',cursor:'pointer',transition:'transform .15s, box-shadow .15s'}}
@@ -123,30 +108,13 @@ function StatCard({label,value,color,icon,onClick}){
   );
 }
 
-// ── DASHBOARD ─────────────────────────────────────────────────────────────────
 function BKODashboard({clientes,setView,setFiltroEstagio}){
-  const counts=useMemo(()=>{
-    const m={};
-    BKO_STAGES.forEach(s=>{ m[s.id]=clientes.filter(c=>c.estagio===s.id).length; });
-    return m;
-  },[clientes]);
-
-  const handleCard=(stageId)=>{
-    setFiltroEstagio(stageId);
-    setView('pipeline');
-  };
-
-  const recent=useMemo(()=>
-    clientes.flatMap(c=>(c.activities||[]).map(a=>({...a,clienteName:c.nomeCliente})))
-      .sort((a,b)=>(b.date||'').localeCompare(a.date||'')).slice(0,8)
-  ,[clientes]);
-
+  const counts=useMemo(()=>{const m={};BKO_STAGES.forEach(s=>{m[s.id]=clientes.filter(c=>c.estagio===s.id).length;});return m;},[clientes]);
+  const handleCard=(stageId)=>{setFiltroEstagio(stageId);setView('pipeline');};
+  const recent=useMemo(()=>clientes.flatMap(c=>(c.activities||[]).map(a=>({...a,clienteName:c.nomeCliente}))).sort((a,b)=>(b.date||'').localeCompare(a.date||'')).slice(0,8),[clientes]);
   return(
     <div style={{padding:'28px 32px'}}>
-      <div style={{marginBottom:24}}>
-        <div className="section-title">Dashboard</div>
-        <div className="section-sub">BKO Backoffice · {fmtD(TODAY)}</div>
-      </div>
+      <div style={{marginBottom:24}}><div className="section-title">Dashboard</div><div className="section-sub">BKO Backoffice · {fmtD(TODAY)}</div></div>
       <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:12}}>
         {BKO_STAGES.slice(0,4).map(s=>(
           <StatCard key={s.id} label={s.label} value={counts[s.id]||0} color={s.color} icon={s.id==='clientes_novos'?'👤':s.id==='saldo_andamento'?'💰':s.id==='em_negociacao'?'⟳':'🏦'} onClick={()=>handleCard(s.id)}/>
@@ -173,26 +141,23 @@ function BKODashboard({clientes,setView,setFiltroEstagio}){
         </div>
         <div className="card fu2" style={{padding:'18px 20px'}}>
           <div className="eyebrow" style={{marginBottom:14}}>Atividade recente</div>
-          {recent.length===0
-            ?<div style={{fontSize:12,color:'var(--text-muted)'}}>Nenhuma atividade ainda.</div>
-            :recent.map((a,i)=>(
-              <div key={a.id||i} style={{display:'flex',gap:10,padding:'7px 0',borderBottom:i<recent.length-1?'1px solid var(--border)':'none'}}>
-                <div style={{width:26,height:26,borderRadius:7,background:B_LIGHT,color:B_MID,display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,flexShrink:0}}>⇄</div>
-                <div style={{flex:1,minWidth:0}}>
-                  <div style={{fontSize:12,fontWeight:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{a.clienteName}</div>
-                  <div style={{fontSize:11,color:'var(--text-muted)',marginTop:1}}>{a.text}</div>
-                </div>
-                <div style={{fontSize:10,color:'var(--text-faint)',flexShrink:0}}>{fmtD(a.date)}</div>
+          {recent.length===0?<div style={{fontSize:12,color:'var(--text-muted)'}}>Nenhuma atividade ainda.</div>:recent.map((a,i)=>(
+            <div key={a.id||i} style={{display:'flex',gap:10,padding:'7px 0',borderBottom:i<recent.length-1?'1px solid var(--border)':'none'}}>
+              <div style={{width:26,height:26,borderRadius:7,background:B_LIGHT,color:B_MID,display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,flexShrink:0}}>⇄</div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:12,fontWeight:600,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{a.clienteName}</div>
+                <div style={{fontSize:11,color:'var(--text-muted)',marginTop:1}}>{a.text}</div>
               </div>
-            ))
-          }
+              <div style={{fontSize:10,color:'var(--text-faint)',flexShrink:0}}>{fmtD(a.date)}</div>
+            </div>
+          ))}
         </div>
       </div>
     </div>
   );
 }
 
-// ── PIPELINE KANBAN ───────────────────────────────────────────────────────────
+// ── 2. KANBAN: mostra prefeitura no card ──
 function BKOKanbanCol({s,clientes,dragId,setDragId,dispatch,onSelect,profile,highlight}){
   const [over,setOver]=useState(false);
   const sl=clientes.filter(c=>c.estagio===s.id);
@@ -210,7 +175,9 @@ function BKOKanbanCol({s,clientes,dragId,setDragId,dispatch,onSelect,profile,hig
         {sl.map(c=>(
           <div key={c.id} className="kcard" draggable onDragStart={()=>setDragId(c.id)} onClick={()=>onSelect(c.id)}>
             <div style={{fontSize:12,fontWeight:600,color:'var(--text-primary)',marginBottom:4}}>{c.nomeCliente}</div>
-            <div style={{fontSize:10,color:'var(--text-muted)',marginBottom:5}}>{c.cpfCliente||'—'}</div>
+            <div style={{fontSize:10,color:'var(--text-muted)',marginBottom:c.prefeitura?3:5}}>{c.cpfCliente||'—'}</div>
+            {/* ── prefeitura no card ── */}
+            {c.prefeitura&&<div style={{fontSize:9,color:'var(--text-muted)',marginBottom:4}}>🏛 {c.prefeitura}</div>}
             {c.saldoDevedor&&<div style={{fontSize:10,fontWeight:700,color:'#10B981',marginBottom:4}}>💰 {c.saldoDevedor}</div>}
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
               <span style={{fontSize:9,color:'var(--text-faint)'}}>{fmtD(c.dataEntrada)}</span>
@@ -229,29 +196,14 @@ function BKOPipeline({clientes,profile,dispatch,onSelect,filtroEstagio,setFiltro
   const [dragId,setDragId]=useState(null);
   const [search,setSearch]=useState('');
   const colsRef=useRef(null);
-  useEffect(()=>{
-    if(filtroEstagio&&colsRef.current){
-      const idx=BKO_STAGES.findIndex(s=>s.id===filtroEstagio);
-      if(idx>-1) colsRef.current.scrollLeft=idx*220;
-    }
-  },[filtroEstagio]);
-  const filtered=search.trim()
-    ?clientes.filter(c=>c.nomeCliente?.toLowerCase().includes(search.toLowerCase())||c.cpfCliente?.includes(search))
-    :clientes;
+  useEffect(()=>{if(filtroEstagio&&colsRef.current){const idx=BKO_STAGES.findIndex(s=>s.id===filtroEstagio);if(idx>-1)colsRef.current.scrollLeft=idx*220;}},[filtroEstagio]);
+  const filtered=search.trim()?clientes.filter(c=>c.nomeCliente?.toLowerCase().includes(search.toLowerCase())||c.cpfCliente?.includes(search)):clientes;
   return(
     <div style={{padding:'28px 32px',overflowX:'hidden'}}>
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20,gap:16}}>
-        <div>
-          <div className="section-title">Pipeline</div>
-          <div className="section-sub">{clientes.length} clientes · arraste para mover</div>
-        </div>
+        <div><div className="section-title">Pipeline</div><div className="section-sub">{clientes.length} clientes · arraste para mover</div></div>
         <div style={{display:'flex',gap:8,alignItems:'center'}}>
-          {filtroEstagio&&(
-            <div style={{display:'flex',alignItems:'center',gap:6,padding:'5px 12px',borderRadius:99,background:B_LIGHT,border:`1px solid ${B_MID}30`,fontSize:11,color:B_MID,fontWeight:600}}>
-              {BKO_STAGES.find(s=>s.id===filtroEstagio)?.label}
-              <button onClick={()=>setFiltroEstagio(null)} style={{background:'none',border:'none',cursor:'pointer',color:B_MID,fontSize:13,lineHeight:1,padding:0}}>×</button>
-            </div>
-          )}
+          {filtroEstagio&&(<div style={{display:'flex',alignItems:'center',gap:6,padding:'5px 12px',borderRadius:99,background:B_LIGHT,border:`1px solid ${B_MID}30`,fontSize:11,color:B_MID,fontWeight:600}}>{BKO_STAGES.find(s=>s.id===filtroEstagio)?.label}<button onClick={()=>setFiltroEstagio(null)} style={{background:'none',border:'none',cursor:'pointer',color:B_MID,fontSize:13,lineHeight:1,padding:0}}>×</button></div>)}
           <div style={{position:'relative',width:240}}>
             <span style={{position:'absolute',left:10,top:'50%',transform:'translateY(-50%)',color:'var(--text-faint)',fontSize:12}}>⌕</span>
             <input className="inp" style={{paddingLeft:30,height:34,fontSize:12}} placeholder="Buscar cliente…" value={search} onChange={e=>setSearch(e.target.value)}/>
@@ -259,15 +211,13 @@ function BKOPipeline({clientes,profile,dispatch,onSelect,filtroEstagio,setFiltro
         </div>
       </div>
       <div ref={colsRef} style={{display:'flex',gap:10,overflowX:'auto',paddingBottom:16}}>
-        {BKO_STAGES.map(s=>(
-          <BKOKanbanCol key={s.id} s={s} clientes={filtered} dragId={dragId} setDragId={setDragId} dispatch={dispatch} onSelect={onSelect} profile={profile} highlight={filtroEstagio===s.id}/>
-        ))}
+        {BKO_STAGES.map(s=>(<BKOKanbanCol key={s.id} s={s} clientes={filtered} dragId={dragId} setDragId={setDragId} dispatch={dispatch} onSelect={onSelect} profile={profile} highlight={filtroEstagio===s.id}/>))}
       </div>
     </div>
   );
 }
 
-// ── CLIENTES LIST ─────────────────────────────────────────────────────────────
+// ── 3. CLIENTES: filtro por prefeitura ──
 function BKOClientes({clientes,profile,onSelect,onNew}){
   const [search,setSearch]=useState('');
   const [estagio,setEstagio]=useState('');
@@ -275,33 +225,24 @@ function BKOClientes({clientes,profile,onSelect,onNew}){
   const [page,setPage]=useState(1);
   const PER=50;
 
-  // Lista de prefeituras únicas
-  const prefeituras=useMemo(()=>[...new Set(clientes.map(c=>c.prefeitura||c.orgaoPrefeitura).filter(Boolean))].sort(),[clientes]);
+  const prefeituras=useMemo(()=>[...new Set(clientes.map(c=>c.prefeitura).filter(Boolean))].sort(),[clientes]);
 
   const filtered=useMemo(()=>clientes.filter(c=>{
     if(estagio&&c.estagio!==estagio) return false;
-    if(prefeitura&&(c.prefeitura||c.orgaoPrefeitura)!==prefeitura) return false;
-    if(search){
-      const s=search.toLowerCase();
-      if(!c.nomeCliente?.toLowerCase().includes(s)&&!c.cpfCliente?.includes(s)) return false;
-    }
+    if(prefeitura&&c.prefeitura!==prefeitura) return false;
+    if(search){const s=search.toLowerCase();if(!c.nomeCliente?.toLowerCase().includes(s)&&!c.cpfCliente?.includes(s)) return false;}
     return true;
   }),[clientes,search,estagio,prefeitura]);
 
   const totalPages=Math.max(1,Math.ceil(filtered.length/PER));
   const paged=filtered.slice((page-1)*PER,page*PER);
-  const stgStyle=(id)=>{
-    const s=BKO_STAGES.find(x=>x.id===id);
-    return s?{background:s.bg,color:s.color,borderRadius:99,padding:'2px 8px',fontSize:10,fontWeight:700}:{};
-  };
+  const stgStyle=(id)=>{const s=BKO_STAGES.find(x=>x.id===id);return s?{background:s.bg,color:s.color,borderRadius:99,padding:'2px 8px',fontSize:10,fontWeight:700}:{};};
   const hasFilter=search||estagio||prefeitura;
+
   return(
     <div style={{padding:'28px 32px'}}>
       <div className="fu" style={{display:'flex',justifyContent:'space-between',alignItems:'flex-end',marginBottom:16}}>
-        <div>
-          <div className="section-title">Clientes</div>
-          <div className="section-sub">{filtered.length} de {clientes.length} registros</div>
-        </div>
+        <div><div className="section-title">Clientes</div><div className="section-sub">{filtered.length} de {clientes.length} registros</div></div>
         <button className="btn" style={{background:B_MID,color:'#fff',boxShadow:`0 3px 14px ${B_GLOW}`}} onClick={onNew}>+ Novo Cliente</button>
       </div>
       <div className="fu1" style={{display:'flex',gap:8,marginBottom:14,flexWrap:'wrap'}}>
@@ -324,7 +265,7 @@ function BKOClientes({clientes,profile,onSelect,onNew}){
           <table style={{width:'100%',borderCollapse:'collapse',fontSize:13}}>
             <thead>
               <tr style={{background:'rgba(0,0,0,.03)',borderBottom:'1px solid var(--border)'}}>
-                {['Nome / CPF','Estágio','Documento','Saldo Devedor','Criado por','Atribuído a','Entrada',''].map(h=>(
+                {['Nome / CPF','Prefeitura','Estágio','Documento','Saldo Devedor','Criado por','Atribuído a','Entrada',''].map(h=>(
                   <th key={h} style={{padding:'10px 14px',textAlign:'left',fontSize:9,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.08em',whiteSpace:'nowrap'}}>{h}</th>
                 ))}
               </tr>
@@ -333,21 +274,17 @@ function BKOClientes({clientes,profile,onSelect,onNew}){
               {paged.map(c=>(
                 <tr key={c.id} className="trow" onClick={()=>onSelect(c.id)}>
                   <td style={{padding:'11px 14px'}}><div style={{fontWeight:600}}>{c.nomeCliente}</div><div style={{fontSize:11,color:'var(--text-muted)',marginTop:1}}>{c.cpfCliente}</div></td>
+                  <td style={{padding:'11px 14px',fontSize:12,color:'var(--text-secondary)'}}>{c.prefeitura||'—'}</td>
                   <td style={{padding:'11px 14px'}}><span style={stgStyle(c.estagio)}>{BKO_STAGES.find(s=>s.id===c.estagio)?.label||c.estagio}</span></td>
                   <td style={{padding:'11px 14px'}}><span style={{fontSize:11,fontWeight:600,color:c.documentoStatus==='Aprovado'?'var(--success)':c.documentoStatus==='Não solicitado'?'var(--text-faint)':'var(--amber)'}}>{c.documentoStatus}</span></td>
                   <td style={{padding:'11px 14px',fontSize:12,fontWeight:600,color:'#10B981'}}>{c.saldoDevedor||'—'}</td>
                   <td style={{padding:'11px 14px',fontSize:12,color:'var(--text-secondary)'}}>{c.criado_por_nome||'—'}</td>
-                  <td style={{padding:'11px 14px'}}>
-                    {c.atribuido_a_nome
-                      ?<span style={{fontSize:10,fontWeight:700,padding:'2px 8px',borderRadius:99,background:B_LIGHT,color:B_MID}}>{c.atribuido_a_nome}</span>
-                      :<span style={{fontSize:11,color:'var(--text-faint)'}}>—</span>
-                    }
-                  </td>
+                  <td style={{padding:'11px 14px'}}>{c.atribuido_a_nome?<span style={{fontSize:10,fontWeight:700,padding:'2px 8px',borderRadius:99,background:B_LIGHT,color:B_MID}}>{c.atribuido_a_nome}</span>:<span style={{fontSize:11,color:'var(--text-faint)'}}>—</span>}</td>
                   <td style={{padding:'11px 14px',fontSize:11,color:'var(--text-secondary)'}}>{fmtD(c.dataEntrada)}</td>
                   <td style={{padding:'11px 14px',color:'var(--text-muted)',fontSize:15}}>›</td>
                 </tr>
               ))}
-              {paged.length===0&&<tr><td colSpan={8} style={{padding:'36px 0',textAlign:'center',color:'var(--text-muted)',fontSize:13}}>Nenhum cliente encontrado</td></tr>}
+              {paged.length===0&&<tr><td colSpan={9} style={{padding:'36px 0',textAlign:'center',color:'var(--text-muted)',fontSize:13}}>Nenhum cliente encontrado</td></tr>}
             </tbody>
           </table>
         </div>
@@ -365,25 +302,23 @@ function BKOClientes({clientes,profile,onSelect,onNew}){
   );
 }
 
-// ── DETAIL PANEL ──────────────────────────────────────────────────────────────
+// ── 4. DETAIL: prefeitura editável, salva com botão ──
 function BKODetail({cliente,profile,session,dispatch,onClose}){
   const [tab,setTab]=useState('info');
   const [es,setEs]=useState(cliente.estagio);
   const [ed,setEd]=useState(cliente.documentoStatus||'Não solicitado');
   const [saldo,setSaldo]=useState(cliente.saldoDevedor||'');
   const [obsBko,setObsBko]=useState(cliente.observacoesBko||'');
+  const [prefeituraEdit,setPrefeituraEdit]=useState(cliente.prefeitura||'');
   const [docs,setDocs]=useState(cliente.documentos||[]);
   const [uploading,setUploading]=useState(false);
   const [uploadMsg,setUploadMsg]=useState(null);
-  // ── ATRIBUIÇÃO comercial → corban ──
   const [corbans,setCorbans]=useState([]);
   const [atribuidoId,setAtribuidoId]=useState(cliente.atribuido_a_id||'');
   const [atribuindo,setAtribuindo]=useState(false);
   const [atribMsg,setAtribMsg]=useState(null);
-  // ── RESPONSÁVEL BKO ──
   const [respMsg,setRespMsg]=useState(null);
   const [salvandoResp,setSalvandoResp]=useState(false);
-  // ── CHAT ──
   const [chatMsgs,setChatMsgs]=useState([]);
   const [chatInput,setChatInput]=useState('');
   const [chatLoading,setChatLoading]=useState(false);
@@ -395,51 +330,35 @@ function BKODetail({cliente,profile,session,dispatch,onClose}){
   const euSouResponsavel=isBko&&cliente.responsavel_bko_id===profile?.id;
   const temResponsavel=!!cliente.responsavel_bko_id;
 
-  // Carregar corbans para atribuição
   useEffect(()=>{
     if(!isComercial) return;
-    supabase.rpc('get_bko_corbans')
-      .then(({data,error})=>{
-        if(error) console.error('get_bko_corbans error:',error);
-        setCorbans(data||[]);
-      });
+    supabase.rpc('get_bko_corbans').then(({data,error})=>{if(error)console.error(error);setCorbans(data||[]);});
   },[isComercial]);
 
-  // Carregar mensagens do chat
   useEffect(()=>{
-    supabase.from('bko_chat').select('*').eq('cliente_id',cliente.id).order('created_at',{ascending:true})
-      .then(({data})=>setChatMsgs(data||[]));
-    const ch=supabase.channel(`chat_${cliente.id}`)
-      .on('postgres_changes',{event:'INSERT',schema:'public',table:'bko_chat',filter:`cliente_id=eq.${cliente.id}`},
-        p=>setChatMsgs(prev=>[...prev,p.new]))
-      .subscribe();
+    supabase.from('bko_chat').select('*').eq('cliente_id',cliente.id).order('created_at',{ascending:true}).then(({data})=>setChatMsgs(data||[]));
+    const ch=supabase.channel(`chat_${cliente.id}`).on('postgres_changes',{event:'INSERT',schema:'public',table:'bko_chat',filter:`cliente_id=eq.${cliente.id}`},p=>setChatMsgs(prev=>[...prev,p.new])).subscribe();
     return ()=>supabase.removeChannel(ch);
   },[cliente.id]);
 
-  useEffect(()=>{ chatEndRef.current?.scrollIntoView({behavior:'smooth'}); },[chatMsgs,tab]);
+  useEffect(()=>{chatEndRef.current?.scrollIntoView({behavior:'smooth'});},[chatMsgs,tab]);
 
   const enviarChat=async()=>{
     if(!chatInput.trim()) return;
     setChatLoading(true);
-    const msg={cliente_id:cliente.id,user_id:profile?.id,user_nome:profile?.nome||'Usuário',user_role:r,mensagem:chatInput.trim()};
-    await supabase.from('bko_chat').insert(msg);
+    await supabase.from('bko_chat').insert({cliente_id:cliente.id,user_id:profile?.id,user_nome:profile?.nome||'Usuário',user_role:r,mensagem:chatInput.trim()});
     setChatInput('');setChatLoading(false);
   };
 
-  // Assumir responsabilidade (BKO)
   const assumirResponsabilidade=async()=>{
     setSalvandoResp(true);setRespMsg(null);
-    const {error}=await supabase.from('bko_clientes').update({
-      responsavel_bko_id:profile?.id,
-      responsavel_bko_nome:profile?.nome,
-    }).eq('id',cliente.id);
+    const {error}=await supabase.from('bko_clientes').update({responsavel_bko_id:profile?.id,responsavel_bko_nome:profile?.nome}).eq('id',cliente.id);
     setSalvandoResp(false);
     if(error){setRespMsg({t:'error',text:'Erro ao assumir.'});return;}
     dispatch({type:'UPD',c:{...cliente,responsavel_bko_id:profile?.id,responsavel_bko_nome:profile?.nome}});
     setRespMsg({t:'success',text:'Você é o responsável por este cliente.'});
   };
 
-  // Liberar responsabilidade
   const liberarResponsabilidade=async()=>{
     if(!confirm('Liberar responsabilidade deste cliente?')) return;
     setSalvandoResp(true);
@@ -452,36 +371,31 @@ function BKODetail({cliente,profile,session,dispatch,onClose}){
   const salvarAtribuicao=async()=>{
     const corbanSel=corbans.find(c=>c.id===atribuidoId);
     setAtribuindo(true);setAtribMsg(null);
-    const {error}=await supabase.from('bko_clientes').update({
-      atribuido_a_id:atribuidoId||null,
-      atribuido_a_nome:corbanSel?.nome||null,
-    }).eq('id',cliente.id);
+    const {error}=await supabase.from('bko_clientes').update({atribuido_a_id:atribuidoId||null,atribuido_a_nome:corbanSel?.nome||null}).eq('id',cliente.id);
     setAtribuindo(false);
     if(error){setAtribMsg({t:'error',text:'Erro ao atribuir.'});return;}
     dispatch({type:'UPD',c:{...cliente,atribuido_a_id:atribuidoId||null,atribuido_a_nome:corbanSel?.nome||null}});
     setAtribMsg({t:'success',text:`Atribuído a ${corbanSel?.nome||'ninguém'}!`});
   };
 
+  // save inclui prefeitura
   const save=()=>{
-    const upd={...cliente,estagio:es,documentoStatus:ed,saldoDevedor:saldo,observacoesBko:obsBko,documentos:docs};
+    const upd={...cliente,estagio:es,documentoStatus:ed,saldoDevedor:saldo,observacoesBko:obsBko,documentos:docs,prefeitura:prefeituraEdit};
     if(es!==cliente.estagio) dispatch({type:'MOVE',cid:cliente.id,st:es,user:profile?.nome||'Usuário'});
     dispatch({type:'UPD',c:upd});
     onClose();
   };
 
   const handleUpload=async(e)=>{
-    const file=e.target.files[0];
-    if(!file) return;
+    const file=e.target.files[0];if(!file) return;
     if(file.size>10*1024*1024){setUploadMsg({t:'error',text:'Máximo 10MB.'});return;}
     setUploading(true);setUploadMsg(null);
     const path=`bko/${cliente.id}/${Date.now()}_${file.name}`;
     const {error}=await supabase.storage.from('documentos').upload(path,file);
     if(error){setUploadMsg({t:'error',text:'Erro ao enviar.'});setUploading(false);return;}
     const {data:{publicUrl}}=supabase.storage.from('documentos').getPublicUrl(path);
-    const novoDoc={nome:file.name,path,url:publicUrl,data:TODAY,enviadoPor:profile?.nome};
-    const novos=[...docs,novoDoc];
-    setDocs(novos);
-    dispatch({type:'UPD',c:{...cliente,documentos:novos}});
+    const novos=[...docs,{nome:file.name,path,url:publicUrl,data:TODAY,enviadoPor:profile?.nome}];
+    setDocs(novos);dispatch({type:'UPD',c:{...cliente,documentos:novos}});
     setUploadMsg({t:'success',text:`"${file.name}" enviado!`});
     setUploading(false);e.target.value='';
   };
@@ -509,6 +423,7 @@ function BKODetail({cliente,profile,session,dispatch,onClose}){
             <div style={{fontSize:11,color:'var(--text-muted)'}}>{cliente.cpfCliente} · {cliente.telefone||'—'}</div>
             <div style={{marginTop:7,display:'flex',gap:5,flexWrap:'wrap'}}>
               {stg&&<span style={{fontSize:10,padding:'2px 8px',borderRadius:99,background:stg.bg,color:stg.color,fontWeight:700}}>{stg.label}</span>}
+              {cliente.prefeitura&&<span style={{fontSize:10,padding:'2px 8px',borderRadius:99,background:'rgba(0,0,0,.05)',color:'var(--text-secondary)',fontWeight:600}}>🏛 {cliente.prefeitura}</span>}
               {cliente.atribuido_a_nome&&<span style={{fontSize:10,padding:'2px 8px',borderRadius:99,background:B_LIGHT,color:B_MID,fontWeight:700}}>→ {cliente.atribuido_a_nome}</span>}
               {cliente.responsavel_bko_nome&&<span style={{fontSize:10,padding:'2px 8px',borderRadius:99,background:'rgba(124,58,237,.1)',color:'#7C3AED',fontWeight:700}}>🔒 {cliente.responsavel_bko_nome}</span>}
               {cliente.saldoDevedor&&<span style={{fontSize:10,padding:'2px 8px',borderRadius:99,background:'rgba(16,185,129,.1)',color:'#10B981',fontWeight:700}}>💰 {cliente.saldoDevedor}</span>}
@@ -519,13 +434,7 @@ function BKODetail({cliente,profile,session,dispatch,onClose}){
       </div>
 
       <div style={{display:'flex',borderBottom:'1px solid var(--border)',background:'var(--bg-card)',flexShrink:0,overflowX:'auto'}}>
-        {[
-          ['info','Informações'],
-          ['bko','BKO'],
-          ['activity','Atividades'],
-          ['chat','Chat'],
-          ['docs',`Documentos${docs.length>0?` (${docs.length})`:''}`],
-        ].map(([id,lb])=>(
+        {[['info','Informações'],['bko','BKO'],['activity','Atividades'],['chat','Chat'],['docs',`Documentos${docs.length>0?` (${docs.length})`:''}`]].map(([id,lb])=>(
           <button key={id} className={`ptab ${tab===id?'on':''}`} onClick={()=>setTab(id)} style={{whiteSpace:'nowrap',fontSize:12}}>{lb}</button>
         ))}
       </div>
@@ -551,7 +460,12 @@ function BKODetail({cliente,profile,session,dispatch,onClose}){
               ))}
             </div>
 
-            {/* ── ATRIBUIÇÃO — só Comercial vê ── */}
+            {/* ── Campo prefeitura editável — salva junto com "Salvar alterações" ── */}
+            <div style={{marginBottom:14}}>
+              <label style={{display:'block',fontSize:10,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:5}}>Prefeitura / Órgão</label>
+              <input className="inp" value={prefeituraEdit} onChange={e=>setPrefeituraEdit(e.target.value)} placeholder="Nome da prefeitura…"/>
+            </div>
+
             {isComercial&&(
               <div style={{marginBottom:16,padding:'14px',background:B_LIGHT,borderRadius:10,border:`1px solid ${B_MID}25`}}>
                 <div style={{fontSize:11,fontWeight:700,color:B_MID,marginBottom:8}}>👤 Atribuir cliente a Corban</div>
@@ -559,17 +473,8 @@ function BKODetail({cliente,profile,session,dispatch,onClose}){
                   <option value="">— Sem atribuição —</option>
                   {corbans.map(c=><option key={c.id} value={c.id}>{c.nome}</option>)}
                 </select>
-                {atribMsg&&(
-                  <div style={{fontSize:11,fontWeight:500,padding:'6px 10px',borderRadius:7,marginBottom:8,
-                    background:atribMsg.t==='success'?'var(--success-dim)':'var(--danger-dim)',
-                    color:atribMsg.t==='success'?'var(--success)':'var(--danger)'}}>
-                    {atribMsg.text}
-                  </div>
-                )}
-                <button style={{width:'100%',padding:'8px 0',borderRadius:8,background:B_MID,color:'#fff',fontSize:12,fontWeight:600,cursor:'pointer',border:'none',opacity:atribuindo?0.7:1}}
-                  onClick={salvarAtribuicao} disabled={atribuindo}>
-                  {atribuindo?'Salvando…':'✓ Confirmar atribuição'}
-                </button>
+                {atribMsg&&(<div style={{fontSize:11,fontWeight:500,padding:'6px 10px',borderRadius:7,marginBottom:8,background:atribMsg.t==='success'?'var(--success-dim)':'var(--danger-dim)',color:atribMsg.t==='success'?'var(--success)':'var(--danger)'}}>{atribMsg.text}</div>)}
+                <button style={{width:'100%',padding:'8px 0',borderRadius:8,background:B_MID,color:'#fff',fontSize:12,fontWeight:600,cursor:'pointer',border:'none',opacity:atribuindo?0.7:1}} onClick={salvarAtribuicao} disabled={atribuindo}>{atribuindo?'Salvando…':'✓ Confirmar atribuição'}</button>
               </div>
             )}
 
@@ -590,7 +495,6 @@ function BKODetail({cliente,profile,session,dispatch,onClose}){
 
         {tab==='bko'&&(
           <div>
-            {/* ── RESPONSÁVEL BKO ── */}
             <div style={{marginBottom:16,padding:'14px',background:'rgba(124,58,237,.06)',borderRadius:10,border:'1px solid rgba(124,58,237,.2)'}}>
               <div style={{fontSize:11,fontWeight:700,color:'#7C3AED',marginBottom:8}}>🔒 Responsável BKO</div>
               {temResponsavel?(
@@ -599,68 +503,40 @@ function BKODetail({cliente,profile,session,dispatch,onClose}){
                     {cliente.responsavel_bko_nome}
                     {euSouResponsavel&&<span style={{fontSize:9,marginLeft:6,padding:'1px 6px',borderRadius:99,background:'rgba(124,58,237,.1)',color:'#7C3AED',fontWeight:700}}>Você</span>}
                   </div>
-                  {euSouResponsavel&&(
-                    <button onClick={liberarResponsabilidade} disabled={salvandoResp}
-                      style={{padding:'6px 12px',borderRadius:7,background:'var(--danger-dim)',color:'var(--danger)',border:'none',fontSize:11,fontWeight:600,cursor:'pointer'}}>
-                      Liberar responsabilidade
-                    </button>
-                  )}
-                  {!euSouResponsavel&&isBko&&(
-                    <div style={{fontSize:10,color:'var(--text-muted)'}}>Somente {cliente.responsavel_bko_nome} pode editar os campos BKO.</div>
-                  )}
+                  {euSouResponsavel&&(<button onClick={liberarResponsabilidade} disabled={salvandoResp} style={{padding:'6px 12px',borderRadius:7,background:'var(--danger-dim)',color:'var(--danger)',border:'none',fontSize:11,fontWeight:600,cursor:'pointer'}}>Liberar responsabilidade</button>)}
+                  {!euSouResponsavel&&isBko&&(<div style={{fontSize:10,color:'var(--text-muted)'}}>Somente {cliente.responsavel_bko_nome} pode editar os campos BKO.</div>)}
                 </div>
               ):(
                 isBko?(
                   <div>
                     <div style={{fontSize:11,color:'var(--text-muted)',marginBottom:8}}>Nenhum responsável ainda. Assuma este cliente para editar os campos BKO.</div>
-                    <button onClick={assumirResponsabilidade} disabled={salvandoResp}
-                      style={{width:'100%',padding:'8px 0',borderRadius:8,background:'#7C3AED',color:'#fff',fontSize:12,fontWeight:600,cursor:'pointer',border:'none',opacity:salvandoResp?0.7:1}}>
-                      {salvandoResp?'Salvando…':'Assumir responsabilidade'}
-                    </button>
+                    <button onClick={assumirResponsabilidade} disabled={salvandoResp} style={{width:'100%',padding:'8px 0',borderRadius:8,background:'#7C3AED',color:'#fff',fontSize:12,fontWeight:600,cursor:'pointer',border:'none',opacity:salvandoResp?0.7:1}}>{salvandoResp?'Salvando…':'Assumir responsabilidade'}</button>
                   </div>
-                ):(
-                  <div style={{fontSize:11,color:'var(--text-muted)'}}>Sem responsável BKO atribuído.</div>
-                )
+                ):(<div style={{fontSize:11,color:'var(--text-muted)'}}>Sem responsável BKO atribuído.</div>)
               )}
               {respMsg&&<div style={{fontSize:11,marginTop:8,padding:'6px 10px',borderRadius:7,background:respMsg.t==='success'?'var(--success-dim)':'var(--danger-dim)',color:respMsg.t==='success'?'var(--success)':'var(--danger)'}}>{respMsg.text}</div>}
             </div>
-
-            <div style={{padding:'10px 12px',background:B_LIGHT,borderRadius:9,border:`1px solid ${B_MID}25`,marginBottom:14,fontSize:11,color:B_MID,fontWeight:600}}>
-              💼 Campos BKO — visível para todos, editável apenas pelo responsável
-            </div>
+            <div style={{padding:'10px 12px',background:B_LIGHT,borderRadius:9,border:`1px solid ${B_MID}25`,marginBottom:14,fontSize:11,color:B_MID,fontWeight:600}}>💼 Campos BKO — visível para todos, editável apenas pelo responsável</div>
             <div style={{marginBottom:12}}>
               <label style={{display:'block',fontSize:10,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:6}}>Saldo Devedor</label>
-              <input className="inp" value={saldo} onChange={e=>setSaldo(e.target.value)} placeholder="R$ 0,00"
-                readOnly={!euSouResponsavel&&temResponsavel||(!isBko)}
-                style={{background:(!euSouResponsavel&&temResponsavel)||!isBko?'var(--bg-surface)':'',cursor:(!euSouResponsavel&&temResponsavel)||!isBko?'not-allowed':''}}/>
+              <input className="inp" value={saldo} onChange={e=>setSaldo(e.target.value)} placeholder="R$ 0,00" readOnly={(!euSouResponsavel&&temResponsavel)||!isBko} style={{background:((!euSouResponsavel&&temResponsavel)||!isBko)?'var(--bg-surface)':'',cursor:((!euSouResponsavel&&temResponsavel)||!isBko)?'not-allowed':''}}/>
             </div>
             <div style={{marginBottom:14}}>
               <label style={{display:'block',fontSize:10,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:6}}>Observações BKO</label>
-              <textarea className="inp" value={obsBko} onChange={e=>setObsBko(e.target.value)} placeholder="Observações do backoffice…"
-                style={{resize:'vertical',minHeight:100,fontFamily:'var(--font)',lineHeight:1.5,
-                  background:(!euSouResponsavel&&temResponsavel)||!isBko?'var(--bg-surface)':'',
-                  cursor:(!euSouResponsavel&&temResponsavel)||!isBko?'not-allowed':''}}
-                readOnly={(!euSouResponsavel&&temResponsavel)||!isBko}/>
+              <textarea className="inp" value={obsBko} onChange={e=>setObsBko(e.target.value)} placeholder="Observações do backoffice…" style={{resize:'vertical',minHeight:100,fontFamily:'var(--font)',lineHeight:1.5,background:((!euSouResponsavel&&temResponsavel)||!isBko)?'var(--bg-surface)':'',cursor:((!euSouResponsavel&&temResponsavel)||!isBko)?'not-allowed':''}} readOnly={(!euSouResponsavel&&temResponsavel)||!isBko}/>
             </div>
             {(euSouResponsavel||(!temResponsavel&&isBko))&&(
-              <button className="btn" style={{width:'100%',justifyContent:'center',background:'#7C3AED',color:'#fff',boxShadow:'0 3px 12px rgba(124,58,237,.3)'}} onClick={save}>
-                Salvar campos BKO
-              </button>
+              <button className="btn" style={{width:'100%',justifyContent:'center',background:'#7C3AED',color:'#fff',boxShadow:'0 3px 12px rgba(124,58,237,.3)'}} onClick={save}>Salvar campos BKO</button>
             )}
           </div>
         )}
 
-        {/* ── ATIVIDADES — só leitura, sem input ── */}
         {tab==='activity'&&(
           <div>
-            {(cliente.activities||[]).length===0&&(
-              <div style={{textAlign:'center',padding:'32px 0',fontSize:12,color:'var(--text-muted)'}}>Nenhuma atividade registrada.</div>
-            )}
+            {(cliente.activities||[]).length===0&&(<div style={{textAlign:'center',padding:'32px 0',fontSize:12,color:'var(--text-muted)'}}>Nenhuma atividade registrada.</div>)}
             {[...(cliente.activities||[])].reverse().map((a,i)=>(
               <div key={a.id||i} style={{display:'flex',gap:9,marginBottom:8}}>
-                <div style={{width:28,height:28,borderRadius:8,background:B_LIGHT,color:B_MID,display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,flexShrink:0}}>
-                  {a.type==='stage_change'?'⇄':'✎'}
-                </div>
+                <div style={{width:28,height:28,borderRadius:8,background:B_LIGHT,color:B_MID,display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,flexShrink:0}}>{a.type==='stage_change'?'⇄':'✎'}</div>
                 <div style={{flex:1,paddingBottom:9,borderBottom:'1px solid var(--border)'}}>
                   <div style={{display:'flex',justifyContent:'space-between',marginBottom:2}}>
                     <span style={{fontSize:11,fontWeight:600}}>{a.user}</span>
@@ -673,13 +549,10 @@ function BKODetail({cliente,profile,session,dispatch,onClose}){
           </div>
         )}
 
-        {/* ── CHAT ── */}
         {tab==='chat'&&(
           <div style={{display:'flex',flexDirection:'column',height:'100%',minHeight:300}}>
             <div style={{flex:1,overflowY:'auto',marginBottom:12,display:'flex',flexDirection:'column',gap:10}}>
-              {chatMsgs.length===0&&(
-                <div style={{textAlign:'center',padding:'32px 0',fontSize:12,color:'var(--text-muted)'}}>Nenhuma mensagem ainda. Inicie a conversa!</div>
-              )}
+              {chatMsgs.length===0&&(<div style={{textAlign:'center',padding:'32px 0',fontSize:12,color:'var(--text-muted)'}}>Nenhuma mensagem ainda. Inicie a conversa!</div>)}
               {chatMsgs.map((m,i)=>{
                 const isMe=m.user_id===profile?.id;
                 const roleColor=ROLE_COLORS[m.user_role]||B_MID;
@@ -690,31 +563,15 @@ function BKODetail({cliente,profile,session,dispatch,onClose}){
                       <span style={{fontSize:10,fontWeight:700,color:roleColor}}>{m.user_nome}</span>
                       <span style={{fontSize:9,color:'var(--text-faint)'}}>{new Date(m.created_at).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</span>
                     </div>
-                    <div style={{
-                      maxWidth:'80%',padding:'8px 12px',borderRadius:isMe?'12px 12px 4px 12px':'12px 12px 12px 4px',
-                      background:isMe?B_MID:'var(--bg-surface)',
-                      color:isMe?'#fff':'var(--text-primary)',
-                      fontSize:12,lineHeight:1.5,
-                      border:isMe?'none':'1px solid var(--border)',
-                    }}>
-                      {m.mensagem}
-                    </div>
+                    <div style={{maxWidth:'80%',padding:'8px 12px',borderRadius:isMe?'12px 12px 4px 12px':'12px 12px 12px 4px',background:isMe?B_MID:'var(--bg-surface)',color:isMe?'#fff':'var(--text-primary)',fontSize:12,lineHeight:1.5,border:isMe?'none':'1px solid var(--border)'}}>{m.mensagem}</div>
                   </div>
                 );
               })}
               <div ref={chatEndRef}/>
             </div>
             <div style={{display:'flex',gap:8,paddingTop:10,borderTop:'1px solid var(--border)',flexShrink:0}}>
-              <input className="inp" style={{flex:1,height:38,fontSize:12}}
-                placeholder="Digite uma mensagem…"
-                value={chatInput}
-                onChange={e=>setChatInput(e.target.value)}
-                onKeyDown={e=>e.key==='Enter'&&!e.shiftKey&&enviarChat()}
-              />
-              <button onClick={enviarChat} disabled={chatLoading||!chatInput.trim()}
-                style={{padding:'0 16px',height:38,borderRadius:8,background:B_MID,color:'#fff',border:'none',fontSize:12,fontWeight:600,cursor:'pointer',opacity:chatLoading||!chatInput.trim()?0.6:1,flexShrink:0}}>
-                Enviar
-              </button>
+              <input className="inp" style={{flex:1,height:38,fontSize:12}} placeholder="Digite uma mensagem…" value={chatInput} onChange={e=>setChatInput(e.target.value)} onKeyDown={e=>e.key==='Enter'&&!e.shiftKey&&enviarChat()}/>
+              <button onClick={enviarChat} disabled={chatLoading||!chatInput.trim()} style={{padding:'0 16px',height:38,borderRadius:8,background:B_MID,color:'#fff',border:'none',fontSize:12,fontWeight:600,cursor:'pointer',opacity:chatLoading||!chatInput.trim()?0.6:1,flexShrink:0}}>Enviar</button>
             </div>
           </div>
         )}
@@ -723,26 +580,16 @@ function BKODetail({cliente,profile,session,dispatch,onClose}){
           <div>
             <div style={{marginBottom:14}}>
               <div className="eyebrow" style={{marginBottom:8}}>Checklist para avançar</div>
-              {[
-                {key:'cnh',label:'CNH'},
-                {key:'holerite1',label:'Último holerite (obrigatório)'},
-                {key:'holerite2',label:'2º holerite (opcional)'},
-                {key:'holerite3',label:'3º holerite (opcional)'},
-                {key:'printMargem',label:'Print da margem'},
-              ].map(doc=>{
+              {[{key:'cnh',label:'CNH'},{key:'holerite1',label:'Último holerite (obrigatório)'},{key:'holerite2',label:'2º holerite (opcional)'},{key:'holerite3',label:'3º holerite (opcional)'},{key:'printMargem',label:'Print da margem'}].map(doc=>{
                 const tem=docs.some(d=>d.nome?.toLowerCase().includes(doc.key)||d.categoria===doc.key);
-                return(
-                  <div key={doc.key} style={{display:'flex',alignItems:'center',gap:8,padding:'6px 0',borderBottom:'1px solid var(--border)'}}>
-                    <div style={{width:18,height:18,borderRadius:5,border:`2px solid ${tem?'#10B981':'var(--border-mid)'}`,background:tem?'#10B981':'transparent',display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,color:'#fff',flexShrink:0}}>{tem?'✓':''}</div>
-                    <span style={{fontSize:12,color:tem?'var(--text-primary)':'var(--text-muted)'}}>{doc.label}</span>
-                  </div>
-                );
+                return(<div key={doc.key} style={{display:'flex',alignItems:'center',gap:8,padding:'6px 0',borderBottom:'1px solid var(--border)'}}>
+                  <div style={{width:18,height:18,borderRadius:5,border:`2px solid ${tem?'#10B981':'var(--border-mid)'}`,background:tem?'#10B981':'transparent',display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,color:'#fff',flexShrink:0}}>{tem?'✓':''}</div>
+                  <span style={{fontSize:12,color:tem?'var(--text-primary)':'var(--text-muted)'}}>{doc.label}</span>
+                </div>);
               })}
             </div>
             <div className="eyebrow" style={{marginBottom:8}}>Enviar documento</div>
-            <label style={{display:'flex',flexDirection:'column',alignItems:'center',gap:7,padding:'18px',borderRadius:10,cursor:'pointer',border:`2px dashed ${uploading?B_MID:'var(--border-mid)'}`,background:uploading?B_LIGHT:'rgba(0,0,0,.02)',marginBottom:12,transition:'all .15s'}}
-              onMouseEnter={e=>{e.currentTarget.style.background=B_LIGHT;e.currentTarget.style.borderColor=B_MID;}}
-              onMouseLeave={e=>{if(!uploading){e.currentTarget.style.background='rgba(0,0,0,.02)';e.currentTarget.style.borderColor='var(--border-mid)';}}}>
+            <label style={{display:'flex',flexDirection:'column',alignItems:'center',gap:7,padding:'18px',borderRadius:10,cursor:'pointer',border:`2px dashed ${uploading?B_MID:'var(--border-mid)'}`,background:uploading?B_LIGHT:'rgba(0,0,0,.02)',marginBottom:12,transition:'all .15s'}} onMouseEnter={e=>{e.currentTarget.style.background=B_LIGHT;e.currentTarget.style.borderColor=B_MID;}} onMouseLeave={e=>{if(!uploading){e.currentTarget.style.background='rgba(0,0,0,.02)';e.currentTarget.style.borderColor='var(--border-mid)';}}}>
               <input type="file" style={{display:'none'}} onChange={handleUpload} disabled={uploading} accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp"/>
               <div style={{fontSize:22}}>{uploading?'⏳':'📤'}</div>
               <div style={{fontSize:12,fontWeight:600,color:'var(--text-primary)'}}>{uploading?'Enviando…':'Clique para enviar'}</div>
@@ -768,7 +615,7 @@ function BKODetail({cliente,profile,session,dispatch,onClose}){
   );
 }
 
-// ── NOVO CLIENTE MODAL ────────────────────────────────────────────────────────
+// ── 5. NOVO CLIENTE: campo prefeitura ──
 function NovoClienteModal({profile,dispatch,clientes,onClose}){
   const [form,setForm]=useState(blankCliente());
   const [cpfAviso,setCpfAviso]=useState(false);
@@ -789,12 +636,9 @@ function NovoClienteModal({profile,dispatch,clientes,onClose}){
   };
   return(
     <div className="mbk" onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
-      <div className="mbox" style={{maxWidth:460}}>
+      <div className="mbox" style={{maxWidth:480}}>
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:20}}>
-          <div>
-            <div style={{fontFamily:'var(--font-display)',fontSize:20,fontWeight:600,color:'var(--text-primary)'}}>Novo Cliente</div>
-            <div style={{fontSize:12,color:'var(--text-muted)',marginTop:2}}>Módulo BKO</div>
-          </div>
+          <div><div style={{fontFamily:'var(--font-display)',fontSize:20,fontWeight:600,color:'var(--text-primary)'}}>Novo Cliente</div><div style={{fontSize:12,color:'var(--text-muted)',marginTop:2}}>Módulo BKO</div></div>
           <button onClick={onClose} style={{background:'rgba(0,0,0,.06)',border:'1px solid var(--border)',borderRadius:8,cursor:'pointer',width:30,height:30,display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,color:'var(--text-muted)'}}>×</button>
         </div>
         {cpfAviso&&<div style={{padding:'8px 12px',borderRadius:8,marginBottom:12,background:'var(--amber-dim)',border:'1px solid rgba(196,131,10,.25)',fontSize:12,color:'var(--amber)',fontWeight:500}}>⚠ CPF já cadastrado. Dados preenchidos automaticamente.</div>}
@@ -812,6 +656,10 @@ function NovoClienteModal({profile,dispatch,clientes,onClose}){
             <input className="inp" value={form.telefone} onChange={e=>set('telefone',e.target.value)} placeholder="(00) 00000-0000"/>
           </div>
           <div>
+            <label style={{display:'block',fontSize:10,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:5}}>Prefeitura / Órgão</label>
+            <input className="inp" value={form.prefeitura||''} onChange={e=>set('prefeitura',e.target.value)} placeholder="Nome da prefeitura"/>
+          </div>
+          <div style={{gridColumn:'1/-1'}}>
             <label style={{display:'block',fontSize:10,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:5}}>Estágio inicial</label>
             <select className="sel" value={form.estagio} onChange={e=>set('estagio',e.target.value)}>
               {BKO_STAGES.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}
@@ -827,7 +675,6 @@ function NovoClienteModal({profile,dispatch,clientes,onClose}){
   );
 }
 
-// ── CADASTRAR USUÁRIO ─────────────────────────────────────────────────────────
 function BKOCadastrar({profile,session}){
   const [usuarios,setUsuarios]=useState([]);
   const [loading,setLoading]=useState(true);
@@ -836,196 +683,110 @@ function BKOCadastrar({profile,session}){
   const [saving,setSaving]=useState(false);
   const [msg,setMsg]=useState(null);
   const [confirmDelete,setConfirmDelete]=useState(null);
-  const load=useCallback(async()=>{
-    setLoading(true);
-    const {data}=await supabase.from('allowed_users').select('*').eq('modulo','bko').order('nome');
-    setUsuarios(data||[]);setLoading(false);
-  },[]);
+  const load=useCallback(async()=>{setLoading(true);const {data}=await supabase.from('allowed_users').select('*').eq('modulo','bko').order('nome');setUsuarios(data||[]);setLoading(false);},[]);
   useEffect(()=>{load();},[load]);
   const save=async()=>{
-    if(!form.nome.trim()||!form.email.trim()||!form.senha||form.senha.length<6){
-      setMsg({t:'error',text:'Nome, e-mail e senha (mín. 6 caracteres) são obrigatórios.'});return;
-    }
+    if(!form.nome.trim()||!form.email.trim()||!form.senha||form.senha.length<6){setMsg({t:'error',text:'Nome, e-mail e senha (mín. 6 caracteres) são obrigatórios.'});return;}
     setSaving(true);setMsg(null);
     const {data:{session:s}}=await supabase.auth.getSession();
     try {
-      const res=await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-bko-user`,{
-        method:'POST',
-        headers:{'Content-Type':'application/json','Authorization':`Bearer ${s?.access_token}`},
-        body:JSON.stringify({email:form.email.trim().toLowerCase(),password:form.senha,role:form.role,nome:form.nome.trim(),modulo:'bko'}),
-      });
-      const result=await res.json();
-      setSaving(false);
+      const res=await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-bko-user`,{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${s?.access_token}`},body:JSON.stringify({email:form.email.trim().toLowerCase(),password:form.senha,role:form.role,nome:form.nome.trim(),modulo:'bko'})});
+      const result=await res.json();setSaving(false);
       if(!res.ok||result.error){setMsg({t:'error',text:result.error||'Erro ao criar usuário.'});}
       else{setMsg({t:'success',text:`✓ ${form.nome} criado! Já pode fazer login.`});setShowModal(false);setForm({nome:'',email:'',senha:'',role:'corban_bko'});load();}
     } catch(e){setSaving(false);setMsg({t:'error',text:'Erro de conexão.'});}
   };
-  const remove=async(u)=>{
-    await supabase.from('allowed_users').delete().eq('email',u.email);
-    setConfirmDelete(null);setMsg({t:'success',text:`${u.nome} removido.`});load();
-  };
-  const grupos=[
-    {role:'comercial',label:'Comercial'},
-    {role:'corban_bko',label:'Corban'},
-    {role:'bko',label:'BKO'},
-  ];
+  const remove=async(u)=>{await supabase.from('allowed_users').delete().eq('email',u.email);setConfirmDelete(null);setMsg({t:'success',text:`${u.nome} removido.`});load();};
+  const grupos=[{role:'comercial',label:'Comercial'},{role:'corban_bko',label:'Corban'},{role:'bko',label:'BKO'}];
   return(
     <div style={{padding:'28px 32px'}}>
       <div className="fu" style={{display:'flex',justifyContent:'space-between',alignItems:'flex-end',marginBottom:22}}>
-        <div>
-          <div className="section-title">Cadastrar</div>
-          <div className="section-sub">Usuários do módulo BKO</div>
-        </div>
+        <div><div className="section-title">Cadastrar</div><div className="section-sub">Usuários do módulo BKO</div></div>
         <button className="btn" style={{background:B_MID,color:'#fff',boxShadow:`0 3px 12px ${B_GLOW}`}} onClick={()=>{setForm({nome:'',email:'',senha:'',role:'corban_bko'});setMsg(null);setShowModal(true);}}>+ Adicionar usuário</button>
       </div>
-      {msg&&(
-        <div className="fu" style={{display:'flex',alignItems:'center',gap:8,padding:'9px 14px',borderRadius:9,marginBottom:14,background:msg.t==='success'?'var(--success-dim)':'var(--danger-dim)',border:`1px solid ${msg.t==='success'?'rgba(61,155,107,.2)':'rgba(192,65,58,.2)'}`,fontSize:13,color:msg.t==='success'?'var(--success)':'var(--danger)'}}>
-          {msg.t==='success'?'✓':'⚠'} {msg.text}
-          <button onClick={()=>setMsg(null)} style={{marginLeft:'auto',background:'none',border:'none',cursor:'pointer',color:'inherit',fontSize:15}}>×</button>
-        </div>
-      )}
+      {msg&&(<div className="fu" style={{display:'flex',alignItems:'center',gap:8,padding:'9px 14px',borderRadius:9,marginBottom:14,background:msg.t==='success'?'var(--success-dim)':'var(--danger-dim)',border:`1px solid ${msg.t==='success'?'rgba(61,155,107,.2)':'rgba(192,65,58,.2)'}`,fontSize:13,color:msg.t==='success'?'var(--success)':'var(--danger)'}}>
+        {msg.t==='success'?'✓':'⚠'} {msg.text}<button onClick={()=>setMsg(null)} style={{marginLeft:'auto',background:'none',border:'none',cursor:'pointer',color:'inherit',fontSize:15}}>×</button>
+      </div>)}
       {loading?<div style={{textAlign:'center',padding:'40px 0',fontSize:13,color:'var(--text-muted)'}}>Carregando…</div>:(
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:18,marginBottom:18}}>
-          {grupos.map(g=>{
-            const list=usuarios.filter(u=>u.role===g.role);
-            return(
-              <div key={g.role}>
-                <div className="eyebrow" style={{marginBottom:8,color:ROLE_COLORS[g.role]}}>{g.label} <span style={{fontWeight:400,color:'var(--text-faint)'}}>({list.length})</span></div>
-                <div className="card" style={{overflow:'hidden'}}>
-                  {list.length===0
-                    ?<div style={{padding:'14px 16px',fontSize:12,color:'var(--text-muted)'}}>Nenhum cadastrado.</div>
-                    :list.map((u,i,arr)=>(
-                      <div key={u.email} style={{display:'flex',alignItems:'center',gap:9,padding:'11px 14px',borderBottom:i<arr.length-1?'1px solid var(--border)':'none'}}>
-                        <Avatar name={u.nome} size={30} color={ROLE_COLORS[u.role]}/>
-                        <div style={{flex:1,minWidth:0}}>
-                          <div style={{fontSize:12,fontWeight:600,color:'var(--text-primary)'}}>{u.nome}</div>
-                          <div style={{fontSize:10,color:'var(--text-muted)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{u.email}</div>
-                        </div>
-                        <button onClick={()=>setConfirmDelete(u)} style={{padding:'3px 8px',borderRadius:6,fontSize:10,fontWeight:600,cursor:'pointer',background:'var(--danger-dim)',color:'var(--danger)',border:'none'}}>✕</button>
-                      </div>
-                    ))
-                  }
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-      {showModal&&(
-        <div className="mbk" onClick={e=>{if(e.target===e.currentTarget){setShowModal(false);setMsg(null);}}}>
-          <div className="mbox" style={{maxWidth:420}}>
-            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20}}>
-              <div>
-                <div style={{fontFamily:'var(--font-display)',fontSize:18,fontWeight:600,color:'var(--text-primary)'}}>Novo usuário BKO</div>
-                <div style={{fontSize:11,color:'var(--text-muted)',marginTop:2}}>Acesso imediato após criação</div>
-              </div>
-              <button onClick={()=>{setShowModal(false);setMsg(null);}} style={{background:'rgba(0,0,0,.06)',border:'1px solid var(--border)',borderRadius:8,cursor:'pointer',width:28,height:28,display:'flex',alignItems:'center',justifyContent:'center',fontSize:15}}>×</button>
-            </div>
-            {msg?.t==='error'&&<div style={{padding:'8px 12px',borderRadius:7,marginBottom:12,background:'var(--danger-dim)',border:'1px solid rgba(192,65,58,.2)',fontSize:11,color:'var(--danger)'}}>{msg.text}</div>}
-            <div style={{marginBottom:10}}>
-              <label style={{display:'block',fontSize:10,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:5}}>Papel</label>
-              <div style={{display:'flex',gap:6}}>
-                {[['corban_bko','Corban'],['bko','BKO']].map(([v,l])=>(
-                  <button key={v} onClick={()=>setForm(f=>({...f,role:v}))} style={{flex:1,padding:'8px 0',borderRadius:8,fontSize:12,fontWeight:600,cursor:'pointer',background:form.role===v?ROLE_COLORS[v]:'rgba(0,0,0,.05)',color:form.role===v?'#fff':'var(--text-secondary)',border:form.role===v?'none':'1px solid var(--border)',transition:'all .15s'}}>{l}</button>
+          {grupos.map(g=>{const list=usuarios.filter(u=>u.role===g.role);return(
+            <div key={g.role}>
+              <div className="eyebrow" style={{marginBottom:8,color:ROLE_COLORS[g.role]}}>{g.label} <span style={{fontWeight:400,color:'var(--text-faint)'}}>({list.length})</span></div>
+              <div className="card" style={{overflow:'hidden'}}>
+                {list.length===0?<div style={{padding:'14px 16px',fontSize:12,color:'var(--text-muted)'}}>Nenhum cadastrado.</div>:list.map((u,i,arr)=>(
+                  <div key={u.email} style={{display:'flex',alignItems:'center',gap:9,padding:'11px 14px',borderBottom:i<arr.length-1?'1px solid var(--border)':'none'}}>
+                    <Avatar name={u.nome} size={30} color={ROLE_COLORS[u.role]}/>
+                    <div style={{flex:1,minWidth:0}}><div style={{fontSize:12,fontWeight:600,color:'var(--text-primary)'}}>{u.nome}</div><div style={{fontSize:10,color:'var(--text-muted)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{u.email}</div></div>
+                    <button onClick={()=>setConfirmDelete(u)} style={{padding:'3px 8px',borderRadius:6,fontSize:10,fontWeight:600,cursor:'pointer',background:'var(--danger-dim)',color:'var(--danger)',border:'none'}}>✕</button>
+                  </div>
                 ))}
               </div>
             </div>
-            <div style={{marginBottom:10}}>
-              <label style={{display:'block',fontSize:10,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:5}}>Nome completo</label>
-              <input className="inp" value={form.nome} onChange={e=>setForm(f=>({...f,nome:e.target.value}))} placeholder="Nome"/>
-            </div>
-            <div style={{marginBottom:10}}>
-              <label style={{display:'block',fontSize:10,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:5}}>E-mail</label>
-              <input className="inp" type="email" value={form.email} onChange={e=>setForm(f=>({...f,email:e.target.value}))} placeholder="email@empresa.com"/>
-            </div>
-            <div style={{marginBottom:18}}>
-              <label style={{display:'block',fontSize:10,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:5}}>Senha inicial</label>
-              <input className="inp" type="password" value={form.senha} onChange={e=>setForm(f=>({...f,senha:e.target.value}))} placeholder="Mínimo 6 caracteres"/>
-            </div>
-            <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
-              <button className="btn btn-ghost" onClick={()=>{setShowModal(false);setMsg(null);}}>Cancelar</button>
-              <button className="btn" style={{background:B_MID,color:'#fff'}} onClick={save} disabled={saving}>{saving?'Criando…':'Criar usuário'}</button>
-            </div>
-          </div>
+          );})}
         </div>
       )}
-      {confirmDelete&&(
-        <div className="mbk" onClick={e=>{if(e.target===e.currentTarget)setConfirmDelete(null);}}>
-          <div className="mbox" style={{maxWidth:360,textAlign:'center'}}>
-            <div style={{fontSize:32,marginBottom:10}}>⚠️</div>
-            <div style={{fontFamily:'var(--font-display)',fontSize:17,fontWeight:600,marginBottom:8}}>Remover {confirmDelete.nome}?</div>
-            <div style={{fontSize:12,color:'var(--text-muted)',marginBottom:20}}>O acesso será revogado imediatamente.</div>
-            <div style={{display:'flex',gap:8,justifyContent:'center'}}>
-              <button className="btn btn-ghost" onClick={()=>setConfirmDelete(null)}>Cancelar</button>
-              <button className="btn" style={{background:'var(--danger)',color:'#fff'}} onClick={()=>remove(confirmDelete)}>Remover</button>
-            </div>
+      {showModal&&(<div className="mbk" onClick={e=>{if(e.target===e.currentTarget){setShowModal(false);setMsg(null);}}}>
+        <div className="mbox" style={{maxWidth:420}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20}}>
+            <div><div style={{fontFamily:'var(--font-display)',fontSize:18,fontWeight:600,color:'var(--text-primary)'}}>Novo usuário BKO</div><div style={{fontSize:11,color:'var(--text-muted)',marginTop:2}}>Acesso imediato após criação</div></div>
+            <button onClick={()=>{setShowModal(false);setMsg(null);}} style={{background:'rgba(0,0,0,.06)',border:'1px solid var(--border)',borderRadius:8,cursor:'pointer',width:28,height:28,display:'flex',alignItems:'center',justifyContent:'center',fontSize:15}}>×</button>
+          </div>
+          {msg?.t==='error'&&<div style={{padding:'8px 12px',borderRadius:7,marginBottom:12,background:'var(--danger-dim)',border:'1px solid rgba(192,65,58,.2)',fontSize:11,color:'var(--danger)'}}>{msg.text}</div>}
+          <div style={{marginBottom:10}}>
+            <label style={{display:'block',fontSize:10,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:5}}>Papel</label>
+            <div style={{display:'flex',gap:6}}>{[['corban_bko','Corban'],['bko','BKO']].map(([v,l])=>(<button key={v} onClick={()=>setForm(f=>({...f,role:v}))} style={{flex:1,padding:'8px 0',borderRadius:8,fontSize:12,fontWeight:600,cursor:'pointer',background:form.role===v?ROLE_COLORS[v]:'rgba(0,0,0,.05)',color:form.role===v?'#fff':'var(--text-secondary)',border:form.role===v?'none':'1px solid var(--border)',transition:'all .15s'}}>{l}</button>))}</div>
+          </div>
+          <div style={{marginBottom:10}}><label style={{display:'block',fontSize:10,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:5}}>Nome completo</label><input className="inp" value={form.nome} onChange={e=>setForm(f=>({...f,nome:e.target.value}))} placeholder="Nome"/></div>
+          <div style={{marginBottom:10}}><label style={{display:'block',fontSize:10,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:5}}>E-mail</label><input className="inp" type="email" value={form.email} onChange={e=>setForm(f=>({...f,email:e.target.value}))} placeholder="email@empresa.com"/></div>
+          <div style={{marginBottom:18}}><label style={{display:'block',fontSize:10,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:5}}>Senha inicial</label><input className="inp" type="password" value={form.senha} onChange={e=>setForm(f=>({...f,senha:e.target.value}))} placeholder="Mínimo 6 caracteres"/></div>
+          <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
+            <button className="btn btn-ghost" onClick={()=>{setShowModal(false);setMsg(null);}}>Cancelar</button>
+            <button className="btn" style={{background:B_MID,color:'#fff'}} onClick={save} disabled={saving}>{saving?'Criando…':'Criar usuário'}</button>
           </div>
         </div>
-      )}
+      </div>)}
+      {confirmDelete&&(<div className="mbk" onClick={e=>{if(e.target===e.currentTarget)setConfirmDelete(null);}}>
+        <div className="mbox" style={{maxWidth:360,textAlign:'center'}}>
+          <div style={{fontSize:32,marginBottom:10}}>⚠️</div>
+          <div style={{fontFamily:'var(--font-display)',fontSize:17,fontWeight:600,marginBottom:8}}>Remover {confirmDelete.nome}?</div>
+          <div style={{fontSize:12,color:'var(--text-muted)',marginBottom:20}}>O acesso será revogado imediatamente.</div>
+          <div style={{display:'flex',gap:8,justifyContent:'center'}}>
+            <button className="btn btn-ghost" onClick={()=>setConfirmDelete(null)}>Cancelar</button>
+            <button className="btn" style={{background:'var(--danger)',color:'#fff'}} onClick={()=>remove(confirmDelete)}>Remover</button>
+          </div>
+        </div>
+      </div>)}
     </div>
   );
 }
 
-// ── AUDITORIA ─────────────────────────────────────────────────────────────────
 function BKOAuditoria(){
-  const [logs,setLogs]=useState([]);
-  const [loading,setLoading]=useState(true);
-  const [search,setSearch]=useState('');
-  const [page,setPage]=useState(1);
-  const PER=50;
+  const [logs,setLogs]=useState([]);const [loading,setLoading]=useState(true);const [search,setSearch]=useState('');const [page,setPage]=useState(1);const PER=50;
   useEffect(()=>{
-    supabase.from('bko_audit_log').select('*').order('created_at',{ascending:false}).limit(500)
-      .then(({data})=>{setLogs(data||[]);setLoading(false);});
-    const ch=supabase.channel('bko_audit_rt')
-      .on('postgres_changes',{event:'INSERT',schema:'public',table:'bko_audit_log'},p=>setLogs(prev=>[p.new,...prev]))
-      .subscribe();
+    supabase.from('bko_audit_log').select('*').order('created_at',{ascending:false}).limit(500).then(({data})=>{setLogs(data||[]);setLoading(false);});
+    const ch=supabase.channel('bko_audit_rt').on('postgres_changes',{event:'INSERT',schema:'public',table:'bko_audit_log'},p=>setLogs(prev=>[p.new,...prev])).subscribe();
     return ()=>supabase.removeChannel(ch);
   },[]);
-  const filtered=useMemo(()=>{
-    if(!search) return logs;
-    const s=search.toLowerCase();
-    return logs.filter(l=>l.user_nome?.toLowerCase().includes(s)||l.cliente_nome?.toLowerCase().includes(s)||l.action?.toLowerCase().includes(s));
-  },[logs,search]);
-  const total=Math.max(1,Math.ceil(filtered.length/PER));
-  const paged=filtered.slice((page-1)*PER,page*PER);
+  const filtered=useMemo(()=>{if(!search) return logs;const s=search.toLowerCase();return logs.filter(l=>l.user_nome?.toLowerCase().includes(s)||l.cliente_nome?.toLowerCase().includes(s)||l.action?.toLowerCase().includes(s));},[logs,search]);
+  const total=Math.max(1,Math.ceil(filtered.length/PER));const paged=filtered.slice((page-1)*PER,page*PER);
   const fmtTs=ts=>new Date(ts).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});
   return(
     <div style={{padding:'28px 32px'}}>
-      <div className="fu" style={{marginBottom:18}}>
-        <div className="section-title">Auditoria</div>
-        <div className="section-sub">{filtered.length} registros · tempo real</div>
-      </div>
+      <div className="fu" style={{marginBottom:18}}><div className="section-title">Auditoria</div><div className="section-sub">{filtered.length} registros · tempo real</div></div>
       <div className="fu1" style={{display:'flex',gap:8,marginBottom:14}}>
-        <div className="search-wrap" style={{flex:1,maxWidth:360}}>
-          <span className="search-icon">⌕</span>
-          <input className="inp" placeholder="Filtrar por usuário, cliente, ação…" value={search} onChange={e=>{setSearch(e.target.value);setPage(1);}}/>
-        </div>
-        <div style={{display:'flex',alignItems:'center',gap:5,fontSize:11,color:'var(--text-muted)',marginLeft:'auto'}}>
-          <div style={{width:7,height:7,borderRadius:'50%',background:'var(--success)',boxShadow:'0 0 5px var(--success)'}}/>
-          Tempo real
-        </div>
+        <div className="search-wrap" style={{flex:1,maxWidth:360}}><span className="search-icon">⌕</span><input className="inp" placeholder="Filtrar por usuário, cliente, ação…" value={search} onChange={e=>{setSearch(e.target.value);setPage(1);}}/></div>
+        <div style={{display:'flex',alignItems:'center',gap:5,fontSize:11,color:'var(--text-muted)',marginLeft:'auto'}}><div style={{width:7,height:7,borderRadius:'50%',background:'var(--success)',boxShadow:'0 0 5px var(--success)'}}/>Tempo real</div>
       </div>
       {loading?<div style={{textAlign:'center',padding:'40px 0',fontSize:13,color:'var(--text-muted)'}}>Carregando…</div>:(
         <div className="fu2 card" style={{overflow:'hidden',marginBottom:14}}>
           <div style={{overflowX:'auto'}}>
             <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
-              <thead>
-                <tr style={{background:'rgba(0,0,0,.03)',borderBottom:'1px solid var(--border)'}}>
-                  {['Data/hora','Usuário','Papel','Ação','Cliente','Detalhes'].map(h=>(
-                    <th key={h} style={{padding:'10px 14px',textAlign:'left',fontSize:9,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.08em',whiteSpace:'nowrap'}}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
+              <thead><tr style={{background:'rgba(0,0,0,.03)',borderBottom:'1px solid var(--border)'}}>{['Data/hora','Usuário','Papel','Ação','Cliente','Detalhes'].map(h=>(<th key={h} style={{padding:'10px 14px',textAlign:'left',fontSize:9,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.08em',whiteSpace:'nowrap'}}>{h}</th>))}</tr></thead>
               <tbody>
                 {paged.map((log,i)=>(
                   <tr key={log.id} style={{borderBottom:'1px solid var(--border)',background:i%2===0?'transparent':'rgba(0,0,0,.015)'}}>
                     <td style={{padding:'9px 14px',fontSize:10,color:'var(--text-muted)',whiteSpace:'nowrap'}}>{fmtTs(log.created_at)}</td>
-                    <td style={{padding:'9px 14px'}}>
-                      <div style={{display:'flex',alignItems:'center',gap:6}}>
-                        <Avatar name={log.user_nome||'?'} size={22} color={ROLE_COLORS[log.user_role]||B_MID}/>
-                        <span style={{fontSize:11,fontWeight:600}}>{log.user_nome}</span>
-                      </div>
-                    </td>
+                    <td style={{padding:'9px 14px'}}><div style={{display:'flex',alignItems:'center',gap:6}}><Avatar name={log.user_nome||'?'} size={22} color={ROLE_COLORS[log.user_role]||B_MID}/><span style={{fontSize:11,fontWeight:600}}>{log.user_nome}</span></div></td>
                     <td style={{padding:'9px 14px'}}><span style={{fontSize:10,padding:'2px 7px',borderRadius:99,background:B_LIGHT,color:B_MID,fontWeight:600}}>{ROLE_LABELS[log.user_role]||log.user_role||'—'}</span></td>
                     <td style={{padding:'9px 14px',fontSize:11}}>{log.action}</td>
                     <td style={{padding:'9px 14px',fontSize:11,fontWeight:500}}>{log.cliente_nome||'—'}</td>
@@ -1038,20 +799,17 @@ function BKOAuditoria(){
           </div>
         </div>
       )}
-      {total>1&&(
-        <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:5}}>
-          <button className="btn btn-ghost" style={{padding:'5px 10px',fontSize:12}} onClick={()=>setPage(1)} disabled={page===1}>«</button>
-          <button className="btn btn-ghost" style={{padding:'5px 10px',fontSize:12}} onClick={()=>setPage(p=>Math.max(1,p-1))} disabled={page===1}>‹</button>
-          <span style={{fontSize:12,color:'var(--text-muted)',padding:'0 8px'}}>Pág {page}/{total}</span>
-          <button className="btn btn-ghost" style={{padding:'5px 10px',fontSize:12}} onClick={()=>setPage(p=>Math.min(total,p+1))} disabled={page===total}>›</button>
-          <button className="btn btn-ghost" style={{padding:'5px 10px',fontSize:12}} onClick={()=>setPage(total)} disabled={page===total}>»</button>
-        </div>
-      )}
+      {total>1&&(<div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:5}}>
+        <button className="btn btn-ghost" style={{padding:'5px 10px',fontSize:12}} onClick={()=>setPage(1)} disabled={page===1}>«</button>
+        <button className="btn btn-ghost" style={{padding:'5px 10px',fontSize:12}} onClick={()=>setPage(p=>Math.max(1,p-1))} disabled={page===1}>‹</button>
+        <span style={{fontSize:12,color:'var(--text-muted)',padding:'0 8px'}}>Pág {page}/{total}</span>
+        <button className="btn btn-ghost" style={{padding:'5px 10px',fontSize:12}} onClick={()=>setPage(p=>Math.min(total,p+1))} disabled={page===total}>›</button>
+        <button className="btn btn-ghost" style={{padding:'5px 10px',fontSize:12}} onClick={()=>setPage(total)} disabled={page===total}>»</button>
+      </div>)}
     </div>
   );
 }
 
-// ── MAIN BKO APP ──────────────────────────────────────────────────────────────
 export function BKOApp({profile,session,signOut,onAlterarSenha}){
   const [s,dispatch]=useReducer(R,INIT);
   const {clientes,view,sel,newOpen}=s;
@@ -1059,7 +817,6 @@ export function BKOApp({profile,session,signOut,onAlterarSenha}){
   const clientesRef=useRef(clientes);
   const [showAS,setShowAS]=useState(false);
   const [filtroEstagio,setFiltroEstagio]=useState(null);
-
   const setView=useCallback(v=>dispatch({type:'VIEW',v}),[]);
   const selected=clientes.find(c=>c.id===sel);
 
@@ -1068,26 +825,12 @@ export function BKOApp({profile,session,signOut,onAlterarSenha}){
     supabase.from('bko_clientes').select('*').order('created_at',{ascending:false})
       .then(({data,error})=>{
         if(error){console.error('BKO load error:',error);setReady(true);return;}
-        const loaded=(data||[]).map(r=>({
-          ...r.data,id:r.id,estagio:r.estagio,
-          criado_por_id:r.criado_por_id,criado_por_nome:r.criado_por_nome,criado_por_role:r.criado_por_role,
-          atribuido_a_id:r.atribuido_a_id||null,atribuido_a_nome:r.atribuido_a_nome||null,
-          responsavel_bko_id:r.responsavel_bko_id||null,responsavel_bko_nome:r.responsavel_bko_nome||null,
-        }));
-        dispatch({type:'SET_C',clientes:loaded});
-        clientesRef.current=loaded;
-        setReady(true);
+        const loaded=(data||[]).map(r=>({...r.data,id:r.id,estagio:r.estagio,criado_por_id:r.criado_por_id,criado_por_nome:r.criado_por_nome,criado_por_role:r.criado_por_role,atribuido_a_id:r.atribuido_a_id||null,atribuido_a_nome:r.atribuido_a_nome||null,responsavel_bko_id:r.responsavel_bko_id||null,responsavel_bko_nome:r.responsavel_bko_nome||null}));
+        dispatch({type:'SET_C',clientes:loaded});clientesRef.current=loaded;setReady(true);
       });
     const ch=supabase.channel('bko_clientes_rt')
-      .on('postgres_changes',{event:'INSERT',schema:'public',table:'bko_clientes'},payload=>{
-        const r=payload.new;
-        const novo={...r.data,id:r.id,estagio:r.estagio,criado_por_id:r.criado_por_id,criado_por_nome:r.criado_por_nome,criado_por_role:r.criado_por_role,atribuido_a_id:r.atribuido_a_id||null,atribuido_a_nome:r.atribuido_a_nome||null,responsavel_bko_id:r.responsavel_bko_id||null,responsavel_bko_nome:r.responsavel_bko_nome||null};
-        dispatch(prev=>prev.clientes?.find(c=>c.id===novo.id)?prev:{...prev,clientes:[novo,...(prev.clientes||[])]});
-      })
-      .on('postgres_changes',{event:'UPDATE',schema:'public',table:'bko_clientes'},payload=>{
-        const r=payload.new;
-        dispatch({type:'UPD',c:{...r.data,id:r.id,estagio:r.estagio,criado_por_id:r.criado_por_id,criado_por_nome:r.criado_por_nome,criado_por_role:r.criado_por_role,atribuido_a_id:r.atribuido_a_id||null,atribuido_a_nome:r.atribuido_a_nome||null,responsavel_bko_id:r.responsavel_bko_id||null,responsavel_bko_nome:r.responsavel_bko_nome||null}});
-      })
+      .on('postgres_changes',{event:'INSERT',schema:'public',table:'bko_clientes'},payload=>{const r=payload.new;const novo={...r.data,id:r.id,estagio:r.estagio,criado_por_id:r.criado_por_id,criado_por_nome:r.criado_por_nome,criado_por_role:r.criado_por_role,atribuido_a_id:r.atribuido_a_id||null,atribuido_a_nome:r.atribuido_a_nome||null,responsavel_bko_id:r.responsavel_bko_id||null,responsavel_bko_nome:r.responsavel_bko_nome||null};dispatch(prev=>prev.clientes?.find(c=>c.id===novo.id)?prev:{...prev,clientes:[novo,...(prev.clientes||[])]});})
+      .on('postgres_changes',{event:'UPDATE',schema:'public',table:'bko_clientes'},payload=>{const r=payload.new;dispatch({type:'UPD',c:{...r.data,id:r.id,estagio:r.estagio,criado_por_id:r.criado_por_id,criado_por_nome:r.criado_por_nome,criado_por_role:r.criado_por_role,atribuido_a_id:r.atribuido_a_id||null,atribuido_a_nome:r.atribuido_a_nome||null,responsavel_bko_id:r.responsavel_bko_id||null,responsavel_bko_nome:r.responsavel_bko_nome||null}});})
       .subscribe();
     return ()=>supabase.removeChannel(ch);
   },[session]);
@@ -1095,28 +838,13 @@ export function BKOApp({profile,session,signOut,onAlterarSenha}){
   useEffect(()=>{
     if(!ready||!session) return;
     const prev=clientesRef.current;
-    const changed=clientes.filter(c=>{
-      const old=prev.find(p=>p.id===c.id);
-      return old&&JSON.stringify(old)!==JSON.stringify(c);
-    });
+    const changed=clientes.filter(c=>{const old=prev.find(p=>p.id===c.id);return old&&JSON.stringify(old)!==JSON.stringify(c);});
     if(changed.length>0){
       Promise.all(changed.map(async c=>{
         const {id,estagio,criado_por_id,criado_por_nome,criado_por_role,atribuido_a_id,atribuido_a_nome,responsavel_bko_id,responsavel_bko_nome,...data}=c;
-        await supabase.from('bko_clientes').upsert({
-          id,data:{...data,id},
-          estagio:estagio||'clientes_novos',
-          criado_por_id:criado_por_id||session.user.id,
-          criado_por_nome:criado_por_nome||profile?.nome,
-          criado_por_role:criado_por_role||profile?.role,
-          atribuido_a_id:atribuido_a_id||null,
-          atribuido_a_nome:atribuido_a_nome||null,
-          responsavel_bko_id:responsavel_bko_id||null,
-          responsavel_bko_nome:responsavel_bko_nome||null,
-        },{onConflict:'id'});
+        await supabase.from('bko_clientes').upsert({id,data:{...data,id},estagio:estagio||'clientes_novos',criado_por_id:criado_por_id||session.user.id,criado_por_nome:criado_por_nome||profile?.nome,criado_por_role:criado_por_role||profile?.role,atribuido_a_id:atribuido_a_id||null,atribuido_a_nome:atribuido_a_nome||null,responsavel_bko_id:responsavel_bko_id||null,responsavel_bko_nome:responsavel_bko_nome||null},{onConflict:'id'});
       })).then(()=>{clientesRef.current=clientes;});
-    } else {
-      clientesRef.current=clientes;
-    }
+    } else {clientesRef.current=clientes;}
   },[clientes,ready,session]);
 
   const auditedDispatch=useCallback(async(action)=>{
@@ -1124,10 +852,7 @@ export function BKOApp({profile,session,signOut,onAlterarSenha}){
     if(!session||!profile) return;
     if(action.type==='ADD'){
       const c=action.c;
-      const {error}=await supabase.from('bko_clientes').insert({
-        id:c.id,data:{...c},estagio:c.estagio||'clientes_novos',
-        criado_por_id:session.user.id,criado_por_nome:profile.nome,criado_por_role:profile.role,
-      });
+      const {error}=await supabase.from('bko_clientes').insert({id:c.id,data:{...c},estagio:c.estagio||'clientes_novos',criado_por_id:session.user.id,criado_por_nome:profile.nome,criado_por_role:profile.role});
       if(error){console.error('BKO ADD error:',error);alert(`Erro: ${error.message}`);}
     }
     const auditMap={
@@ -1139,23 +864,14 @@ export function BKOApp({profile,session,signOut,onAlterarSenha}){
     if(fn){
       const {action:act,details,clienteId}=fn();
       const clienteNome=action.type==='ADD'?action.c?.nomeCliente:clientes.find(c=>c.id===clienteId)?.nomeCliente||'—';
-      supabase.from('bko_audit_log').insert({
-        user_id:session.user.id,user_nome:profile.nome,user_role:profile.role,
-        action:act,cliente_id:clienteId||null,cliente_nome:clienteNome,detalhes:details,
-      });
+      supabase.from('bko_audit_log').insert({user_id:session.user.id,user_nome:profile.nome,user_role:profile.role,action:act,cliente_id:clienteId||null,cliente_nome:clienteNome,detalhes:details});
     }
   },[profile,clientes,session]);
 
   return(
     <>
       <div style={{display:'flex',minHeight:'100vh',background:'var(--bg-base)',fontFamily:'var(--font)'}}>
-        <BKOSidebar
-          view={view}
-          setView={v=>{setView(v);if(v!=='pipeline')setFiltroEstagio(null);}}
-          profile={profile}
-          onLogout={signOut}
-          onAlterarSenha={()=>setShowAS(true)}
-        />
+        <BKOSidebar view={view} setView={v=>{setView(v);if(v!=='pipeline')setFiltroEstagio(null);}} profile={profile} onLogout={signOut} onAlterarSenha={()=>setShowAS(true)}/>
         <main style={{flex:1,minWidth:0,overflowY:'auto',paddingRight:selected?490:0,transition:'padding-right .3s cubic-bezier(.4,0,.2,1)'}}>
           {view==='dashboard' && <BKODashboard clientes={clientes} setView={v=>{setView(v);}} setFiltroEstagio={setFiltroEstagio}/>}
           {view==='pipeline'  && <BKOPipeline clientes={clientes} profile={profile} dispatch={auditedDispatch} onSelect={id=>dispatch({type:'SEL',id})} filtroEstagio={filtroEstagio} setFiltroEstagio={setFiltroEstagio}/>}
