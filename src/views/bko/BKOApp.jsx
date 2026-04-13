@@ -222,22 +222,29 @@ function BKOClientes({clientes,profile,onSelect,onNew}){
   const [search,setSearch]=useState('');
   const [estagio,setEstagio]=useState('');
   const [prefeitura,setPrefeitura]=useState('');
+  const [criadoPor,setCriadoPor]=useState('');
+  const [atribuidoA,setAtribuidoA]=useState('');
   const [page,setPage]=useState(1);
   const PER=50;
+  const isComercial=profile?.role==='comercial';
 
   const prefeituras=useMemo(()=>[...new Set(clientes.map(c=>c.prefeitura).filter(Boolean))].sort(),[clientes]);
+  const criadoresList=useMemo(()=>[...new Set(clientes.map(c=>c.criado_por_nome).filter(Boolean))].sort(),[clientes]);
+  const atribuidosList=useMemo(()=>[...new Set(clientes.map(c=>c.atribuido_a_nome).filter(Boolean))].sort(),[clientes]);
 
   const filtered=useMemo(()=>clientes.filter(c=>{
     if(estagio&&c.estagio!==estagio) return false;
     if(prefeitura&&c.prefeitura!==prefeitura) return false;
+    if(criadoPor&&c.criado_por_nome!==criadoPor) return false;
+    if(atribuidoA&&c.atribuido_a_nome!==atribuidoA) return false;
     if(search){const s=search.toLowerCase();if(!c.nomeCliente?.toLowerCase().includes(s)&&!c.cpfCliente?.includes(s)) return false;}
     return true;
-  }),[clientes,search,estagio,prefeitura]);
+  }),[clientes,search,estagio,prefeitura,criadoPor,atribuidoA]);
 
   const totalPages=Math.max(1,Math.ceil(filtered.length/PER));
   const paged=filtered.slice((page-1)*PER,page*PER);
   const stgStyle=(id)=>{const s=BKO_STAGES.find(x=>x.id===id);return s?{background:s.bg,color:s.color,borderRadius:99,padding:'2px 8px',fontSize:10,fontWeight:700}:{};};
-  const hasFilter=search||estagio||prefeitura;
+  const hasFilter=search||estagio||prefeitura||criadoPor||atribuidoA;
 
   return(
     <div style={{padding:'28px 32px'}}>
@@ -250,15 +257,27 @@ function BKOClientes({clientes,profile,onSelect,onNew}){
           <span className="search-icon">⌕</span>
           <input className="inp" placeholder="Nome ou CPF…" value={search} onChange={e=>{setSearch(e.target.value);setPage(1);}}/>
         </div>
-        <select className="sel" style={{width:170}} value={estagio} onChange={e=>{setEstagio(e.target.value);setPage(1);}}>
+        <select className="sel" style={{width:160}} value={estagio} onChange={e=>{setEstagio(e.target.value);setPage(1);}}>
           <option value="">Todos os estágios</option>
           {BKO_STAGES.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}
         </select>
-        <select className="sel" style={{width:170}} value={prefeitura} onChange={e=>{setPrefeitura(e.target.value);setPage(1);}}>
+        <select className="sel" style={{width:160}} value={prefeitura} onChange={e=>{setPrefeitura(e.target.value);setPage(1);}}>
           <option value="">Todas as prefeituras</option>
           {prefeituras.map(p=><option key={p} value={p}>{p}</option>)}
         </select>
-        {hasFilter&&<button className="btn btn-ghost" onClick={()=>{setSearch('');setEstagio('');setPrefeitura('');setPage(1);}}>✕ Limpar</button>}
+        {isComercial&&(
+          <select className="sel" style={{width:150}} value={criadoPor} onChange={e=>{setCriadoPor(e.target.value);setPage(1);}}>
+            <option value="">Criado por…</option>
+            {criadoresList.map(n=><option key={n} value={n}>{n}</option>)}
+          </select>
+        )}
+        {isComercial&&(
+          <select className="sel" style={{width:150}} value={atribuidoA} onChange={e=>{setAtribuidoA(e.target.value);setPage(1);}}>
+            <option value="">Atribuído a…</option>
+            {atribuidosList.map(n=><option key={n} value={n}>{n}</option>)}
+          </select>
+        )}
+        {hasFilter&&<button className="btn btn-ghost" onClick={()=>{setSearch('');setEstagio('');setPrefeitura('');setCriadoPor('');setAtribuidoA('');setPage(1);}}>✕ Limpar</button>}
       </div>
       <div className="fu2 card" style={{overflow:'hidden',marginBottom:14}}>
         <div style={{overflowX:'auto'}}>
@@ -556,11 +575,15 @@ function BKODetail({cliente,profile,session,dispatch,onClose}){
               {chatMsgs.map((m,i)=>{
                 const isMe=m.user_id===profile?.id;
                 const roleColor=ROLE_COLORS[m.user_role]||B_MID;
+                const roleLabel=ROLE_LABELS[m.user_role]||m.user_role||'';
                 return(
                   <div key={m.id||i} style={{display:'flex',flexDirection:'column',alignItems:isMe?'flex-end':'flex-start'}}>
                     <div style={{display:'flex',alignItems:'center',gap:5,marginBottom:3}}>
                       <Avatar name={m.user_nome||'?'} size={18} color={roleColor}/>
-                      <span style={{fontSize:10,fontWeight:700,color:roleColor}}>{m.user_nome}</span>
+                      <span style={{fontSize:10,fontWeight:700,color:roleColor}}>
+                        {m.user_nome}
+                        {roleLabel&&<span style={{fontWeight:400,color:'var(--text-faint)',marginLeft:4}}>· {roleLabel}</span>}
+                      </span>
                       <span style={{fontSize:9,color:'var(--text-faint)'}}>{new Date(m.created_at).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</span>
                     </div>
                     <div style={{maxWidth:'80%',padding:'8px 12px',borderRadius:isMe?'12px 12px 4px 12px':'12px 12px 12px 4px',background:isMe?B_MID:'var(--bg-surface)',color:isMe?'#fff':'var(--text-primary)',fontSize:12,lineHeight:1.5,border:isMe?'none':'1px solid var(--border)'}}>{m.mensagem}</div>
@@ -679,12 +702,33 @@ function BKOCadastrar({profile,session}){
   const [usuarios,setUsuarios]=useState([]);
   const [loading,setLoading]=useState(true);
   const [showModal,setShowModal]=useState(false);
+  const [editUser,setEditUser]=useState(null);
+  const [editForm,setEditForm]=useState({nome:''});
+  const [editSaving,setEditSaving]=useState(false);
+  const [editMsg,setEditMsg]=useState(null);
   const [form,setForm]=useState({nome:'',email:'',senha:'',role:'corban_bko'});
   const [saving,setSaving]=useState(false);
   const [msg,setMsg]=useState(null);
   const [confirmDelete,setConfirmDelete]=useState(null);
+  const isComercial=profile?.role==='comercial';
+
   const load=useCallback(async()=>{setLoading(true);const {data}=await supabase.from('allowed_users').select('*').eq('modulo','bko').order('nome');setUsuarios(data||[]);setLoading(false);},[]);
   useEffect(()=>{load();},[load]);
+
+  const openEdit=(u)=>{setEditUser(u);setEditForm({nome:u.nome});setEditMsg(null);};
+
+  const saveEdit=async()=>{
+    if(!editForm.nome.trim()){setEditMsg({t:'error',text:'Nome é obrigatório.'});return;}
+    setEditSaving(true);setEditMsg(null);
+    const {error:e1}=await supabase.from('allowed_users').update({nome:editForm.nome.trim()}).eq('email',editUser.email);
+    const {error:e2}=await supabase.from('profiles').update({nome:editForm.nome.trim()}).eq('email',editUser.email);
+    setEditSaving(false);
+    if(e1||e2){setEditMsg({t:'error',text:'Erro ao salvar. Tente novamente.'});return;}
+    setEditMsg({t:'success',text:'Nome atualizado com sucesso!'});
+    load();
+    setTimeout(()=>setEditUser(null),900);
+  };
+
   const save=async()=>{
     if(!form.nome.trim()||!form.email.trim()||!form.senha||form.senha.length<6){setMsg({t:'error',text:'Nome, e-mail e senha (mín. 6 caracteres) são obrigatórios.'});return;}
     setSaving(true);setMsg(null);
@@ -716,7 +760,13 @@ function BKOCadastrar({profile,session}){
                 {list.length===0?<div style={{padding:'14px 16px',fontSize:12,color:'var(--text-muted)'}}>Nenhum cadastrado.</div>:list.map((u,i,arr)=>(
                   <div key={u.email} style={{display:'flex',alignItems:'center',gap:9,padding:'11px 14px',borderBottom:i<arr.length-1?'1px solid var(--border)':'none'}}>
                     <Avatar name={u.nome} size={30} color={ROLE_COLORS[u.role]}/>
-                    <div style={{flex:1,minWidth:0}}><div style={{fontSize:12,fontWeight:600,color:'var(--text-primary)'}}>{u.nome}</div><div style={{fontSize:10,color:'var(--text-muted)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{u.email}</div></div>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:12,fontWeight:600,color:'var(--text-primary)'}}>{u.nome}</div>
+                      <div style={{fontSize:10,color:'var(--text-muted)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{u.email}</div>
+                    </div>
+                    {isComercial&&(
+                      <button onClick={()=>openEdit(u)} title="Editar" style={{padding:'3px 8px',borderRadius:6,fontSize:11,fontWeight:600,cursor:'pointer',background:B_LIGHT,color:B_MID,border:'none',marginRight:4}}>✎</button>
+                    )}
                     <button onClick={()=>setConfirmDelete(u)} style={{padding:'3px 8px',borderRadius:6,fontSize:10,fontWeight:600,cursor:'pointer',background:'var(--danger-dim)',color:'var(--danger)',border:'none'}}>✕</button>
                   </div>
                 ))}
@@ -725,6 +775,38 @@ function BKOCadastrar({profile,session}){
           );})}
         </div>
       )}
+
+      {/* ── MODAL EDITAR USUÁRIO (só Comercial) ── */}
+      {editUser&&(
+        <div className="mbk" onClick={e=>{if(e.target===e.currentTarget)setEditUser(null);}}>
+          <div className="mbox" style={{maxWidth:400}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20}}>
+              <div>
+                <div style={{fontFamily:'var(--font-display)',fontSize:18,fontWeight:600,color:'var(--text-primary)'}}>Editar usuário</div>
+                <div style={{marginTop:5}}>
+                  <span style={{fontSize:10,padding:'2px 8px',borderRadius:99,fontWeight:700,background:`${ROLE_COLORS[editUser.role]}18`,color:ROLE_COLORS[editUser.role]}}>{ROLE_LABELS[editUser.role]||editUser.role}</span>
+                </div>
+              </div>
+              <button onClick={()=>setEditUser(null)} style={{background:'rgba(0,0,0,.06)',border:'1px solid var(--border)',borderRadius:8,cursor:'pointer',width:28,height:28,display:'flex',alignItems:'center',justifyContent:'center',fontSize:15}}>×</button>
+            </div>
+            {editMsg&&<div style={{padding:'8px 12px',borderRadius:7,marginBottom:12,background:editMsg.t==='success'?'var(--success-dim)':'var(--danger-dim)',border:`1px solid ${editMsg.t==='success'?'rgba(61,155,107,.2)':'rgba(192,65,58,.2)'}`,fontSize:11,color:editMsg.t==='success'?'var(--success)':'var(--danger)'}}>{editMsg.text}</div>}
+            <div style={{marginBottom:12}}>
+              <label style={{display:'block',fontSize:10,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:5}}>Nome completo</label>
+              <input className="inp" value={editForm.nome} onChange={e=>setEditForm(f=>({...f,nome:e.target.value}))} placeholder="Nome completo" autoFocus/>
+            </div>
+            <div style={{marginBottom:20}}>
+              <label style={{display:'block',fontSize:10,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:5}}>E-mail</label>
+              <input className="inp" value={editUser.email} readOnly style={{background:'var(--bg-surface)',cursor:'not-allowed',color:'var(--text-muted)'}}/>
+              <div style={{fontSize:10,color:'var(--text-faint)',marginTop:4}}>E-mail não pode ser alterado.</div>
+            </div>
+            <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
+              <button className="btn btn-ghost" onClick={()=>setEditUser(null)}>Cancelar</button>
+              <button className="btn" style={{background:B_MID,color:'#fff',boxShadow:`0 3px 12px ${B_GLOW}`}} onClick={saveEdit} disabled={editSaving}>{editSaving?'Salvando…':'Salvar alterações'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showModal&&(<div className="mbk" onClick={e=>{if(e.target===e.currentTarget){setShowModal(false);setMsg(null);}}}>
         <div className="mbox" style={{maxWidth:420}}>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20}}>
