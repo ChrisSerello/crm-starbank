@@ -55,29 +55,28 @@ export default function App(){
     });
   },[session]);
 
-  // ── Save lead to Supabase ──
-  const saveLead=useCallback(async(lead)=>{
-    if(!session||!leadsReady) return;
-    const {error}=await supabase.from('leads').upsert({id:lead.id,data:lead},{onConflict:'id'});
-    if(error) console.error('Erro ao salvar lead:', error);
-  },[session,leadsReady]);
+  // ── Watch leads e sync com debounce por lead (sem lock contention) ──
+  const pendingSyncRef = useRef({});
+  const leadsMapRef = useRef(new Map());
 
-  // ── Watch leads and sync changes to Supabase ──
-  const leadsRef=useRef(leads);
   useEffect(()=>{
     if(!leadsReady||!session) return;
-    const prev=leadsRef.current;
-    const changed=leads.filter(l=>{
-      const old=prev.find(p=>p.id===l.id);
-      return !old||JSON.stringify(old)!==JSON.stringify(l);
+    const prevMap = leadsMapRef.current;
+    leads.forEach(l=>{
+      if(prevMap.get(l.id) !== l){
+        if(pendingSyncRef.current[l.id]){
+          clearTimeout(pendingSyncRef.current[l.id]);
+        }
+        pendingSyncRef.current[l.id] = setTimeout(async ()=>{
+          const {error} = await supabase
+            .from('leads')
+            .upsert({id:l.id, data:l},{onConflict:'id'});
+          if(error) console.error('Sync error:',l.id,error);
+          delete pendingSyncRef.current[l.id];
+        }, 800);
+      }
     });
-    if(changed.length>0){
-      Promise.all(changed.map(l=>
-        supabase.from('leads').upsert({id:l.id,data:l},{onConflict:'id'})
-          .then(({error})=>{ if(error) console.error('Sync error:',l.id,error); })
-      ));
-    }
-    leadsRef.current=leads;
+    leadsMapRef.current = new Map(leads.map(l=>[l.id,l]));
   },[leads,leadsReady,session]);
 
   const auditedDispatch=useCallback((action)=>{
@@ -98,27 +97,22 @@ export default function App(){
           const leadAtual=leads.find(l=>l.id===action.lead?.id);
           const detalhes=[];
           if(leadAtual){
-            // Detecta troca de responsável
             if(action.lead.responsavelId!==undefined&&action.lead.responsavelId!==leadAtual.responsavelId){
               const antes=OPERATORS.find(o=>o.id===leadAtual.responsavelId)?.name||leadAtual.responsavelId||'Nenhum';
               const depois=OPERATORS.find(o=>o.id===action.lead.responsavelId)?.name||action.lead.responsavelId||'Nenhum';
               detalhes.push(`Responsável: ${antes} → ${depois}`);
             }
-            // Detecta troca de estágio via UPD
             if(action.lead.statusComercial!==undefined&&action.lead.statusComercial!==leadAtual.statusComercial){
               detalhes.push(`Estágio: "${stg(leadAtual.statusComercial).label}" → "${stg(action.lead.statusComercial).label}"`);
             }
-            // Detecta troca de documento
             if(action.lead.documentoStatus!==undefined&&action.lead.documentoStatus!==leadAtual.documentoStatus){
               detalhes.push(`Documento: ${leadAtual.documentoStatus} → ${action.lead.documentoStatus}`);
             }
-            // Detecta troca de operador repassado
             if(action.lead.operadorRepassado!==undefined&&action.lead.operadorRepassado!==leadAtual.operadorRepassado){
               const antes=leadAtual.operadorRepassado||'Nenhum';
               const depois=action.lead.operadorRepassado||'Nenhum';
               detalhes.push(`Op. Repassado: ${antes} → ${depois}`);
             }
-            // Detecta troca de equipe
             if(action.lead.equipe!==undefined&&action.lead.equipe!==leadAtual.equipe){
               detalhes.push(`Equipe: ${leadAtual.equipe||'Nenhuma'} → ${action.lead.equipe||'Nenhuma'}`);
             }
