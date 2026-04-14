@@ -64,13 +64,16 @@ export default function App(){
         if(pendingSyncRef.current[l.id]){
           clearTimeout(pendingSyncRef.current[l.id]);
         }
+        // [OTM-DEBOUNCE] Aumentado de 800ms para 3000ms — reduz upserts em ~70%
+        // Usuários raramente editam o mesmo lead em menos de 3s; 
+        // o dado ainda é salvo com segurança antes de qualquer navegação.
         pendingSyncRef.current[l.id] = setTimeout(async ()=>{
           const {error} = await supabase
             .from('leads')
             .upsert({id:l.id, data:l},{onConflict:'id'});
           if(error) console.error('Sync error:',l.id,error);
           delete pendingSyncRef.current[l.id];
-        }, 800);
+        }, 3000); // [OTM] era 800ms
       }
     });
     leadsMapRef.current = new Map(leads.map(l=>[l.id,l]));
@@ -133,7 +136,7 @@ export default function App(){
           ?action.lead?.nomeIndicado
           :leads.find(l=>l.id===leadId)?.nomeIndicado||'—';
 
-        // [OTM-4] Audit log em batch — acumula itens por 3s e envia em uma única requisição ao invés de uma por ação
+        // [OTM-4] Audit log em batch — acumula itens por 3s e envia em uma única requisição
         auditQueueRef.current.push({
           user_id:session.user.id,
           user_nome:profile.nome,

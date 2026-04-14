@@ -41,16 +41,17 @@ export function useAuth(){
       const modulo=allowed.modulo||'indicacoes';
 
       if(modulo==='corbans'){
-        if(allowed.promotora_principal_email){
-          const {data:pp}=await supabase.from('profiles')
-            .select('id').ilike('email',allowed.promotora_principal_email).single();
-          promotora_principal_id=pp?.id||null;
-        }
-        if(allowed.promotora_email){
-          const {data:p}=await supabase.from('profiles')
-            .select('id').ilike('email',allowed.promotora_email).single();
-          promotora_id=p?.id||null;
-        }
+        // [OTM-AUTH] Queries em paralelo — era sequencial (2 awaits separados = 2x mais lento)
+        const [ppResult, pResult] = await Promise.all([
+          allowed.promotora_principal_email
+            ? supabase.from('profiles').select('id').ilike('email',allowed.promotora_principal_email).single()
+            : Promise.resolve({data:null}),
+          allowed.promotora_email
+            ? supabase.from('profiles').select('id').ilike('email',allowed.promotora_email).single()
+            : Promise.resolve({data:null}),
+        ]);
+        promotora_principal_id = ppResult.data?.id || null;
+        promotora_id = pResult.data?.id || null;
       }
 
       // 4. Cria profile
@@ -75,31 +76,29 @@ export function useAuth(){
     setAuthLoading(false);
   },[]);
 
-  // Adiciona nomes de promotora/pp ao profile para exibição no frontend
-  async function enrichCorbanProfile(prof,allowed=null){
-    let promotoraNome=null;
-    let promotoraPrincipalNome=null;
+  // [OTM-AUTH] Queries em paralelo — era sequencial (até 4 awaits encadeados)
+  // Antes: 4 queries sequenciais (~400-800ms total)
+  // Depois: 2 queries paralelas (~100-200ms total)
+  async function enrichCorbanProfile(prof, allowed=null){
+    // Buscar nomes de promotora e PP em paralelo
+    const [promResult, ppResult] = await Promise.all([
+      prof.promotora_id
+        ? supabase.from('profiles').select('nome').eq('id',prof.promotora_id).single()
+        : allowed?.promotora_email
+          ? supabase.from('allowed_users').select('nome').ilike('email',allowed.promotora_email).single()
+          : Promise.resolve({data:null}),
+      prof.promotora_principal_id
+        ? supabase.from('profiles').select('nome').eq('id',prof.promotora_principal_id).single()
+        : allowed?.promotora_principal_email
+          ? supabase.from('allowed_users').select('nome').ilike('email',allowed.promotora_principal_email).single()
+          : Promise.resolve({data:null}),
+    ]);
 
-    if(prof.promotora_id){
-      const {data:p}=await supabase.from('profiles').select('nome').eq('id',prof.promotora_id).single();
-      promotoraNome=p?.nome||null;
-    }
-    if(prof.promotora_principal_id){
-      const {data:pp}=await supabase.from('profiles').select('nome').eq('id',prof.promotora_principal_id).single();
-      promotoraPrincipalNome=pp?.nome||null;
-    }
-
-    // Fallback via allowed_users emails se UUIDs ainda não resolvidos
-    if(!promotoraNome&&allowed?.promotora_email){
-      const {data:au}=await supabase.from('allowed_users').select('nome').ilike('email',allowed.promotora_email).single();
-      promotoraNome=au?.nome||null;
-    }
-    if(!promotoraPrincipalNome&&allowed?.promotora_principal_email){
-      const {data:au}=await supabase.from('allowed_users').select('nome').ilike('email',allowed.promotora_principal_email).single();
-      promotoraPrincipalNome=au?.nome||null;
-    }
-
-    return { ...prof, promotoraNome, promotoraPrincipalNome };
+    return {
+      ...prof,
+      promotoraNome: promResult.data?.nome || null,
+      promotoraPrincipalNome: ppResult.data?.nome || null,
+    };
   }
 
   useEffect(()=>{

@@ -1,21 +1,32 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
 import { Avatar } from '../components/shared';
+import { withCache, invalidateCache } from '../cache';
+
+// [OTM-CACHE] Cache de 5 minutos para a lista de usuários.
+// A lista de equipe muda raramente (add/remove usuário).
+// Ao salvar/deletar, o cache é invalidado para que o próximo load busque dados frescos.
+const CACHE_KEY = 'gestao_equipe_allowed_users';
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutos
 
 export function GestaoEquipe(){
   const [pessoas,setPessoas]=useState([]);
   const [loading,setLoading]=useState(true);
   const [showModal,setShowModal]=useState(false);
-  const [editing,setEditing]=useState(null); // null = new, object = editing
+  const [editing,setEditing]=useState(null);
   const [saving,setSaving]=useState(false);
   const [confirmDelete,setConfirmDelete]=useState(null);
   const [form,setForm]=useState({email:'',nome:'',role:'pos_venda'});
-  const [msg,setMsg]=useState(null); // {type:'success'|'error', text}
+  const [msg,setMsg]=useState(null);
 
   const load=async()=>{
     setLoading(true);
-    const {data}=await supabase.from('allowed_users').select('*').order('nome');
-    setPessoas(data||[]);
+    // [OTM] withCache evita re-fetch ao alternar entre views
+    const data = await withCache(CACHE_KEY, CACHE_TTL, async () => {
+      const {data} = await supabase.from('allowed_users').select('*').order('nome');
+      return data || [];
+    });
+    setPessoas(data);
     setLoading(false);
   };
 
@@ -38,31 +49,38 @@ export function GestaoEquipe(){
     const emailLower=form.email.trim().toLowerCase();
     setSaving(true);setMsg(null);
     if(editing){
-      // Update allowed_users
       const {error}=await supabase.from('allowed_users')
         .update({email:emailLower,nome:form.nome.trim(),role:form.role})
         .eq('email',editing.email);
-      // Also update profile if exists
       await supabase.from('profiles')
         .update({email:emailLower,nome:form.nome.trim(),role:form.role})
         .ilike('email',editing.email);
       if(error){setMsg({type:'error',text:'Erro ao salvar. Verifique os dados.'});}
-      else{setMsg({type:'success',text:`${form.nome} atualizado com sucesso!`});setShowModal(false);load();}
+      else{
+        invalidateCache(CACHE_KEY); // [OTM] invalida cache após edição
+        setMsg({type:'success',text:`${form.nome} atualizado com sucesso!`});
+        setShowModal(false);
+        load();
+      }
     } else {
-      // Check if already exists
       const {data:exists}=await supabase.from('allowed_users').select('email').ilike('email',emailLower).single();
       if(exists){setSaving(false);setMsg({type:'error',text:'Este e-mail já está cadastrado.'});return;}
       const {error}=await supabase.from('allowed_users').insert({email:emailLower,nome:form.nome.trim(),role:form.role});
       if(error){setMsg({type:'error',text:'Erro ao adicionar. Tente novamente.'});}
-      else{setMsg({type:'success',text:`${form.nome} adicionado! Crie o acesso no Supabase Auth.`});setShowModal(false);load();}
+      else{
+        invalidateCache(CACHE_KEY); // [OTM] invalida cache após inserção
+        setMsg({type:'success',text:`${form.nome} adicionado! Crie o acesso no Supabase Auth.`});
+        setShowModal(false);
+        load();
+      }
     }
     setSaving(false);
   };
 
   const remove=async(pessoa)=>{
-    // Remove from allowed_users and profiles
     await supabase.from('profiles').delete().ilike('email',pessoa.email);
     await supabase.from('allowed_users').delete().eq('email',pessoa.email);
+    invalidateCache(CACHE_KEY); // [OTM] invalida cache após remoção
     setConfirmDelete(null);
     setMsg({type:'success',text:`${pessoa.nome} removido do sistema.`});
     load();
@@ -186,7 +204,6 @@ export function GestaoEquipe(){
             </div>
           </div>
 
-          {/* Info box */}
           <div style={{padding:"12px 16px",background:"rgba(90,70,50,.05)",borderRadius:10,border:"1px solid var(--border)",fontSize:12,color:"var(--text-muted)",lineHeight:1.7}}>
             💡 <strong>Para dar acesso a uma nova pessoa:</strong> adicione aqui primeiro, depois vá em{' '}
             <strong>Supabase → Authentication → Users → Add user → Create new user</strong> e crie o usuário com o mesmo e-mail e uma senha inicial.

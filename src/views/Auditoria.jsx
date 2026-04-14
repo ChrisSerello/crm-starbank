@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '../supabase';
 import { Avatar } from '../components/shared';
 
+// [OTM] Reduzido de 50 para 50 (mantido) — mas o fetch foi de 1000 → 100 registros
 const PER_PAGE = 50;
 
 export function Auditoria(){
@@ -15,7 +16,14 @@ export function Auditoria(){
   const [page,setPage]=useState(1);
 
   useEffect(()=>{
-    supabase.from('audit_log').select('*').order('created_at',{ascending:false}).limit(1000)
+    // [OTM-AUDIT] Reduzido de limit(1000) + select('*') para limit(100) + colunas específicas.
+    // A auditoria raramente precisa de mais de 100 registros na tela.
+    // O realtime continua adicionando novos registros em tempo real.
+    supabase
+      .from('audit_log')
+      .select('id, created_at, user_nome, action, lead_id, lead_nome, detalhes')
+      .order('created_at',{ascending:false})
+      .limit(100)
       .then(({data})=>{ setLogs(data||[]); setLoading(false); });
 
     const ch=supabase.channel('audit_realtime')
@@ -83,7 +91,7 @@ export function Auditoria(){
       <div className="fu" style={{marginBottom:20}}>
         <div className="section-title">Auditoria</div>
         <div className="section-sub">
-          {filtered.length} de {logs.length} registros
+          {filtered.length} de {logs.length} registros (últimos 100)
           {totalPages>1?` · Página ${page} de ${totalPages}`:''}
         </div>
       </div>

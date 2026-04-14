@@ -1,4 +1,6 @@
-import { LEADS0 } from './leads_data';
+// [OTM-STORE] LEADS0 removido do INIT — Supabase é a única fonte de verdade.
+// Carregar 104 leads estáticos no estado inicial causava comparações desnecessárias
+// no leadsMapRef e disparava upserts extras a cada carregamento de página.
 import { stg, TODAY } from './utils';
 
 export const INIT_RULES = [
@@ -7,9 +9,9 @@ export const INIT_RULES = [
   {id:"r3",name:"Indicação s/ nome → Mesa (Round-robin)",condition:"indicacao_sem_nome",action:"round_robin:mesa",showIndicator:false,active:true},
 ];
 
-// Supabase é a fonte de verdade — não usar localStorage
 export const INIT = {
-  leads: LEADS0, view:"dashboard", sel:null, newOpen:false, dragId:null,
+  leads: [], // [OTM] era LEADS0 (104 itens) — agora array vazio, dados vêm só do Supabase
+  view:"dashboard", sel:null, newOpen:false, dragId:null,
   filters:{search:"",product:"",operator:"",stage:"",orgao:""},
   rules: INIT_RULES,
 };
