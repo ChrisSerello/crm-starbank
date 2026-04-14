@@ -46,6 +46,8 @@ function R(s,{type:t,...a}){
     case'MOVE':  return{...s,clientes:s.clientes.map(c=>c.id!==a.cid?c:{...c,estagio:a.st,ultimoContato:TODAY,activities:[...(c.activities||[]),{id:gid(),type:'stage_change',date:TODAY,user:a.user,text:`Movido para "${BKO_STAGES.find(s=>s.id===a.st)?.label}"`}]})};
     case'UPD':   return{...s,clientes:s.clientes.map(c=>c.id!==a.c.id?c:{...c,...a.c})};
     case'ADD':   return{...s,newOpen:false,clientes:[{...a.c,activities:[{id:gid(),type:'stage_change',date:TODAY,user:a.user,text:'Cliente cadastrado'}]},...s.clientes]};
+    // BUG-1 FIX: useReducer não aceita função como dispatch(fn) — criado caso específico para INSERT realtime que evita duplicatas
+    case'RT_ADD': return s.clientes.find(c=>c.id===a.c.id)?s:{...s,clientes:[a.c,...s.clientes]};
     default:     return s;
   }
 }
@@ -349,9 +351,22 @@ function BKODetail({cliente,profile,session,dispatch,onClose}){
   const euSouResponsavel=isBko&&cliente.responsavel_bko_id===profile?.id;
   const temResponsavel=!!cliente.responsavel_bko_id;
 
+  // BUG-5 FIX: Carregar corbans via RPC SECURITY DEFINER com feedback de erro se RPC não existir
   useEffect(()=>{
     if(!isComercial) return;
-    supabase.rpc('get_bko_corbans').then(({data,error})=>{if(error)console.error(error);setCorbans(data||[]);});
+    supabase.rpc('get_bko_corbans').then(({data,error})=>{
+      if(error){
+        console.error('get_bko_corbans RPC error — verifique se a função existe no banco:', error.message);
+        // Fallback: tentar direto na tabela profiles
+        supabase.from('profiles').select('id,nome,email').eq('modulo','bko').eq('role','corban_bko').order('nome')
+          .then(({data:d2,error:e2})=>{
+            if(e2) console.error('Fallback corbans load error:', e2.message);
+            setCorbans(d2||[]);
+          });
+        return;
+      }
+      setCorbans(data||[]);
+    });
   },[isComercial]);
 
   useEffect(()=>{
@@ -538,11 +553,12 @@ function BKODetail({cliente,profile,session,dispatch,onClose}){
             <div style={{padding:'10px 12px',background:B_LIGHT,borderRadius:9,border:`1px solid ${B_MID}25`,marginBottom:14,fontSize:11,color:B_MID,fontWeight:600}}>💼 Campos BKO — visível para todos, editável apenas pelo responsável</div>
             <div style={{marginBottom:12}}>
               <label style={{display:'block',fontSize:10,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:6}}>Saldo Devedor</label>
-              <input className="inp" value={saldo} onChange={e=>setSaldo(e.target.value)} placeholder="R$ 0,00" readOnly={(!euSouResponsavel&&temResponsavel)||!isBko} style={{background:((!euSouResponsavel&&temResponsavel)||!isBko)?'var(--bg-surface)':'',cursor:((!euSouResponsavel&&temResponsavel)||!isBko)?'not-allowed':''}}/>
+              {/* BUG-4 FIX: Editável somente pelo responsável ativo; se não há responsável, bloqueado até assumir */}
+              <input className="inp" value={saldo} onChange={e=>setSaldo(e.target.value)} placeholder="R$ 0,00" readOnly={!euSouResponsavel||!isBko} style={{background:(!euSouResponsavel||!isBko)?'var(--bg-surface)':'',cursor:(!euSouResponsavel||!isBko)?'not-allowed':''}}/>
             </div>
             <div style={{marginBottom:14}}>
               <label style={{display:'block',fontSize:10,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:6}}>Observações BKO</label>
-              <textarea className="inp" value={obsBko} onChange={e=>setObsBko(e.target.value)} placeholder="Observações do backoffice…" style={{resize:'vertical',minHeight:100,fontFamily:'var(--font)',lineHeight:1.5,background:((!euSouResponsavel&&temResponsavel)||!isBko)?'var(--bg-surface)':'',cursor:((!euSouResponsavel&&temResponsavel)||!isBko)?'not-allowed':''}} readOnly={(!euSouResponsavel&&temResponsavel)||!isBko}/>
+              <textarea className="inp" value={obsBko} onChange={e=>setObsBko(e.target.value)} placeholder="Observações do backoffice…" style={{resize:'vertical',minHeight:100,fontFamily:'var(--font)',lineHeight:1.5,background:(!euSouResponsavel||!isBko)?'var(--bg-surface)':'',cursor:(!euSouResponsavel||!isBko)?'not-allowed':''}} readOnly={!euSouResponsavel||!isBko}/>
             </div>
             {(euSouResponsavel||(!temResponsavel&&isBko))&&(
               <button className="btn" style={{width:'100%',justifyContent:'center',background:'#7C3AED',color:'#fff',boxShadow:'0 3px 12px rgba(124,58,237,.3)'}} onClick={save}>Salvar campos BKO</button>
@@ -897,6 +913,10 @@ export function BKOApp({profile,session,signOut,onAlterarSenha}){
   const {clientes,view,sel,newOpen}=s;
   const [ready,setReady]=useState(false);
   const clientesRef=useRef(clientes);
+  const syncTimerRef=useRef(null);      // fix-1: debounce do sync
+  const syncQueueRef=useRef(new Map()); // fix-1: fila de itens pendentes (Map → O(1))
+  const auditTimerRef=useRef(null);     // fix-3: debounce do batch de audit
+  const auditQueueRef=useRef([]);       // fix-3: fila de eventos de audit
   const [showAS,setShowAS]=useState(false);
   const [filtroEstagio,setFiltroEstagio]=useState(null);
   const setView=useCallback(v=>dispatch({type:'VIEW',v}),[]);
@@ -904,14 +924,16 @@ export function BKOApp({profile,session,signOut,onAlterarSenha}){
 
   useEffect(()=>{
     if(!session) return;
-    supabase.from('bko_clientes').select('*').order('created_at',{ascending:false})
+    // BUG-7 FIX: Adicionar limit para evitar carregar tabela inteira
+    supabase.from('bko_clientes').select('*').order('created_at',{ascending:false}).limit(500)
       .then(({data,error})=>{
         if(error){console.error('BKO load error:',error);setReady(true);return;}
         const loaded=(data||[]).map(r=>({...r.data,id:r.id,estagio:r.estagio,criado_por_id:r.criado_por_id,criado_por_nome:r.criado_por_nome,criado_por_role:r.criado_por_role,atribuido_a_id:r.atribuido_a_id||null,atribuido_a_nome:r.atribuido_a_nome||null,responsavel_bko_id:r.responsavel_bko_id||null,responsavel_bko_nome:r.responsavel_bko_nome||null}));
         dispatch({type:'SET_C',clientes:loaded});clientesRef.current=loaded;setReady(true);
       });
     const ch=supabase.channel('bko_clientes_rt')
-      .on('postgres_changes',{event:'INSERT',schema:'public',table:'bko_clientes'},payload=>{const r=payload.new;const novo={...r.data,id:r.id,estagio:r.estagio,criado_por_id:r.criado_por_id,criado_por_nome:r.criado_por_nome,criado_por_role:r.criado_por_role,atribuido_a_id:r.atribuido_a_id||null,atribuido_a_nome:r.atribuido_a_nome||null,responsavel_bko_id:r.responsavel_bko_id||null,responsavel_bko_nome:r.responsavel_bko_nome||null};dispatch(prev=>prev.clientes?.find(c=>c.id===novo.id)?prev:{...prev,clientes:[novo,...(prev.clientes||[])]});})
+      // BUG-1 FIX: Usar dispatch({type:'RT_ADD'}) em vez de dispatch(fn) — useReducer não aceita função
+      .on('postgres_changes',{event:'INSERT',schema:'public',table:'bko_clientes'},payload=>{const r=payload.new;const novo={...r.data,id:r.id,estagio:r.estagio,criado_por_id:r.criado_por_id,criado_por_nome:r.criado_por_nome,criado_por_role:r.criado_por_role,atribuido_a_id:r.atribuido_a_id||null,atribuido_a_nome:r.atribuido_a_nome||null,responsavel_bko_id:r.responsavel_bko_id||null,responsavel_bko_nome:r.responsavel_bko_nome||null};dispatch({type:'RT_ADD',c:novo});})
       .on('postgres_changes',{event:'UPDATE',schema:'public',table:'bko_clientes'},payload=>{const r=payload.new;dispatch({type:'UPD',c:{...r.data,id:r.id,estagio:r.estagio,criado_por_id:r.criado_por_id,criado_por_nome:r.criado_por_nome,criado_por_role:r.criado_por_role,atribuido_a_id:r.atribuido_a_id||null,atribuido_a_nome:r.atribuido_a_nome||null,responsavel_bko_id:r.responsavel_bko_id||null,responsavel_bko_nome:r.responsavel_bko_nome||null}});})
       .subscribe();
     return ()=>supabase.removeChannel(ch);
@@ -919,14 +941,25 @@ export function BKOApp({profile,session,signOut,onAlterarSenha}){
 
   useEffect(()=>{
     if(!ready||!session) return;
+    // fix-2: atualizar ref ANTES de qualquer async — quebra o round-trip realtime→upsert→realtime
     const prev=clientesRef.current;
-    const changed=clientes.filter(c=>{const old=prev.find(p=>p.id===c.id);return old&&JSON.stringify(old)!==JSON.stringify(c);});
-    if(changed.length>0){
-      Promise.all(changed.map(async c=>{
+    clientesRef.current=clientes;
+    // fix-1: Map O(1) em vez de .find O(n) por item
+    const prevMap=new Map(prev.map(c=>[c.id,c]));
+    const changed=clientes.filter(c=>{const old=prevMap.get(c.id);return old&&JSON.stringify(old)!==JSON.stringify(c);});
+    if(changed.length===0) return;
+    // fix-1: acumular no queue e enviar em lote após 600ms de inatividade
+    changed.forEach(c=>syncQueueRef.current.set(c.id,c));
+    clearTimeout(syncTimerRef.current);
+    syncTimerRef.current=setTimeout(async()=>{
+      const toSync=[...syncQueueRef.current.values()];
+      syncQueueRef.current.clear();
+      await Promise.all(toSync.map(async c=>{
         const {id,estagio,criado_por_id,criado_por_nome,criado_por_role,atribuido_a_id,atribuido_a_nome,responsavel_bko_id,responsavel_bko_nome,...data}=c;
-        await supabase.from('bko_clientes').upsert({id,data:{...data,id},estagio:estagio||'clientes_novos',criado_por_id:criado_por_id||session.user.id,criado_por_nome:criado_por_nome||profile?.nome,criado_por_role:criado_por_role||profile?.role,atribuido_a_id:atribuido_a_id||null,atribuido_a_nome:atribuido_a_nome||null,responsavel_bko_id:responsavel_bko_id||null,responsavel_bko_nome:responsavel_bko_nome||null},{onConflict:'id'});
-      })).then(()=>{clientesRef.current=clientes;});
-    } else {clientesRef.current=clientes;}
+        const {error}=await supabase.from('bko_clientes').upsert({id,data:{...data,id},estagio:estagio||'clientes_novos',criado_por_id:criado_por_id||session.user.id,criado_por_nome:criado_por_nome||profile?.nome,criado_por_role:criado_por_role||profile?.role,atribuido_a_id:atribuido_a_id||null,atribuido_a_nome:atribuido_a_nome||null,responsavel_bko_id:responsavel_bko_id||null,responsavel_bko_nome:responsavel_bko_nome||null},{onConflict:'id'});
+        if(error) console.error('BKO sync error (verifique RLS em bko_clientes):',id,error.message);
+      }));
+    },600);
   },[clientes,ready,session]);
 
   const auditedDispatch=useCallback(async(action)=>{
@@ -946,7 +979,15 @@ export function BKOApp({profile,session,signOut,onAlterarSenha}){
     if(fn){
       const {action:act,details,clienteId}=fn();
       const clienteNome=action.type==='ADD'?action.c?.nomeCliente:clientes.find(c=>c.id===clienteId)?.nomeCliente||'—';
-      supabase.from('bko_audit_log').insert({user_id:session.user.id,user_nome:profile.nome,user_role:profile.role,action:act,cliente_id:clienteId||null,cliente_nome:clienteNome,detalhes:details});
+      // fix-3: batch de audit — acumula eventos por 3s e faz 1 insert com array
+      auditQueueRef.current.push({user_id:session.user.id,user_nome:profile.nome,user_role:profile.role,action:act,cliente_id:clienteId||null,cliente_nome:clienteNome,detalhes:details});
+      clearTimeout(auditTimerRef.current);
+      auditTimerRef.current=setTimeout(async()=>{
+        const batch=auditQueueRef.current.splice(0);
+        if(batch.length===0) return;
+        const {error}=await supabase.from('bko_audit_log').insert(batch);
+        if(error) console.error('BKO audit batch error:',error.message);
+      },3000);
     }
   },[profile,clientes,session]);
 

@@ -60,6 +60,8 @@ function R(s,{type:t,...a}){
     case'NOTE':   return{...s,clientes:s.clientes.map(c=>c.id!==a.cid?c:{...c,ultimoContato:TODAY,activities:[...(c.activities||[]),a.act]})};
     case'UPD':    return{...s,clientes:s.clientes.map(c=>c.id!==a.c.id?c:{...c,...a.c})};
     case'ADD':    return{...s,newOpen:false,clientes:[{...a.c,activities:[{id:gid(),type:'stage_change',date:TODAY,user:a.user,text:'Cliente cadastrado'}]},...s.clientes]};
+    // BUG-2 FIX: useReducer não aceita dispatch(fn) — caso RT_ADD trata INSERT realtime sem duplicatas
+    case'RT_ADD': return s.clientes.find(c=>c.id===a.c.id)?s:{...s,clientes:[a.c,...s.clientes]};
     default:      return s;
   }
 }
@@ -2388,6 +2390,10 @@ export function CorbanApp({profile,session,signOut,onAlterarSenha}){
   const [estrutura,setEstrutura]=useState([]);
   const [ready,setReady]=useState(false);
   const clientesRef=useRef(clientes);
+  const syncTimerRef=useRef(null);      // fix-1: debounce do sync
+  const syncQueueRef=useRef(new Map()); // fix-1: fila de itens pendentes (Map → O(1))
+  const auditTimerRef=useRef(null);     // fix-3: debounce do batch de audit
+  const auditQueueRef=useRef([]);       // fix-3: fila de eventos de audit
   const [showAS,setShowAS]=useState(false);
   const [showSino,setShowSino]=useState(false);
   const [notifs,setNotifs]=useState([]);
@@ -2496,11 +2502,8 @@ export function CorbanApp({profile,session,signOut,onAlterarSenha}){
             promotora_principal_id:r.promotora_principal_id,
             digitalizadorNome:r.digitalizador_nome,promotoraNome:r.promotora_nome,
             promotoraPrincipalNome:r.promotora_principal_nome};
-          dispatch(prev=>{
-            // Evitar duplicata
-            if(prev.clientes?.find(c=>c.id===novo.id)) return prev;
-            return{...prev,clientes:[novo,...(prev.clientes||[])]};
-          });
+          // BUG-2/6 FIX: dispatch(fn) não funciona com useReducer — usar RT_ADD que evita duplicatas internamente
+          dispatch({type:'RT_ADD',c:novo});
         })
       .on('postgres_changes',{event:'UPDATE',schema:'public',table:'corban_clientes'},
         payload=>{
@@ -2549,15 +2552,24 @@ export function CorbanApp({profile,session,signOut,onAlterarSenha}){
   // ── Sync local → Supabase (apenas mudanças, não ADD — ADD é imediato) ──
   useEffect(()=>{
     if(!ready||!session) return;
+    // fix-2: atualizar ref ANTES de qualquer async — quebra o round-trip realtime→upsert→realtime
     const prev=clientesRef.current;
+    clientesRef.current=clientes;
+    // fix-1: Map O(1) em vez de .find O(n) por item
+    const prevMap=new Map(prev.map(c=>[c.id,c]));
     const changed=clientes.filter(c=>{
-      const old=prev.find(p=>p.id===c.id);
-      // Só sincroniza UPD e MOVE — ADD já é salvo imediatamente no auditedDispatch
+      const old=prevMap.get(c.id);
       return old&&JSON.stringify(old)!==JSON.stringify(c);
     });
-    if(changed.length>0){
-      const h=hierarchyRef.current;
-      Promise.all(changed.map(async c=>{
+    if(changed.length===0) return;
+    const h=hierarchyRef.current;
+    // fix-1: acumular no queue e enviar em lote após 600ms de inatividade
+    changed.forEach(c=>syncQueueRef.current.set(c.id,c));
+    clearTimeout(syncTimerRef.current);
+    syncTimerRef.current=setTimeout(async()=>{
+      const toSync=[...syncQueueRef.current.values()];
+      syncQueueRef.current.clear();
+      await Promise.all(toSync.map(async c=>{
         const {id,digitalizador_id,promotora_id,promotora_principal_id,
           digitalizadorNome,promotoraNome,promotoraPrincipalNome,...data}=c;
         const {error}=await supabase.from('corban_clientes').upsert({
@@ -2570,11 +2582,9 @@ export function CorbanApp({profile,session,signOut,onAlterarSenha}){
           promotora_principal_id:   promotora_principal_id||h.promotora_principal_id||null,
           promotora_principal_nome: promotoraPrincipalNome||h.promotora_principal_nome||null,
         },{onConflict:'id'});
-        if(error) console.error('Sync error:',id,error);
-      })).then(()=>{ clientesRef.current=clientes; });
-    } else {
-      clientesRef.current=clientes;
-    }
+        if(error) console.error('Corban sync error:',id,error.message);
+      }));
+    },600);
   },[clientes,ready,session]);
 
   // ── Audited dispatch — salva ADD imediatamente no Supabase ──
@@ -2620,10 +2630,18 @@ export function CorbanApp({profile,session,signOut,onAlterarSenha}){
       const clienteNome=action.type==='ADD'
         ?action.c?.nomeCliente
         :clientes.find(c=>c.id===clienteId)?.nomeCliente||'—';
-      supabase.from('corban_audit_log').insert({
+      // fix-3: batch de audit — acumula eventos por 3s e faz 1 insert com array
+      auditQueueRef.current.push({
         user_id:session.user.id,user_nome:profile.nome,user_role:profile.role,
         action:act,cliente_id:clienteId||null,cliente_nome:clienteNome,detalhes:details,
       });
+      clearTimeout(auditTimerRef.current);
+      auditTimerRef.current=setTimeout(async()=>{
+        const batch=auditQueueRef.current.splice(0);
+        if(batch.length===0) return;
+        const {error}=await supabase.from('corban_audit_log').insert(batch);
+        if(error) console.error('Corban audit batch error:',error.message);
+      },3000);
     }
   },[profile,clientes,session]);
 
