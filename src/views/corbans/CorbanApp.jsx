@@ -1063,9 +1063,18 @@ function CorbanDetail({cliente,profile,session,dispatch,onClose}){
     if(!file) return;
     if(file.size>10*1024*1024){setUploadMsg({t:'error',text:'Arquivo muito grande. Máximo 10MB.'});return;}
     setUploading(true);setUploadMsg(null);
-    const path=`corbans/${cliente.id}/${Date.now()}_${file.name}`;
+    // sanitizar nome: remove espaços/acentos/caracteres especiais que quebram o Storage path
+    const safeName=file.name.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9._-]/g,'_');
+    const path=`corbans/${cliente.id}/${Date.now()}_${safeName}`;
     const {error}=await supabase.storage.from('documentos').upload(path,file);
-    if(error){setUploadMsg({t:'error',text:'Erro ao enviar. Tente novamente.'});setUploading(false);return;}
+    if(error){
+      console.error('Upload error completo:',error);
+      const msg=error.message?.includes('Bucket')?'Bucket "documentos" não encontrado no Supabase Storage.'
+               :error.message?.includes('security')||error.message?.includes('policy')?'Sem permissão para upload. Verifique as políticas do Storage.'
+               :`Erro ao enviar: ${error.message}`;
+      setUploadMsg({t:'error',text:msg});
+      setUploading(false);return;
+    }
     const {data:{publicUrl}}=supabase.storage.from('documentos').getPublicUrl(path);
     const novoDoc={nome:file.name,path,url:publicUrl,data:TODAY,enviadoPor:profile?.nome||'Usuário'};
     const novos=[...docs,novoDoc];
