@@ -3,9 +3,10 @@ import { supabase } from "./supabase";
 import { GlobalStyles } from "./styles";
 import { useAuth } from "./hooks/useAuth";
 import { INIT, R } from "./store";
-import { LEADS0 } from "./leads_data";
 import { stg, TODAY } from "./utils";
 import { OPERATORS } from "./constants";
+
+// [OTM-3] Import de LEADS0 removido — seed desativado para reduzir Disk IO
 
 import { Sidebar } from "./components/Sidebar";
 import { Detail } from "./components/Detail";
@@ -34,23 +35,19 @@ export default function App(){
   const [showAlterarSenha,setShowAlterarSenha]=useState(false);
   const [leadsReady,setLeadsReady]=useState(false);
 
+  // [OTM-4] Refs para fila e timer do batch de audit_log
+  const auditQueueRef = useRef([]);
+  const auditTimerRef = useRef(null);
+
   // ── Load leads from Supabase on login ──
   useEffect(()=>{
     if(!session) return;
-    supabase.from('leads').select('data').then(async({data,error})=>{
+    // [OTM-1] Limite de 500 registros para reduzir Disk IO no carregamento inicial
+    supabase.from('leads').select('data').limit(500).then(async({data,error})=>{
       if(error) console.error('Erro ao carregar leads:', error);
+      // [OTM-2] Bloco de seed removido — elimina upsert em chunks que esgotava o Disk IO Budget
       const remoteLeads = data?.map(r=>r.data) || [];
-      if(remoteLeads.length >= LEADS0.length){
-        dispatch({type:'SET_LEADS', leads:remoteLeads});
-      } else {
-        const toSeed = LEADS0.map(l=>({id:l.id, data:l}));
-        for(let i=0;i<toSeed.length;i+=50){
-          const chunk = toSeed.slice(i,i+50);
-          const {error:e} = await supabase.from('leads').upsert(chunk,{onConflict:'id'});
-          if(e) console.error('Seed error:', e);
-        }
-        dispatch({type:'SET_LEADS', leads:LEADS0});
-      }
+      dispatch({type:'SET_LEADS', leads:remoteLeads});
       setLeadsReady(true);
     });
   },[session]);
@@ -135,13 +132,24 @@ export default function App(){
         const leadNome=action.type==='ADD'
           ?action.lead?.nomeIndicado
           :leads.find(l=>l.id===leadId)?.nomeIndicado||'—';
-        supabase.from('audit_log').insert({
-          user_id:session.user.id,user_nome:profile.nome,
-          action:act,lead_id:leadId||null,lead_nome:leadNome,detalhes:details,
-        }).then(({error})=>{
-          if(error) console.error('❌ Audit log error:', error.message, error.details, error.hint);
-          else console.log('✅ Audit log saved:', act, leadNome);
+
+        // [OTM-4] Audit log em batch — acumula itens por 3s e envia em uma única requisição ao invés de uma por ação
+        auditQueueRef.current.push({
+          user_id:session.user.id,
+          user_nome:profile.nome,
+          action:act,
+          lead_id:leadId||null,
+          lead_nome:leadNome,
+          detalhes:details,
         });
+        clearTimeout(auditTimerRef.current);
+        auditTimerRef.current = setTimeout(async () => {
+          const batch = auditQueueRef.current.splice(0);
+          if(batch.length === 0) return;
+          const {error} = await supabase.from('audit_log').insert(batch);
+          if(error) console.error('❌ Audit batch error:', error.message, error.details, error.hint);
+          else console.log('✅ Audit batch saved:', batch.length, 'item(s)');
+        }, 3000);
       }
     }
   },[profile,leads,session]);
