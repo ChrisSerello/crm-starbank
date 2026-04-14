@@ -1437,27 +1437,12 @@ function KanbanColuna({s,filtered,clientes,isSearching,dragId,setDragId,dispatch
   );
 }
 
-function CorbanKanban({clientes,profile,dispatch,onSelect,session}){
+function CorbanKanban({clientes,profile,dispatch,onSelect,session,rtPulse}){
   const [dragId,setDragId]=useState(null);
   const [search,setSearch]=useState('');
-  const [rtPulse,setRtPulse]=useState(false);
   const r=profile?.role;
 
-  // ── Real-time: escuta mudanças em corban_clientes e pulsa o indicador ──
-  useEffect(()=>{
-    if(!session) return;
-    const ch=supabase.channel('kanban_rt_indicator')
-      .on('postgres_changes',{event:'UPDATE',schema:'public',table:'corban_clientes'},
-        ()=>{
-          // Pulsa o indicador de tempo real por 2s
-          setRtPulse(true);
-          setTimeout(()=>setRtPulse(false),2000);
-        })
-      .on('postgres_changes',{event:'INSERT',schema:'public',table:'corban_clientes'},
-        ()=>{ setRtPulse(true); setTimeout(()=>setRtPulse(false),2000); })
-      .subscribe();
-    return ()=>supabase.removeChannel(ch);
-  },[session]);
+  // canal kanban_rt_indicator removido — rtPulse vem do canal principal do CorbanApp (consolidação)
 
   const filtered=search.trim()
     ?clientes.filter(c=>
@@ -2406,6 +2391,8 @@ export function CorbanApp({profile,session,signOut,onAlterarSenha}){
   const [showAS,setShowAS]=useState(false);
   const [showSino,setShowSino]=useState(false);
   const [notifs,setNotifs]=useState([]);
+  const [rtPulse,setRtPulse]=useState(false); // consolidado: pulso do kanban vem do canal principal
+  const rtPulseTimerRef=useRef(null);
 
   // notifCount = não lidas
   const notifCount=notifs.filter(n=>!n.lida).length;
@@ -2501,8 +2488,8 @@ export function CorbanApp({profile,session,signOut,onAlterarSenha}){
     };
     load();
 
-    // ── Real-time: escuta INSERT e UPDATE em corban_clientes ──
-    const ch=supabase.channel('corban_clientes_rt')
+    // canal consolidado: clientes (INSERT+UPDATE) + notificacoes (INSERT) em 1 única conexão WebSocket
+    const chMain=supabase.channel('corban_main_rt')
       .on('postgres_changes',{event:'INSERT',schema:'public',table:'corban_clientes'},
         payload=>{
           const r=payload.new;
@@ -2511,8 +2498,11 @@ export function CorbanApp({profile,session,signOut,onAlterarSenha}){
             promotora_principal_id:r.promotora_principal_id,
             digitalizadorNome:r.digitalizador_nome,promotoraNome:r.promotora_nome,
             promotoraPrincipalNome:r.promotora_principal_nome};
-          // BUG-2/6 FIX: dispatch(fn) não funciona com useReducer — usar RT_ADD que evita duplicatas internamente
           dispatch({type:'RT_ADD',c:novo});
+          // pulsar indicador do kanban
+          clearTimeout(rtPulseTimerRef.current);
+          setRtPulse(true);
+          rtPulseTimerRef.current=setTimeout(()=>setRtPulse(false),2000);
         })
       .on('postgres_changes',{event:'UPDATE',schema:'public',table:'corban_clientes'},
         payload=>{
@@ -2523,10 +2513,17 @@ export function CorbanApp({profile,session,signOut,onAlterarSenha}){
             digitalizadorNome:r.digitalizador_nome,promotoraNome:r.promotora_nome,
             promotoraPrincipalNome:r.promotora_principal_nome};
           dispatch({type:'UPD',c:atualizado});
+          // pulsar indicador do kanban
+          clearTimeout(rtPulseTimerRef.current);
+          setRtPulse(true);
+          rtPulseTimerRef.current=setTimeout(()=>setRtPulse(false),2000);
         })
+      .on('postgres_changes',{event:'INSERT',schema:'public',table:'corban_notificacoes',
+        filter:`para_user_id=eq.${session.user.id}`},
+        payload=>setNotifs(prev=>[payload.new,...prev]))
       .subscribe();
 
-    return ()=>supabase.removeChannel(ch);
+    return ()=>supabase.removeChannel(chMain);
   },[session]);
 
   // ── Carregar estrutura ──
@@ -2536,21 +2533,13 @@ export function CorbanApp({profile,session,signOut,onAlterarSenha}){
       .then(({data})=>setEstrutura(data||[]));
   },[session,profile?.role]);
 
-  // ── Carregar e escutar notificações ──
+  // ── Carregar notificações (canal realtime consolidado no corban_main_rt acima) ──
   useEffect(()=>{
     if(!session) return;
-    // Carregar notificações para este usuário
     supabase.from('corban_notificacoes')
       .select('*').eq('para_user_id',session.user.id)
       .order('created_at',{ascending:false}).limit(50)
       .then(({data})=>setNotifs(data||[]));
-    // Real-time
-    const ch=supabase.channel('corban_notif_rt')
-      .on('postgres_changes',{event:'INSERT',schema:'public',table:'corban_notificacoes',
-        filter:`para_user_id=eq.${session.user.id}`},
-        payload=>setNotifs(prev=>[payload.new,...prev]))
-      .subscribe();
-    return ()=>supabase.removeChannel(ch);
   },[session]);
 
   const marcarLida=async(id)=>{
@@ -2668,7 +2657,7 @@ export function CorbanApp({profile,session,signOut,onAlterarSenha}){
         />
         <main style={{flex:1,minWidth:0,overflowY:'auto',paddingRight:selected?490:0,transition:'padding-right .3s cubic-bezier(.4,0,.2,1)'}}>
           {view==='dashboard' && <CorbanDashboard clientes={clientes} estrutura={estrutura} profile={profile}/>}
-          {view==='pipeline'  && <CorbanKanban clientes={clientes} profile={profile} dispatch={auditedDispatch} onSelect={id=>dispatch({type:'SEL',id})} session={session}/>}
+          {view==='pipeline'  && <CorbanKanban clientes={clientes} profile={profile} dispatch={auditedDispatch} onSelect={id=>dispatch({type:'SEL',id})} session={session} rtPulse={rtPulse}/>}
           {view==='clientes'  && <CorbanClientes clientes={clientes} profile={profile} estrutura={estrutura} onSelect={id=>dispatch({type:'SEL',id})} onNew={()=>dispatch({type:'TNEW'})}/>}
           {view==='arvore'    && <CorbanArvore estrutura={estrutura} clientes={clientes} profile={profile}/>}
           {view==='estrutura' && <CorbanEstrutura profile={profile} session={session}/>}
