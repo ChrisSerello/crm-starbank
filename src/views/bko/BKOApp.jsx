@@ -392,7 +392,7 @@ function BKOCadastrar({profile,session}){
   const [loading,setLoading]=useState(true);
   const [showModal,setShowModal]=useState(false);
   const [editUser,setEditUser]=useState(null);
-  const [editForm,setEditForm]=useState({nome:''});
+  const [editForm,setEditForm]=useState({nome:'', novaSenha:'', confirmarSenha:'',});
   const [editSaving,setEditSaving]=useState(false);
   const [editMsg,setEditMsg]=useState(null);
   const [form,setForm]=useState({nome:'',email:'',senha:'',role:'corban_bko'});
@@ -404,18 +404,111 @@ function BKOCadastrar({profile,session}){
   const load=useCallback(async()=>{setLoading(true);const {data}=await supabase.from('allowed_users').select('*').eq('modulo','bko').order('nome');setUsuarios(data||[]);setLoading(false);},[]);
   useEffect(()=>{load();},[load]);
 
-  const openEdit=(u)=>{setEditUser(u);setEditForm({nome:u.nome});setEditMsg(null);};
+  const openEdit=(u)=>{
+    setEditUser(u);
+    setEditForm({
+      nome:u.nome || '',
+      novaSenha:'',
+      confirmarSenha:'',
+    });
+    setEditMsg(null);
+  };
 
-  const saveEdit=async()=>{
-    if(!editForm.nome.trim()){setEditMsg({t:'error',text:'Nome é obrigatório.'});return;}
-    setEditSaving(true);setEditMsg(null);
-    const {error:e1}=await supabase.from('allowed_users').update({nome:editForm.nome.trim()}).eq('email',editUser.email);
-    const {error:e2}=await supabase.from('profiles').update({nome:editForm.nome.trim()}).eq('email',editUser.email);
+  const saveEdit = async () => {
+    if (!editForm.nome.trim()) {
+      setEditMsg({ t:'error', text:'Nome é obrigatório.' });
+      return;
+    }
+
+    if (profile?.role !== 'comercial') {
+      setEditMsg({ t:'error', text:'Apenas o comercial pode editar usuários.' });
+      return;
+    }
+
+    const vaiAlterarSenha = !!editForm.novaSenha || !!editForm.confirmarSenha;
+
+    if (vaiAlterarSenha) {
+      if (editUser?.role !== 'corban_bko') {
+        setEditMsg({ t:'error', text:'A redefinição de senha é permitida apenas para usuários Corban.' });
+        return;
+      }
+
+      if (editForm.novaSenha.length < 8) {
+        setEditMsg({ t:'error', text:'A nova senha deve ter no mínimo 8 caracteres.' });
+        return;
+      }
+
+      if (editForm.novaSenha !== editForm.confirmarSenha) {
+        setEditMsg({ t:'error', text:'A confirmação da senha não confere.' });
+        return;
+      }
+    }
+
+    setEditSaving(true);
+    setEditMsg(null);
+
+    const { error:e1 } = await supabase
+      .from('allowed_users')
+      .update({ nome: editForm.nome.trim() })
+      .eq('email', editUser.email);
+
+    const { error:e2 } = await supabase
+      .from('profiles')
+      .update({ nome: editForm.nome.trim() })
+      .eq('email', editUser.email);
+
+    let passwordError = null;
+
+    if (vaiAlterarSenha) {
+      try {
+        const { data:{ session:s } } = await supabase.auth.getSession();
+
+        const res = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/reset-bko-user-password`,
+          {
+            method:'POST',
+            headers:{
+              'Content-Type':'application/json',
+              'Authorization':`Bearer ${s?.access_token}`,
+            },
+            body: JSON.stringify({
+              email: editUser.email,
+              newPassword: editForm.novaSenha,
+            }),
+          }
+        );
+
+        const result = await res.json().catch(()=> ({}));
+        console.log('reset-bko-user-password status:', res.status);
+        console.log('reset-bko-user-password result:', result);
+
+        if (!res.ok || result.error) {
+          passwordError = result.error || 'Erro ao redefinir senha (status ${res.status}).';
+        }
+      } catch (e) {
+        passwordError = 'Erro de conexão ao redefinir senha.';
+      }
+    }
+
     setEditSaving(false);
-    if(e1||e2){setEditMsg({t:'error',text:'Erro ao salvar. Tente novamente.'});return;}
-    setEditMsg({t:'success',text:'Nome atualizado com sucesso!'});
+
+    if (e1 || e2 || passwordError) {
+      setEditMsg({
+        t:'error',
+        text: passwordError || 'Erro ao salvar. Tente novamente.',
+      });
+      return;
+    }
+
+    setEditMsg({
+      t:'success',
+      text: vaiAlterarSenha
+        ? 'Nome e senha atualizados com sucesso!'
+        : 'Nome atualizado com sucesso!',
+    });
+
     load();
-    setTimeout(()=>setEditUser(null),900);
+    setTimeout(() => setEditUser(null), 1200);
   };
 
   const save=async()=>{
@@ -480,14 +573,65 @@ function BKOCadastrar({profile,session}){
             </div>
             {editMsg&&<div style={{padding:'8px 12px',borderRadius:7,marginBottom:12,background:editMsg.t==='success'?'var(--success-dim)':'var(--danger-dim)',border:`1px solid ${editMsg.t==='success'?'rgba(61,155,107,.2)':'rgba(192,65,58,.2)'}`,fontSize:11,color:editMsg.t==='success'?'var(--success)':'var(--danger)'}}>{editMsg.text}</div>}
             <div style={{marginBottom:12}}>
-              <label style={{display:'block',fontSize:10,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:5}}>Nome completo</label>
-              <input className="inp" value={editForm.nome} onChange={e=>setEditForm(f=>({...f,nome:e.target.value}))} placeholder="Nome completo" autoFocus/>
+              <label style={{display:'block',fontSize:10,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:5}}>
+                Nome completo
+              </label>
+              <input
+                className="inp"
+                value={editForm.nome}
+                onChange={e=>setEditForm(f=>({...f,nome:e.target.value}))}
+                placeholder="Nome completo"
+                autoFocus
+              />
             </div>
-            <div style={{marginBottom:20}}>
-              <label style={{display:'block',fontSize:10,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:5}}>E-mail</label>
-              <input className="inp" value={editUser.email} readOnly style={{background:'var(--bg-surface)',cursor:'not-allowed',color:'var(--text-muted)'}}/>
-              <div style={{fontSize:10,color:'var(--text-faint)',marginTop:4}}>E-mail não pode ser alterado.</div>
+
+            <div style={{marginBottom:12}}>
+              <label style={{display:'block',fontSize:10,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:5}}>
+                E-mail
+              </label>
+              <input
+                className="inp"
+                value={editUser.email}
+                readOnly
+                style={{background:'var(--bg-surface)',cursor:'not-allowed',color:'var(--text-muted)'}}
+              />
+              <div style={{fontSize:10,color:'var(--text-faint)',marginTop:4}}>
+                E-mail não pode ser alterado.
+              </div>
             </div>
+
+            {editUser.role === 'corban_bko' && (
+              <>
+                <div style={{marginBottom:12}}>
+                  <label style={{display:'block',fontSize:10,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:5}}>
+                    Nova senha do Corban
+                  </label>
+                  <input
+                    className="inp"
+                    type="password"
+                    value={editForm.novaSenha}
+                    onChange={e=>setEditForm(f=>({...f,novaSenha:e.target.value}))}
+                    placeholder="Mínimo 8 caracteres"
+                  />
+                </div>
+
+                <div style={{marginBottom:20}}>
+                  <label style={{display:'block',fontSize:10,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:5}}>
+                    Confirmar nova senha
+                  </label>
+                  <input
+                    className="inp"
+                    type="password"
+                    value={editForm.confirmarSenha}
+                    onChange={e=>setEditForm(f=>({...f,confirmarSenha:e.target.value}))}
+                    placeholder="Repita a nova senha"
+                  />
+                  <div style={{fontSize:10,color:'var(--text-faint)',marginTop:4}}>
+                    Preencha os campos acima apenas se quiser redefinir a senha deste Corban.
+                  </div>
+                </div>
+              </>
+            )}
             <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
               <button className="btn btn-ghost" onClick={()=>setEditUser(null)}>Cancelar</button>
               <button className="btn" style={{background:B_MID,color:'#fff',boxShadow:`0 3px 12px ${B_GLOW}`}} onClick={saveEdit} disabled={editSaving}>{editSaving?'Salvando…':'Salvar alterações'}</button>
