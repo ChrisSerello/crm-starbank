@@ -1,8 +1,7 @@
 import { useState, useEffect, useReducer, useMemo, useCallback, useRef } from 'react';
 import { supabase } from '../../supabase';
-import { gid, TODAY, fmtD, sinceD } from '../../utils';
-import { DOC_STATUS } from '../../constants';
-import { Avatar, StageTag } from '../../components/shared';
+import { gid, TODAY, fmtD } from '../../utils';
+import { Avatar } from '../../components/shared';
 import { AlterarSenha } from '../../components/AlterarSenha';
 import { BKODetail } from './BKODetail';
 import ReactDOM from 'react-dom';
@@ -17,16 +16,16 @@ const ROLE_LABELS = { comercial:'Comercial', corban_bko:'Corban', bko:'BKO' };
 const ROLE_COLORS = { comercial:'#3B5BDB', corban_bko:'#0EA5E9', bko:'#7C3AED' };
 
 const BKO_STAGES = [
-  { id:'clientes_novos',   label:'Clientes Novos',              color:'#3B5BDB', bg:'rgba(59,91,219,.1)'  },
-  { id:'saldo_andamento',  label:'Saldo em Andamento - BKO',    color:'#7C3AED', bg:'rgba(124,58,237,.1)' },
-  { id:'em_negociacao',    label:'Em Negociação - Corban',      color:'#0EA5E9', bg:'rgba(14,165,233,.1)' },
-  { id:'abertura_conta',   label:'Abertura de Conta - Corban',  color:'#10B981', bg:'rgba(16,185,129,.1)' },
-  { id:'digitar_proposta', label:'Digitar Proposta - Corban',   color:'#F59E0B', bg:'rgba(245,158,11,.1)' },
-  { id:'integrado',        label:'Integrado',                   color:'#22C55E', bg:'rgba(34,197,94,.1)'  },
-  { id:'perdido',          label:'Perdido',                     color:'#EF4444', bg:'rgba(239,68,68,.1)'  },
+  { id:'clientes_novos',        label:'Clientes Novos',                color:'#3B5BDB', bg:'rgba(59,91,219,.1)'   },
+  { id:'saldo_andamento',       label:'Saldo em Andamento - BKO',      color:'#7C3AED', bg:'rgba(124,58,237,.1)'  },
+  { id:'pendencia_financeiro',  label:'Pendência Análise Financeiro',  color:'#F97316', bg:'rgba(249,115,22,.1)'  },
+  { id:'em_negociacao',         label:'Em Negociação - Corban',        color:'#0EA5E9', bg:'rgba(14,165,233,.1)'  },
+  { id:'abertura_conta',        label:'Abertura de Conta - Corban',    color:'#10B981', bg:'rgba(16,185,129,.1)'  },
+  { id:'digitar_proposta',      label:'Digitar Proposta - Corban',     color:'#F59E0B', bg:'rgba(245,158,11,.1)'  },
+  { id:'integrado',             label:'Integrado',                     color:'#22C55E', bg:'rgba(34,197,94,.1)'   },
+  { id:'perdido',               label:'Perdido',                       color:'#EF4444', bg:'rgba(239,68,68,.1)'   },
 ];
 
-// ── 1. blankCliente com prefeitura ──
 const blankCliente = () => ({
   nomeCliente:'', cpfCliente:'', telefone:'', prefeitura:'',
   estagio:'clientes_novos',
@@ -48,7 +47,6 @@ function R(s,{type:t,...a}){
     case'MOVE':  return{...s,clientes:s.clientes.map(c=>c.id!==a.cid?c:{...c,estagio:a.st,ultimoContato:TODAY,activities:[...(c.activities||[]),{id:gid(),type:'stage_change',date:TODAY,user:a.user,text:`Movido para "${BKO_STAGES.find(s=>s.id===a.st)?.label}"`}]})};
     case'UPD':   return{...s,clientes:s.clientes.map(c=>c.id!==a.c.id?c:{...c,...a.c})};
     case'ADD':   return{...s,newOpen:false,clientes:[{...a.c,activities:[{id:gid(),type:'stage_change',date:TODAY,user:a.user,text:'Cliente cadastrado'}]},...s.clientes]};
-    // BUG-1 FIX: useReducer não aceita função como dispatch(fn) — criado caso específico para INSERT realtime que evita duplicatas
     case'RT_ADD': return s.clientes.find(c=>c.id===a.c.id)?s:{...s,clientes:[a.c,...s.clientes]};
     default:     return s;
   }
@@ -119,14 +117,20 @@ function BKODashboard({clientes,setView,setFiltroEstagio}){
   return(
     <div style={{padding:'28px 32px'}}>
       <div style={{marginBottom:24}}><div className="section-title">Dashboard</div><div className="section-sub">BKO Backoffice · {fmtD(TODAY)}</div></div>
+      {/* Linha 1: primeiros 4 estágios */}
       <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:12}}>
         {BKO_STAGES.slice(0,4).map(s=>(
-          <StatCard key={s.id} label={s.label} value={counts[s.id]||0} color={s.color} icon={s.id==='clientes_novos'?'👤':s.id==='saldo_andamento'?'💰':s.id==='em_negociacao'?'⟳':'🏦'} onClick={()=>handleCard(s.id)}/>
+          <StatCard key={s.id} label={s.label} value={counts[s.id]||0} color={s.color}
+            icon={s.id==='clientes_novos'?'👤':s.id==='saldo_andamento'?'💰':s.id==='pendencia_financeiro'?'⏳':'⟳'}
+            onClick={()=>handleCard(s.id)}/>
         ))}
       </div>
-      <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:12,marginBottom:20}}>
+      {/* Linha 2: últimos 4 estágios */}
+      <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:20}}>
         {BKO_STAGES.slice(4).map(s=>(
-          <StatCard key={s.id} label={s.label} value={counts[s.id]||0} color={s.color} icon={s.id==='digitar_proposta'?'📝':s.id==='integrado'?'✓':'✕'} onClick={()=>handleCard(s.id)}/>
+          <StatCard key={s.id} label={s.label} value={counts[s.id]||0} color={s.color}
+            icon={s.id==='abertura_conta'?'🏦':s.id==='digitar_proposta'?'📝':s.id==='integrado'?'✓':'✕'}
+            onClick={()=>handleCard(s.id)}/>
         ))}
       </div>
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}>
@@ -231,8 +235,7 @@ function KCard({c, onSelect, dispatch, profile, setDragId}){
   );
 }
 
-// ── 2. KANBAN: mostra prefeitura no card ──
-function BKOKanbanCol({s,clientes,dragId,setDragId,dispatch,onSelect,profile,highlight}){
+function BKOKanbanCol({s,clientes,dragId,setDragId,dispatch,onSelect,profile,highlight,selected,onToggleSel}){
   const [over,setOver]=useState(false);
   const sl=clientes.filter(c=>c.estagio===s.id);
   return(
@@ -246,41 +249,296 @@ function BKOKanbanCol({s,clientes,dragId,setDragId,dispatch,onSelect,profile,hig
         <span style={{fontSize:10,fontWeight:700,background:s.bg,color:s.color,borderRadius:99,padding:'1px 6px'}}>{sl.length}</span>
       </div>
       <div style={{minHeight:40}}>
-        {sl.map(c=>(
-          <KCard key={c.id} c={c} onSelect={onSelect} dispatch={dispatch} profile={profile} setDragId={setDragId}/>
-        ))}
+        {sl.map(c=>{
+          const isSel=selected?.has(c.id);
+          return(
+            <div key={c.id} style={{position:'relative'}}>
+              {/* Checkbox de seleção */}
+              {(selected?.size>0||isSel)&&(
+                <div onClick={e=>{e.stopPropagation();onToggleSel(c.id);}}
+                  style={{position:'absolute',top:7,left:7,zIndex:2,width:16,height:16,borderRadius:4,border:`1.5px solid ${isSel?B_MID:'rgba(0,0,0,.25)'}`,background:isSel?B_MID:'rgba(255,255,255,.9)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,color:'#fff',cursor:'pointer',transition:'all .15s'}}>
+                  {isSel&&'✓'}
+                </div>
+              )}
+              <KCard c={c} onSelect={onSelect} dispatch={dispatch} profile={profile} setDragId={setDragId}/>
+            </div>
+          );
+        })}
         {sl.length===0&&<div style={{textAlign:'center',padding:'16px 0',fontSize:10,color:'var(--text-faint)'}}>Solte aqui</div>}
       </div>
     </div>
   );
 }
 
+
+// ─── PIPELINE COM BULK SELECT (todos os 8 estágios) ──────────────────────────
 function BKOPipeline({clientes,profile,dispatch,onSelect,filtroEstagio,setFiltroEstagio}){
   const [dragId,setDragId]=useState(null);
   const [search,setSearch]=useState('');
+  const [selected,setSelected]=useState(new Set());
+  const [bulkTarget,setBulkTarget]=useState('');
+  const [bulkApplying,setBulkApplying]=useState(false);
   const colsRef=useRef(null);
-  useEffect(()=>{if(filtroEstagio&&colsRef.current){const idx=BKO_STAGES.findIndex(s=>s.id===filtroEstagio);if(idx>-1)colsRef.current.scrollLeft=idx*220;}},[filtroEstagio]);
-  const filtered=search.trim()?clientes.filter(c=>c.nomeCliente?.toLowerCase().includes(search.toLowerCase())||c.cpfCliente?.includes(search)):clientes;
+
+  useEffect(()=>{if(filtroEstagio&&colsRef.current){const idx=BKO_STAGES.findIndex(s=>s.id===filtroEstagio);if(idx>-1)colsRef.current.scrollLeft=idx*215;}},[filtroEstagio]);
+
+  const filtered = search.trim()
+    ? clientes.filter(c=>c.nomeCliente?.toLowerCase().includes(search.toLowerCase())||c.cpfCliente?.includes(search))
+    : clientes;
+
+  const toggleSel=(id)=>setSelected(s=>{const n=new Set(s);n.has(id)?n.delete(id):n.add(id);return n;});
+  const selectAll=()=>setSelected(new Set(filtered.map(c=>c.id)));
+  const clearSel=()=>setSelected(new Set());
+
+  const applyBulk=()=>{
+    if(!bulkTarget||selected.size===0) return;
+    setBulkApplying(true);
+    dispatch({type:'BULK_MOVE',ids:[...selected],st:bulkTarget,user:profile?.nome||'Usuário'});
+    clearSel(); setBulkTarget(''); setBulkApplying(false);
+  };
+
   return(
     <div style={{padding:'28px 32px',overflowX:'hidden'}}>
-      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20,gap:16}}>
-        <div><div className="section-title">Pipeline</div><div className="section-sub">{clientes.length} clientes · arraste para mover</div></div>
-        <div style={{display:'flex',gap:8,alignItems:'center'}}>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20,gap:16,flexWrap:'wrap'}}>
+        <div>
+          <div className="section-title">Pipeline</div>
+          <div className="section-sub">
+            {clientes.length} clientes
+            {selected.size>0&&<span style={{marginLeft:8,fontWeight:700,color:B_MID}}> · {selected.size} selecionado{selected.size>1?'s':''}</span>}
+          </div>
+        </div>
+        <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
           {filtroEstagio&&(<div style={{display:'flex',alignItems:'center',gap:6,padding:'5px 12px',borderRadius:99,background:B_LIGHT,border:`1px solid ${B_MID}30`,fontSize:11,color:B_MID,fontWeight:600}}>{BKO_STAGES.find(s=>s.id===filtroEstagio)?.label}<button onClick={()=>setFiltroEstagio(null)} style={{background:'none',border:'none',cursor:'pointer',color:B_MID,fontSize:13,lineHeight:1,padding:0}}>×</button></div>)}
-          <div style={{position:'relative',width:240}}>
+          <div style={{position:'relative',width:220}}>
             <span style={{position:'absolute',left:10,top:'50%',transform:'translateY(-50%)',color:'var(--text-faint)',fontSize:12}}>⌕</span>
             <input className="inp" style={{paddingLeft:30,height:34,fontSize:12}} placeholder="Buscar cliente…" value={search} onChange={e=>setSearch(e.target.value)}/>
           </div>
         </div>
       </div>
-      <div ref={colsRef} style={{display:'flex',gap:10,overflowX:'auto',paddingBottom:16}}>
-        {BKO_STAGES.map(s=>(<BKOKanbanCol key={s.id} s={s} clientes={filtered} dragId={dragId} setDragId={setDragId} dispatch={dispatch} onSelect={onSelect} profile={profile} highlight={filtroEstagio===s.id}/>))}
+
+      <div ref={colsRef} style={{display:'flex',gap:10,overflowX:'auto',paddingBottom: selected.size>0?80:16}}>
+        {BKO_STAGES.map(s=>(
+          <BKOKanbanCol key={s.id} s={s} clientes={filtered} dragId={dragId} setDragId={setDragId}
+            dispatch={dispatch} onSelect={id=>{if(selected.size>0){toggleSel(id);}else{onSelect(id);}}}
+            profile={profile} highlight={filtroEstagio===s.id}
+            selected={selected} onToggleSel={toggleSel}/>
+        ))}
       </div>
+
+      {/* Barra de bulk action flutuante */}
+      {selected.size>0&&(
+        <div style={{position:'fixed',bottom:24,left:'50%',transform:'translateX(-50%)',background:'#1A1F3A',borderRadius:14,padding:'12px 20px',display:'flex',alignItems:'center',gap:12,boxShadow:'0 8px 32px rgba(26,31,58,0.4)',zIndex:200,whiteSpace:'nowrap',border:'1px solid rgba(255,255,255,.1)'}}>
+          <span style={{fontSize:13,fontWeight:700,color:'#fff'}}>{selected.size} selecionado{selected.size>1?'s':''}</span>
+          <div style={{width:1,height:20,background:'rgba(255,255,255,.15)'}}/>
+          <span style={{fontSize:11,color:'rgba(255,255,255,.6)'}}>Mover para:</span>
+          <select value={bulkTarget} onChange={e=>setBulkTarget(e.target.value)}
+            style={{padding:'6px 10px',borderRadius:8,border:'1px solid rgba(255,255,255,.2)',background:'rgba(255,255,255,.1)',color:'#fff',fontSize:12,outline:'none',cursor:'pointer',minWidth:200}}>
+            <option value="">— escolha o estágio —</option>
+            {BKO_STAGES.map(st=>(
+              <option key={st.id} value={st.id}>{st.id==='integrado'?'✓ ':st.id==='perdido'?'✕ ':''}{st.label}</option>
+            ))}
+          </select>
+          <button onClick={applyBulk} disabled={!bulkTarget||bulkApplying}
+            style={{padding:'8px 18px',borderRadius:8,background:bulkTarget?B_MID:'rgba(255,255,255,.1)',color:'#fff',border:'none',fontSize:12,fontWeight:700,cursor:bulkTarget?'pointer':'not-allowed',opacity:bulkApplying?.7:1,transition:'all .15s'}}>
+            {bulkApplying?'Movendo…':'Aplicar'}
+          </button>
+          <button onClick={clearSel} style={{padding:'8px 10px',borderRadius:8,background:'rgba(255,255,255,.08)',border:'none',color:'rgba(255,255,255,.6)',fontSize:12,cursor:'pointer'}}>✕</button>
+        </div>
+      )}
     </div>
   );
 }
 
-// ── 3. CLIENTES: filtro por prefeitura ──
+// ─── ARQUIVO — Funis por Mês ──────────────────────────────────────────────────
+const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
+function getDataFinalização(c){
+  // Pega a data da última activity de stage_change para integrado/perdido
+  // Se não achar, usa ultimoContato
+  const acts = (c.activities||[]).filter(a=>a.type==='stage_change'&&(a.text?.includes('Integrado')||a.text?.includes('Perdido')));
+  if(acts.length>0) return acts[acts.length-1].date || c.ultimoContato || c.dataEntrada;
+  return c.ultimoContato || c.dataEntrada || TODAY;
+}
+
+function fmtMesAno(dateStr){
+  if(!dateStr) return null;
+  const d = new Date(dateStr+'T12:00:00');
+  if(isNaN(d)) return null;
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+}
+
+function BKOFunilMes({tab,clientes,profile,dispatch,onSelect,selected,onToggleSel,search}){
+  // Agrupar por mês/ano de finalização, ordenar desc (mais recente primeiro)
+  const grupos = useMemo(()=>{
+    const filtered = search.trim()
+      ? clientes.filter(c=>c.nomeCliente?.toLowerCase().includes(search.toLowerCase())||c.cpfCliente?.includes(search))
+      : clientes;
+    const map = {};
+    filtered.forEach(c=>{
+      const key = fmtMesAno(getDataFinalização(c)) || 'sem-data';
+      if(!map[key]) map[key]=[];
+      map[key].push(c);
+    });
+    return Object.entries(map)
+      .sort(([a],[b])=> b.localeCompare(a)) // desc: mais recente primeiro
+      .map(([key,items])=>{
+        if(key==='sem-data') return {key, label:'Sem data', sub:'', items};
+        const [ano,mes] = key.split('-');
+        return { key, label: MESES[parseInt(mes,10)-1]||mes, sub: ano, items };
+      });
+  },[clientes,search]);
+
+  const stgColor = tab==='integrado' ? '#22C55E' : '#EF4444';
+  const stgBg    = tab==='integrado' ? 'rgba(34,197,94,.08)' : 'rgba(239,68,68,.06)';
+
+  if(grupos.length===0) return(
+    <div style={{textAlign:'center',padding:'60px 0'}}>
+      <div style={{fontSize:32,marginBottom:12}}>{tab==='integrado'?'✅':'❌'}</div>
+      <div style={{fontSize:14,fontWeight:600,color:'var(--text-primary)',marginBottom:6}}>
+        Nenhum cliente {tab==='integrado'?'integrado':'perdido'} ainda
+      </div>
+      <div style={{fontSize:12,color:'var(--text-muted)'}}>
+        Mova clientes do pipeline para este funil
+      </div>
+    </div>
+  );
+
+  return(
+    <div style={{display:'flex',gap:14,overflowX:'auto',paddingBottom:24,alignItems:'flex-start'}}>
+      {grupos.map(({key,label,sub,items})=>(
+        <div key={key} style={{minWidth:220,width:230,flexShrink:0}}>
+          {/* Cabeçalho do mês */}
+          <div style={{display:'flex',alignItems:'baseline',gap:7,marginBottom:10,padding:'0 2px'}}>
+            <span style={{fontSize:13,fontWeight:700,color:'var(--text-primary)'}}>{label}</span>
+            {sub&&<span style={{fontSize:11,color:'var(--text-muted)',fontWeight:500}}>{sub}</span>}
+            <span style={{marginLeft:'auto',fontSize:11,fontWeight:700,padding:'1px 7px',borderRadius:99,background:`${stgColor}15`,color:stgColor}}>{items.length}</span>
+          </div>
+          {/* Cards */}
+          <div style={{display:'flex',flexDirection:'column',gap:7}}>
+            {items.map(c=>{
+              const isSel=selected.has(c.id);
+              const dataFin = getDataFinalização(c);
+              return(
+                <div key={c.id}
+                  onClick={()=>{ if(selected.size>0){onToggleSel(c.id);}else{onSelect(c.id);} }}
+                  style={{background:'var(--bg-card)',border:`1.5px solid ${isSel?B_MID:stgColor+'30'}`,borderRadius:11,padding:'11px 12px',cursor:'pointer',transition:'all .15s',boxShadow:isSel?`0 0 0 2px ${B_MID}30`:'0 1px 4px rgba(0,0,0,.05)',position:'relative'}}
+                  onMouseEnter={e=>{if(!isSel){e.currentTarget.style.borderColor=stgColor+'70';e.currentTarget.style.boxShadow=`0 3px 10px ${stgColor}18`;}}}
+                  onMouseLeave={e=>{if(!isSel){e.currentTarget.style.borderColor=stgColor+'30';e.currentTarget.style.boxShadow='0 1px 4px rgba(0,0,0,.05)';}}}
+                >
+                  {/* Checkbox */}
+                  <div onClick={e=>{e.stopPropagation();onToggleSel(c.id);}}
+                    style={{position:'absolute',top:8,right:8,width:16,height:16,borderRadius:4,border:`1.5px solid ${isSel?B_MID:'rgba(0,0,0,.2)'}`,background:isSel?B_MID:'rgba(255,255,255,.9)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,color:'#fff',cursor:'pointer',opacity:isSel||selected.size>0?1:0,transition:'opacity .15s'}}>
+                    {isSel&&'✓'}
+                  </div>
+                  <div style={{fontSize:12,fontWeight:700,color:'var(--text-primary)',marginBottom:3,paddingRight:20,lineHeight:1.3}}>{c.nomeCliente}</div>
+                  <div style={{fontSize:10,color:'var(--text-muted)',marginBottom:c.prefeitura?3:5}}>{c.cpfCliente||'—'}</div>
+                  {c.prefeitura&&<div style={{fontSize:9,color:'var(--text-muted)',marginBottom:4}}>🏛 {c.prefeitura}</div>}
+                  {c.saldoDevedor&&<div style={{fontSize:10,fontWeight:700,color:'#10B981',marginBottom:4}}>💰 {c.saldoDevedor}</div>}
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:4,paddingTop:4,borderTop:'1px solid var(--border)'}}>
+                    <span style={{fontSize:9,color:'var(--text-faint)'}}>{fmtD(dataFin)}</span>
+                    {c.criado_por_nome&&<span style={{fontSize:9,color:'var(--text-faint)'}}>{c.criado_por_nome}</span>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function BKOArquivo({clientes,profile,dispatch,onSelect}){
+  const [tab,setTab]=useState('integrado');
+  const [search,setSearch]=useState('');
+  const [selected,setSelected]=useState(new Set());
+  const [bulkTarget,setBulkTarget]=useState('');
+  const [bulkApplying,setBulkApplying]=useState(false);
+
+  const stageClientes = clientes.filter(c=>c.estagio===tab);
+  const integrados=clientes.filter(c=>c.estagio==='integrado').length;
+  const perdidos=clientes.filter(c=>c.estagio==='perdido').length;
+
+  const toggleSel=(id)=>setSelected(s=>{const n=new Set(s);n.has(id)?n.delete(id):n.add(id);return n;});
+  const selectAll=()=>{
+    const filtered=search.trim()?stageClientes.filter(c=>c.nomeCliente?.toLowerCase().includes(search.toLowerCase())||c.cpfCliente?.includes(search)):stageClientes;
+    setSelected(new Set(filtered.map(c=>c.id)));
+  };
+  const clearSel=()=>{setSelected(new Set());setBulkTarget('');};
+
+  const applyBulk=()=>{
+    if(!bulkTarget||selected.size===0) return;
+    setBulkApplying(true);
+    dispatch({type:'BULK_MOVE',ids:[...selected],st:bulkTarget,user:profile?.nome||'Usuário'});
+    clearSel(); setBulkApplying(false);
+  };
+
+  const stgColor = tab==='integrado' ? '#22C55E' : '#EF4444';
+
+  return(
+    <div style={{padding:'28px 32px',overflowX:'hidden'}}>
+      <div style={{marginBottom:20}}>
+        <div className="section-title">Arquivo</div>
+        <div className="section-sub">Clientes finalizados agrupados por mês · mova de volta ao pipeline quando necessário</div>
+      </div>
+
+      {/* Seletor de funil */}
+      <div style={{display:'flex',gap:0,marginBottom:20,background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:11,overflow:'hidden',width:'fit-content'}}>
+        {[
+          {id:'integrado', label:'Integrados', color:'#22C55E', count:integrados, icon:'✓'},
+          {id:'perdido',   label:'Perdidos',   color:'#EF4444', count:perdidos,   icon:'✕'},
+        ].map(t=>(
+          <button key={t.id} onClick={()=>{setTab(t.id);clearSel();setSearch('');}}
+            style={{padding:'10px 24px',border:'none',cursor:'pointer',fontSize:13,fontWeight:tab===t.id?700:500,fontFamily:'var(--font)',transition:'all .15s',background:tab===t.id?`${t.color}12`:'transparent',color:tab===t.id?t.color:'var(--text-muted)',borderBottom:tab===t.id?`2.5px solid ${t.color}`:'2.5px solid transparent'}}>
+            {t.icon} {t.label}
+            <span style={{marginLeft:8,fontSize:11,fontWeight:700,padding:'2px 8px',borderRadius:99,background:tab===t.id?`${t.color}18`:'rgba(0,0,0,.06)',color:tab===t.id?t.color:'var(--text-muted)'}}>{t.count}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Toolbar */}
+      <div style={{display:'flex',gap:8,marginBottom:18,alignItems:'center',flexWrap:'wrap'}}>
+        <div style={{position:'relative',width:280}}>
+          <span style={{position:'absolute',left:10,top:'50%',transform:'translateY(-50%)',color:'var(--text-faint)',fontSize:12}}>⌕</span>
+          <input className="inp" style={{paddingLeft:30,height:34,fontSize:12}} placeholder="Buscar nome ou CPF…" value={search} onChange={e=>setSearch(e.target.value)}/>
+        </div>
+        <button onClick={selected.size>0?clearSel:selectAll}
+          style={{padding:'7px 14px',borderRadius:8,border:`1px solid ${selected.size>0?stgColor:'var(--border)'}`,background:selected.size>0?`${stgColor}10`:'transparent',color:selected.size>0?stgColor:'var(--text-muted)',fontSize:12,fontWeight:600,cursor:'pointer',fontFamily:'var(--font)',whiteSpace:'nowrap',transition:'all .15s'}}>
+          {selected.size>0?`✕ Limpar seleção (${selected.size})`:'☐ Selecionar tudo'}
+        </button>
+        {selected.size>0&&(
+          <>
+            <select value={bulkTarget} onChange={e=>setBulkTarget(e.target.value)}
+              style={{padding:'7px 12px',borderRadius:8,border:`1.5px solid ${B_MID}40`,background:B_LIGHT,color:B_MID,fontSize:12,fontWeight:600,outline:'none',cursor:'pointer',minWidth:220}}>
+              <option value="">Mover para o estágio…</option>
+              {BKO_STAGES.filter(s=>s.id!==tab).map(st=>(
+                <option key={st.id} value={st.id}>{st.label}</option>
+              ))}
+            </select>
+            <button onClick={applyBulk} disabled={!bulkTarget||bulkApplying}
+              style={{padding:'7px 18px',borderRadius:8,background:bulkTarget?B_MID:'rgba(0,0,0,.06)',color:bulkTarget?'#fff':'var(--text-muted)',border:'none',fontSize:12,fontWeight:700,cursor:bulkTarget?'pointer':'not-allowed',boxShadow:bulkTarget?`0 3px 12px ${B_GLOW}`:'none',transition:'all .15s'}}>
+              {bulkApplying?'Movendo…':`Mover ${selected.size} para o pipeline`}
+            </button>
+          </>
+        )}
+      </div>
+
+      {/* Funil por meses */}
+      <BKOFunilMes
+        key={tab}
+        tab={tab}
+        clientes={stageClientes}
+        profile={profile}
+        dispatch={dispatch}
+        onSelect={onSelect}
+        selected={selected}
+        onToggleSel={toggleSel}
+        search={search}
+      />
+    </div>
+  );
+}
+
 function BKOClientes({clientes,profile,onSelect,onNew}){
   const [search,setSearch]=useState('');
   const [estagio,setEstagio]=useState('');
@@ -384,10 +642,6 @@ function BKOClientes({clientes,profile,onSelect,onNew}){
   );
 }
 
-// ── 4. DETAIL: prefeitura editável, salva com botão ──
-
-
-// ── 5. NOVO CLIENTE: campo prefeitura ──
 function NovoClienteModal({profile,dispatch,clientes,onClose}){
   const [form,setForm]=useState(blankCliente());
   const [cpfAviso,setCpfAviso]=useState(false);
@@ -403,6 +657,7 @@ function NovoClienteModal({profile,dispatch,clientes,onClose}){
   };
   const save=()=>{
     if(!form.nomeCliente.trim()||!form.cpfCliente.trim()){alert('Nome e CPF são obrigatórios.');return;}
+    if(cpfAviso){alert('Este CPF já está cadastrado. Verifique os dados antes de continuar.');return;}
     const id=gid();
     dispatch({type:'ADD',c:{...form,id,criado_por_nome:profile?.nome,criado_por_role:profile?.role},user:profile?.nome||'Usuário'});
   };
@@ -466,107 +721,34 @@ function BKOCadastrar({profile,session}){
 
   const openEdit=(u)=>{
     setEditUser(u);
-    setEditForm({
-      nome:u.nome || '',
-      novaSenha:'',
-      confirmarSenha:'',
-    });
+    setEditForm({ nome:u.nome || '', novaSenha:'', confirmarSenha:'', });
     setEditMsg(null);
   };
 
   const saveEdit = async () => {
-    if (!editForm.nome.trim()) {
-      setEditMsg({ t:'error', text:'Nome é obrigatório.' });
-      return;
-    }
-
-    if (profile?.role !== 'comercial') {
-      setEditMsg({ t:'error', text:'Apenas o comercial pode editar usuários.' });
-      return;
-    }
-
+    if (!editForm.nome.trim()) { setEditMsg({ t:'error', text:'Nome é obrigatório.' }); return; }
+    if (profile?.role !== 'comercial') { setEditMsg({ t:'error', text:'Apenas o comercial pode editar usuários.' }); return; }
     const vaiAlterarSenha = !!editForm.novaSenha || !!editForm.confirmarSenha;
-
     if (vaiAlterarSenha) {
-      if (editUser?.role !== 'corban_bko') {
-        setEditMsg({ t:'error', text:'A redefinição de senha é permitida apenas para usuários Corban.' });
-        return;
-      }
-
-      if (editForm.novaSenha.length < 8) {
-        setEditMsg({ t:'error', text:'A nova senha deve ter no mínimo 8 caracteres.' });
-        return;
-      }
-
-      if (editForm.novaSenha !== editForm.confirmarSenha) {
-        setEditMsg({ t:'error', text:'A confirmação da senha não confere.' });
-        return;
-      }
+      if (editUser?.role !== 'corban_bko') { setEditMsg({ t:'error', text:'A redefinição de senha é permitida apenas para usuários Corban.' }); return; }
+      if (editForm.novaSenha.length < 8) { setEditMsg({ t:'error', text:'A nova senha deve ter no mínimo 8 caracteres.' }); return; }
+      if (editForm.novaSenha !== editForm.confirmarSenha) { setEditMsg({ t:'error', text:'A confirmação da senha não confere.' }); return; }
     }
-
-    setEditSaving(true);
-    setEditMsg(null);
-
-    const { error:e1 } = await supabase
-      .from('allowed_users')
-      .update({ nome: editForm.nome.trim() })
-      .eq('email', editUser.email);
-
-    const { error:e2 } = await supabase
-      .from('profiles')
-      .update({ nome: editForm.nome.trim() })
-      .eq('email', editUser.email);
-
+    setEditSaving(true); setEditMsg(null);
+    const { error:e1 } = await supabase.from('allowed_users').update({ nome: editForm.nome.trim() }).eq('email', editUser.email);
+    const { error:e2 } = await supabase.from('profiles').update({ nome: editForm.nome.trim() }).eq('email', editUser.email);
     let passwordError = null;
-
     if (vaiAlterarSenha) {
       try {
         const { data:{ session:s } } = await supabase.auth.getSession();
-
-        const res = await fetch(
-          `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/reset-bko-user-password`,
-          {
-            method:'POST',
-            headers:{
-              'Content-Type':'application/json',
-              'Authorization':`Bearer ${s?.access_token}`,
-            },
-            body: JSON.stringify({
-              email: editUser.email,
-              newPassword: editForm.novaSenha,
-            }),
-          }
-        );
-
+        const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/reset-bko-user-password`,{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${s?.access_token}`},body: JSON.stringify({email: editUser.email,newPassword: editForm.novaSenha})});
         const result = await res.json().catch(()=> ({}));
-        console.log('reset-bko-user-password status:', res.status);
-        console.log('reset-bko-user-password result:', result);
-
-        if (!res.ok || result.error) {
-          passwordError = result.error || 'Erro ao redefinir senha (status ${res.status}).';
-        }
-      } catch (e) {
-        passwordError = 'Erro de conexão ao redefinir senha.';
-      }
+        if (!res.ok || result.error) { passwordError = result.error || `Erro ao redefinir senha (status ${res.status}).`; }
+      } catch (e) { passwordError = 'Erro de conexão ao redefinir senha.'; }
     }
-
     setEditSaving(false);
-
-    if (e1 || e2 || passwordError) {
-      setEditMsg({
-        t:'error',
-        text: passwordError || 'Erro ao salvar. Tente novamente.',
-      });
-      return;
-    }
-
-    setEditMsg({
-      t:'success',
-      text: vaiAlterarSenha
-        ? 'Nome e senha atualizados com sucesso!'
-        : 'Nome atualizado com sucesso!',
-    });
-
+    if (e1 || e2 || passwordError) { setEditMsg({ t:'error', text: passwordError || 'Erro ao salvar. Tente novamente.' }); return; }
+    setEditMsg({ t:'success', text: vaiAlterarSenha ? 'Nome e senha atualizados com sucesso!' : 'Nome atualizado com sucesso!' });
     load();
     setTimeout(() => setEditUser(null), 1200);
   };
@@ -582,7 +764,14 @@ function BKOCadastrar({profile,session}){
       else{setMsg({t:'success',text:`✓ ${form.nome} criado! Já pode fazer login.`});setShowModal(false);setForm({nome:'',email:'',senha:'',role:'corban_bko'});load();}
     } catch(e){setSaving(false);setMsg({t:'error',text:'Erro de conexão.'});}
   };
-  const remove=async(u)=>{await supabase.from('allowed_users').delete().eq('email',u.email);setConfirmDelete(null);setMsg({t:'success',text:`${u.nome} removido.`});load();};
+  const remove=async(u)=>{
+    // Deletar em ambas as tabelas para revogar o acesso completamente
+    await supabase.from('profiles').delete().ilike('email', u.email);
+    await supabase.from('allowed_users').delete().eq('email', u.email);
+    setConfirmDelete(null);
+    setMsg({t:'success',text:`${u.nome} removido.`});
+    load();
+  };
   const grupos=[{role:'comercial',label:'Comercial'},{role:'corban_bko',label:'Corban'},{role:'bko',label:'BKO'}];
   return(
     <div style={{padding:'28px 32px'}}>
@@ -609,7 +798,9 @@ function BKOCadastrar({profile,session}){
                     {isComercial&&(
                       <button onClick={()=>openEdit(u)} title="Editar" style={{padding:'3px 8px',borderRadius:6,fontSize:11,fontWeight:600,cursor:'pointer',background:B_LIGHT,color:B_MID,border:'none',marginRight:4}}>✎</button>
                     )}
-                    <button onClick={()=>setConfirmDelete(u)} style={{padding:'3px 8px',borderRadius:6,fontSize:10,fontWeight:600,cursor:'pointer',background:'var(--danger-dim)',color:'var(--danger)',border:'none'}}>✕</button>
+                    {isComercial&&(
+                      <button onClick={()=>setConfirmDelete(u)} style={{padding:'3px 8px',borderRadius:6,fontSize:10,fontWeight:600,cursor:'pointer',background:'var(--danger-dim)',color:'var(--danger)',border:'none'}}>✕</button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -618,77 +809,36 @@ function BKOCadastrar({profile,session}){
         </div>
       )}
 
-      {/* ── MODAL EDITAR USUÁRIO (só Comercial) ── */}
       {editUser&&(
         <div className="mbk" onClick={e=>{if(e.target===e.currentTarget)setEditUser(null);}}>
           <div className="mbox" style={{maxWidth:400}}>
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:20}}>
               <div>
                 <div style={{fontFamily:'var(--font-display)',fontSize:18,fontWeight:600,color:'var(--text-primary)'}}>Editar usuário</div>
-                <div style={{marginTop:5}}>
-                  <span style={{fontSize:10,padding:'2px 8px',borderRadius:99,fontWeight:700,background:`${ROLE_COLORS[editUser.role]}18`,color:ROLE_COLORS[editUser.role]}}>{ROLE_LABELS[editUser.role]||editUser.role}</span>
-                </div>
+                <div style={{marginTop:5}}><span style={{fontSize:10,padding:'2px 8px',borderRadius:99,fontWeight:700,background:`${ROLE_COLORS[editUser.role]}18`,color:ROLE_COLORS[editUser.role]}}>{ROLE_LABELS[editUser.role]||editUser.role}</span></div>
               </div>
               <button onClick={()=>setEditUser(null)} style={{background:'rgba(0,0,0,.06)',border:'1px solid var(--border)',borderRadius:8,cursor:'pointer',width:28,height:28,display:'flex',alignItems:'center',justifyContent:'center',fontSize:15}}>×</button>
             </div>
             {editMsg&&<div style={{padding:'8px 12px',borderRadius:7,marginBottom:12,background:editMsg.t==='success'?'var(--success-dim)':'var(--danger-dim)',border:`1px solid ${editMsg.t==='success'?'rgba(61,155,107,.2)':'rgba(192,65,58,.2)'}`,fontSize:11,color:editMsg.t==='success'?'var(--success)':'var(--danger)'}}>{editMsg.text}</div>}
             <div style={{marginBottom:12}}>
-              <label style={{display:'block',fontSize:10,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:5}}>
-                Nome completo
-              </label>
-              <input
-                className="inp"
-                value={editForm.nome}
-                onChange={e=>setEditForm(f=>({...f,nome:e.target.value}))}
-                placeholder="Nome completo"
-                autoFocus
-              />
+              <label style={{display:'block',fontSize:10,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:5}}>Nome completo</label>
+              <input className="inp" value={editForm.nome} onChange={e=>setEditForm(f=>({...f,nome:e.target.value}))} placeholder="Nome completo" autoFocus/>
             </div>
-
             <div style={{marginBottom:12}}>
-              <label style={{display:'block',fontSize:10,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:5}}>
-                E-mail
-              </label>
-              <input
-                className="inp"
-                value={editUser.email}
-                readOnly
-                style={{background:'var(--bg-surface)',cursor:'not-allowed',color:'var(--text-muted)'}}
-              />
-              <div style={{fontSize:10,color:'var(--text-faint)',marginTop:4}}>
-                E-mail não pode ser alterado.
-              </div>
+              <label style={{display:'block',fontSize:10,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:5}}>E-mail</label>
+              <input className="inp" value={editUser.email} readOnly style={{background:'var(--bg-surface)',cursor:'not-allowed',color:'var(--text-muted)'}}/>
+              <div style={{fontSize:10,color:'var(--text-faint)',marginTop:4}}>E-mail não pode ser alterado.</div>
             </div>
-
             {editUser.role === 'corban_bko' && (
               <>
                 <div style={{marginBottom:12}}>
-                  <label style={{display:'block',fontSize:10,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:5}}>
-                    Nova senha do Corban
-                  </label>
-                  <input
-                    className="inp"
-                    type="password"
-                    value={editForm.novaSenha}
-                    onChange={e=>setEditForm(f=>({...f,novaSenha:e.target.value}))}
-                    placeholder="Mínimo 8 caracteres"
-                  />
+                  <label style={{display:'block',fontSize:10,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:5}}>Nova senha do Corban</label>
+                  <input className="inp" type="password" value={editForm.novaSenha} onChange={e=>setEditForm(f=>({...f,novaSenha:e.target.value}))} placeholder="Mínimo 8 caracteres"/>
                 </div>
-
                 <div style={{marginBottom:20}}>
-                  <label style={{display:'block',fontSize:10,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:5}}>
-                    Confirmar nova senha
-                  </label>
-                  <input
-                    className="inp"
-                    type="password"
-                    value={editForm.confirmarSenha}
-                    onChange={e=>setEditForm(f=>({...f,confirmarSenha:e.target.value}))}
-                    placeholder="Repita a nova senha"
-                  />
-                  <div style={{fontSize:10,color:'var(--text-faint)',marginTop:4}}>
-                    Preencha os campos acima apenas se quiser redefinir a senha deste Corban.
-                  </div>
+                  <label style={{display:'block',fontSize:10,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:5}}>Confirmar nova senha</label>
+                  <input className="inp" type="password" value={editForm.confirmarSenha} onChange={e=>setEditForm(f=>({...f,confirmarSenha:e.target.value}))} placeholder="Repita a nova senha"/>
+                  <div style={{fontSize:10,color:'var(--text-faint)',marginTop:4}}>Preencha apenas se quiser redefinir a senha deste Corban.</div>
                 </div>
               </>
             )}
@@ -789,11 +939,12 @@ export function BKOApp({profile,session,signOut,onAlterarSenha}){
   const [s,dispatch]=useReducer(R,INIT);
   const {clientes,view,sel,newOpen}=s;
   const [ready,setReady]=useState(false);
+  const [sidebarCollapsed,setSidebarCollapsed]=useState(false);
   const clientesRef=useRef(clientes);
-  const syncTimerRef=useRef(null);      // fix-1: debounce do sync
-  const syncQueueRef=useRef(new Map()); // fix-1: fila de itens pendentes (Map → O(1))
-  const auditTimerRef=useRef(null);     // fix-3: debounce do batch de audit
-  const auditQueueRef=useRef([]);       // fix-3: fila de eventos de audit
+  const syncTimerRef=useRef(null);
+  const syncQueueRef=useRef(new Map());
+  const auditTimerRef=useRef(null);
+  const auditQueueRef=useRef([]);
   const [showAS,setShowAS]=useState(false);
   const [filtroEstagio,setFiltroEstagio]=useState(null);
   const setView=useCallback(v=>dispatch({type:'VIEW',v}),[]);
@@ -801,7 +952,6 @@ export function BKOApp({profile,session,signOut,onAlterarSenha}){
 
   useEffect(()=>{
     if(!session) return;
-    // BUG-7 FIX: Adicionar limit para evitar carregar tabela inteira
     supabase.from('bko_clientes').select('*').order('created_at',{ascending:false}).limit(500)
       .then(({data,error})=>{
         if(error){console.error('BKO load error:',error);setReady(true);return;}
@@ -809,7 +959,6 @@ export function BKOApp({profile,session,signOut,onAlterarSenha}){
         dispatch({type:'SET_C',clientes:loaded});clientesRef.current=loaded;setReady(true);
       });
     const ch=supabase.channel('bko_clientes_rt')
-      // BUG-1 FIX: Usar dispatch({type:'RT_ADD'}) em vez de dispatch(fn) — useReducer não aceita função
       .on('postgres_changes',{event:'INSERT',schema:'public',table:'bko_clientes'},payload=>{const r=payload.new;const novo={...r.data,id:r.id,estagio:r.estagio,criado_por_id:r.criado_por_id,criado_por_nome:r.criado_por_nome,criado_por_role:r.criado_por_role,atribuido_a_id:r.atribuido_a_id||null,atribuido_a_nome:r.atribuido_a_nome||null,responsavel_bko_id:r.responsavel_bko_id||null,responsavel_bko_nome:r.responsavel_bko_nome||null};dispatch({type:'RT_ADD',c:novo});})
       .on('postgres_changes',{event:'UPDATE',schema:'public',table:'bko_clientes'},payload=>{const r=payload.new;dispatch({type:'UPD',c:{...r.data,id:r.id,estagio:r.estagio,criado_por_id:r.criado_por_id,criado_por_nome:r.criado_por_nome,criado_por_role:r.criado_por_role,atribuido_a_id:r.atribuido_a_id||null,atribuido_a_nome:r.atribuido_a_nome||null,responsavel_bko_id:r.responsavel_bko_id||null,responsavel_bko_nome:r.responsavel_bko_nome||null}});})
       .subscribe();
@@ -818,14 +967,11 @@ export function BKOApp({profile,session,signOut,onAlterarSenha}){
 
   useEffect(()=>{
     if(!ready||!session) return;
-    // fix-2: atualizar ref ANTES de qualquer async — quebra o round-trip realtime→upsert→realtime
     const prev=clientesRef.current;
     clientesRef.current=clientes;
-    // fix-1: Map O(1) em vez de .find O(n) por item
     const prevMap=new Map(prev.map(c=>[c.id,c]));
     const changed=clientes.filter(c=>{const old=prevMap.get(c.id);return old&&JSON.stringify(old)!==JSON.stringify(c);});
     if(changed.length===0) return;
-    // fix-1: acumular no queue e enviar em lote após 600ms de inatividade
     changed.forEach(c=>syncQueueRef.current.set(c.id,c));
     clearTimeout(syncTimerRef.current);
     syncTimerRef.current=setTimeout(async()=>{
@@ -834,7 +980,7 @@ export function BKOApp({profile,session,signOut,onAlterarSenha}){
       await Promise.all(toSync.map(async c=>{
         const {id,estagio,criado_por_id,criado_por_nome,criado_por_role,atribuido_a_id,atribuido_a_nome,responsavel_bko_id,responsavel_bko_nome,...data}=c;
         const {error}=await supabase.from('bko_clientes').upsert({id,data:{...data,id},estagio:estagio||'clientes_novos',criado_por_id:criado_por_id||session.user.id,criado_por_nome:criado_por_nome||profile?.nome,criado_por_role:criado_por_role||profile?.role,atribuido_a_id:atribuido_a_id||null,atribuido_a_nome:atribuido_a_nome||null,responsavel_bko_id:responsavel_bko_id||null,responsavel_bko_nome:responsavel_bko_nome||null},{onConflict:'id'});
-        if(error) console.error('BKO sync error (verifique RLS em bko_clientes):',id,error.message);
+        if(error) console.error('BKO sync error:',id,error.message);
       }));
     },600);
   },[clientes,ready,session]);
@@ -848,15 +994,15 @@ export function BKOApp({profile,session,signOut,onAlterarSenha}){
       if(error){console.error('BKO ADD error:',error);alert(`Erro: ${error.message}`);}
     }
     const auditMap={
-      MOVE:()=>({action:'Moveu cliente',details:`→ "${BKO_STAGES.find(s=>s.id===action.st)?.label}"`,clienteId:action.cid}),
-      UPD: ()=>({action:'Editou cliente',details:'Campos atualizados',clienteId:action.c?.id}),
-      ADD: ()=>({action:'Cadastrou cliente',details:`Nome: ${action.c?.nomeCliente}`,clienteId:action.c?.id}),
+      MOVE:     ()=>({action:'Moveu cliente',      details:`→ "${BKO_STAGES.find(s=>s.id===action.st)?.label}"`,clienteId:action.cid}),
+      BULK_MOVE:()=>({action:'Movimento em lote',   details:`${action.ids?.length} clientes → "${BKO_STAGES.find(s=>s.id===action.st)?.label}"`,clienteId:null}),
+      UPD:      ()=>({action:'Editou cliente',      details:'Campos atualizados',clienteId:action.c?.id}),
+      ADD:      ()=>({action:'Cadastrou cliente',   details:`Nome: ${action.c?.nomeCliente}`,clienteId:action.c?.id}),
     };
     const fn=auditMap[action.type];
     if(fn){
       const {action:act,details,clienteId}=fn();
       const clienteNome=action.type==='ADD'?action.c?.nomeCliente:clientes.find(c=>c.id===clienteId)?.nomeCliente||'—';
-      // fix-3: batch de audit — acumula eventos por 3s e faz 1 insert com array
       auditQueueRef.current.push({user_id:session.user.id,user_nome:profile.nome,user_role:profile.role,action:act,cliente_id:clienteId||null,cliente_nome:clienteNome,detalhes:details});
       clearTimeout(auditTimerRef.current);
       auditTimerRef.current=setTimeout(async()=>{
@@ -871,11 +1017,20 @@ export function BKOApp({profile,session,signOut,onAlterarSenha}){
   return(
     <>
       <div style={{display:'flex',minHeight:'100vh',background:'var(--bg-base)',fontFamily:'var(--font)'}}>
-        <BKOSidebar view={view} setView={v=>{setView(v);if(v!=='pipeline')setFiltroEstagio(null);}} profile={profile} onLogout={signOut} onAlterarSenha={()=>setShowAS(true)}/>
+        <BKOSidebar
+          view={view}
+          setView={v=>{setView(v);if(v!=='pipeline')setFiltroEstagio(null);}}
+          profile={profile}
+          onLogout={signOut}
+          onAlterarSenha={()=>setShowAS(true)}
+          collapsed={sidebarCollapsed}
+          setCollapsed={setSidebarCollapsed}
+        />
         <main style={{flex:1,minWidth:0,overflowY:'auto',paddingRight:selected?490:0,transition:'padding-right .3s cubic-bezier(.4,0,.2,1)'}}>
           {view==='dashboard' && <BKODashboard clientes={clientes} setView={v=>{setView(v);}} setFiltroEstagio={setFiltroEstagio}/>}
           {view==='pipeline'  && <BKOPipeline clientes={clientes} profile={profile} dispatch={auditedDispatch} onSelect={id=>dispatch({type:'SEL',id})} filtroEstagio={filtroEstagio} setFiltroEstagio={setFiltroEstagio}/>}
           {view==='clientes'  && <BKOClientes clientes={clientes} profile={profile} onSelect={id=>dispatch({type:'SEL',id})} onNew={()=>dispatch({type:'TNEW'})}/>}
+          {view==='arquivo'   && <BKOArquivo clientes={clientes} profile={profile} dispatch={auditedDispatch} onSelect={id=>dispatch({type:'SEL',id})}/>}
           {view==='cadastrar' && <BKOCadastrar profile={profile} session={session}/>}
           {view==='auditoria' && <BKOAuditoria/>}
         </main>
