@@ -5,6 +5,7 @@ import { DOC_STATUS } from '../../constants';
 import { Avatar, StageTag } from '../../components/shared';
 import { AlterarSenha } from '../../components/AlterarSenha';
 import { BKODetail } from './BKODetail';
+import ReactDOM from 'react-dom';
 
 const B_DARK  = '#1C2033';
 const B_MID   = '#3B5BDB';
@@ -160,6 +161,76 @@ function BKODashboard({clientes,setView,setFiltroEstagio}){
   );
 }
 
+function KCard({c, onSelect, dispatch, profile, setDragId}){
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuPos, setMenuPos] = useState({top:0, left:0});
+  const btnRef = useRef(null);
+
+  useEffect(()=>{
+    if(!menuOpen) return;
+    const close = (e)=>{
+      if(btnRef.current && !btnRef.current.closest('[data-kcard-menu]')?.contains(e.target)){
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', close);
+    return ()=>document.removeEventListener('mousedown', close);
+  },[menuOpen]);
+
+  const openMenu = (e)=>{
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = btnRef.current.getBoundingClientRect();
+    setMenuPos({ top: rect.bottom + 4, left: rect.right - 200 });
+    setMenuOpen(v=>!v);
+  };
+
+  return(
+    <>
+      <div className="kcard" style={{position:'relative'}} draggable onDragStart={()=>setDragId(c.id)} onClick={(e)=>{if(!e.defaultPrevented)onSelect(c.id);}}>
+        <div style={{fontSize:12,fontWeight:600,color:'var(--text-primary)',marginBottom:4,paddingRight:20}}>{c.nomeCliente}</div>
+        <div style={{fontSize:10,color:'var(--text-muted)',marginBottom:c.prefeitura?3:5}}>{c.cpfCliente||'—'}</div>
+        {c.prefeitura&&<div style={{fontSize:9,color:'var(--text-muted)',marginBottom:4}}>🏛 {c.prefeitura}</div>}
+        {c.saldoDevedor&&<div style={{fontSize:10,fontWeight:700,color:'#10B981',marginBottom:4}}>💰 {c.saldoDevedor}</div>}
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+          <span style={{fontSize:9,color:'var(--text-faint)'}}>{fmtD(c.dataEntrada)}</span>
+          <span style={{fontSize:9,fontWeight:600,color:c.documentoStatus==='Aprovado'?'var(--success)':c.documentoStatus==='Não solicitado'?'var(--text-faint)':'var(--amber)'}}>{c.documentoStatus}</span>
+        </div>
+        {c.criado_por_nome&&<div style={{marginTop:5,paddingTop:5,borderTop:'1px solid var(--border)',fontSize:9,color:'var(--text-muted)'}}>{c.criado_por_nome}</div>}
+
+        <button
+          ref={btnRef}
+          onClick={openMenu}
+          style={{position:'absolute',top:6,right:6,background:'rgba(0,0,0,.06)',border:'none',borderRadius:5,cursor:'pointer',width:20,height:20,display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,color:'var(--text-muted)',lineHeight:1,padding:0}}
+        >⋯</button>
+      </div>
+
+      {menuOpen && typeof document !== 'undefined' && ReactDOM.createPortal(
+        <div
+          data-kcard-menu="1"
+          onMouseDown={e=>e.stopPropagation()}
+          style={{position:'fixed',top:menuPos.top,left:Math.max(8,menuPos.left),zIndex:9999,background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:10,boxShadow:'0 8px 24px rgba(0,0,0,.18)',minWidth:200,overflow:'hidden'}}
+        >
+          <div style={{padding:'7px 12px',fontSize:9,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.08em',borderBottom:'1px solid var(--border)'}}>Mover para…</div>
+          {BKO_STAGES.filter(st=>st.id!==c.estagio).map(st=>(
+            <button
+              key={st.id}
+              onMouseDown={e=>{e.stopPropagation();dispatch({type:'MOVE',cid:c.id,st:st.id,user:profile?.nome||'Usuário'});setMenuOpen(false);}}
+              style={{display:'flex',alignItems:'center',gap:8,width:'100%',padding:'8px 12px',background:'none',border:'none',cursor:'pointer',textAlign:'left',fontSize:12,color:'var(--text-primary)',fontFamily:'var(--font)',transition:'background .1s'}}
+              onMouseEnter={e=>e.currentTarget.style.background='rgba(0,0,0,.04)'}
+              onMouseLeave={e=>e.currentTarget.style.background='none'}
+            >
+              <div style={{width:7,height:7,borderRadius:'50%',background:st.color,flexShrink:0}}/>
+              {st.label}
+            </button>
+          ))}
+        </div>,
+        document.body
+      )}
+    </>
+  );
+}
+
 // ── 2. KANBAN: mostra prefeitura no card ──
 function BKOKanbanCol({s,clientes,dragId,setDragId,dispatch,onSelect,profile,highlight}){
   const [over,setOver]=useState(false);
@@ -176,18 +247,7 @@ function BKOKanbanCol({s,clientes,dragId,setDragId,dispatch,onSelect,profile,hig
       </div>
       <div style={{minHeight:40}}>
         {sl.map(c=>(
-          <div key={c.id} className="kcard" draggable onDragStart={()=>setDragId(c.id)} onClick={()=>onSelect(c.id)}>
-            <div style={{fontSize:12,fontWeight:600,color:'var(--text-primary)',marginBottom:4}}>{c.nomeCliente}</div>
-            <div style={{fontSize:10,color:'var(--text-muted)',marginBottom:c.prefeitura?3:5}}>{c.cpfCliente||'—'}</div>
-            {/* ── prefeitura no card ── */}
-            {c.prefeitura&&<div style={{fontSize:9,color:'var(--text-muted)',marginBottom:4}}>🏛 {c.prefeitura}</div>}
-            {c.saldoDevedor&&<div style={{fontSize:10,fontWeight:700,color:'#10B981',marginBottom:4}}>💰 {c.saldoDevedor}</div>}
-            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-              <span style={{fontSize:9,color:'var(--text-faint)'}}>{fmtD(c.dataEntrada)}</span>
-              <span style={{fontSize:9,fontWeight:600,color:c.documentoStatus==='Aprovado'?'var(--success)':c.documentoStatus==='Não solicitado'?'var(--text-faint)':'var(--amber)'}}>{c.documentoStatus}</span>
-            </div>
-            {c.criado_por_nome&&<div style={{marginTop:5,paddingTop:5,borderTop:'1px solid var(--border)',fontSize:9,color:'var(--text-muted)'}}>{c.criado_por_nome}</div>}
-          </div>
+          <KCard key={c.id} c={c} onSelect={onSelect} dispatch={dispatch} profile={profile} setDragId={setDragId}/>
         ))}
         {sl.length===0&&<div style={{textAlign:'center',padding:'16px 0',fontSize:10,color:'var(--text-faint)'}}>Solte aqui</div>}
       </div>

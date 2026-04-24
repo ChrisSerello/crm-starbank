@@ -5,6 +5,8 @@ import { useAuth } from "./hooks/useAuth";
 import { INIT, R } from "./store";
 import { stg, TODAY } from "./utils";
 import { OPERATORS } from "./constants";
+import { EcommerceApp } from "./views/ecommerce/EcommerceApp";
+import { ExternosApp } from './views/externos/ExternosApp';
 
 // [OTM-3] Import de LEADS0 removido — seed desativado para reduzir Disk IO
 
@@ -229,6 +231,21 @@ export default function App(){
     </>
   );
 
+  // Modulo ecommerce
+  if (profile.modulo === 'ecommerce') return (
+    <>
+      <GlobalStyles/>
+      {/* Substitua pelo seu componente real */}
+      <EcommerceApp
+        profile={profile}
+        session={session}
+        signOut={signOut}
+        onAlterarSenha={() => setShowAlterarSenha(true)}
+      />
+      {showAlterarSenha && <AlterarSenha onClose={() => setShowAlterarSenha(false)}/>}
+    </>
+  );
+
   // ── Operador — app separado com visão filtrada ──
   if(profile.role==='operador') return(
     <>
@@ -245,7 +262,20 @@ export default function App(){
     </>
   );
 
-  // ── Main app ──
+  if (profile.modulo === 'externos') return (
+    <>
+      <GlobalStyles />
+      <ExternosApp
+        profile={profile}
+        session={session}
+        signOut={signOut}
+        onAlterarSenha={() => setShowAlterarSenha(true)}
+      />
+      {showAlterarSenha && <AlterarSenha onClose={() => setShowAlterarSenha(false)} />}
+    </>
+  );
+
+  // Main app
   return(
     <>
       <GlobalStyles/>
