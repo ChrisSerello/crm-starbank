@@ -165,48 +165,33 @@ function BrazilMap({ counts }) {
 }
 
 /* ─── TVApp principal ─────────────────────────────────────────────────────── */
+
+/* Fora do componente — normalize não depende de estado */
+const normalize = (r) => ({
+  ...r.data,
+  id: r.id,
+  estagio: r.estagio,
+  criado_por_nome: r.criado_por_nome || r.data?.criado_por_nome || null,
+  criado_por_id:   r.criado_por_id   || r.data?.criado_por_id   || null,
+  atribuido_a_nome:r.atribuido_a_nome|| r.data?.atribuido_a_nome|| null,
+});
+
 export function TVApp({ profile, signOut }) {
   const [clientes, setClientes] = useState([]);
-  const [ready, setReady] = useState(false);
-  const [time, setTime] = useState(new Date());
+  const [ready, setReady]       = useState(false);
+  const [time, setTime]         = useState(new Date());
+  const isComercial             = profile?.role === 'comercial';
 
-  /* Acesso restrito ao Comercial */
-  if (profile?.role !== 'comercial') {
-    return (
-      <div style={{ minHeight:'100vh', background:C.bg, display:'flex',
-        alignItems:'center', justifyContent:'center', flexDirection:'column', gap:16,
-        fontFamily:"'DM Sans',sans-serif" }}>
-        <div style={{ fontSize:48 }}>🔒</div>
-        <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:30, color:C.text,
-          letterSpacing:'.04em' }}>ACESSO RESTRITO</div>
-        <div style={{ fontSize:14, color:C.muted }}>Este painel é exclusivo para o Comercial</div>
-        <button onClick={signOut} style={{ marginTop:8, padding:'10px 24px', borderRadius:8,
-          background:C.blueG, border:`1px solid ${C.border}`, color:C.text,
-          cursor:'pointer', fontSize:13, fontFamily:"'DM Sans',sans-serif" }}>
-          Voltar ao login
-        </button>
-      </div>
-    );
-  }
-
-  /* Normaliza uma linha do banco — garante criado_por_nome de qualquer lugar */
-  const normalize = (r) => ({
-    ...r.data,
-    id: r.id,
-    estagio: r.estagio,
-    criado_por_nome: r.criado_por_nome || r.data?.criado_por_nome || null,
-    criado_por_id:   r.criado_por_id   || r.data?.criado_por_id   || null,
-    atribuido_a_nome:r.atribuido_a_nome|| r.data?.atribuido_a_nome|| null,
-  });
-
-  /* Clock */
+  /* Clock — sempre roda */
   useEffect(() => {
     const t = setInterval(() => setTime(new Date()), 1000);
     return () => clearInterval(t);
   }, []);
 
-  /* Carregar dados reais */
+  /* Carregar dados — só busca se for comercial */
   useEffect(() => {
+    if (!isComercial) { setReady(true); return; }
+
     supabase.from('bko_clientes').select('*').order('created_at', { ascending:false }).limit(1000)
       .then(({ data, error }) => {
         if (error) { console.error('TVApp load error:', error); setReady(true); return; }
@@ -227,7 +212,7 @@ export function TVApp({ profile, signOut }) {
       .subscribe();
 
     return () => supabase.removeChannel(ch);
-  }, []);
+  }, [isComercial]);
 
   /* Métricas calculadas */
   const integrados    = clientes.filter(c => c.estagio === 'integrado').length;
@@ -284,6 +269,23 @@ export function TVApp({ profile, signOut }) {
   const hh = pad(time.getHours()), mm = pad(time.getMinutes()), ss = pad(time.getSeconds());
   const fmtDate = time.toLocaleDateString('pt-BR', { weekday:'long', day:'numeric', month:'long' });
   const mesNome = MES_FULL[time.getMonth()];
+
+  /* ── Tela de acesso negado — APÓS todos os hooks ── */
+  if (!isComercial) return (
+    <div style={{ minHeight:'100vh', background:C.bg, display:'flex',
+      alignItems:'center', justifyContent:'center', flexDirection:'column', gap:16,
+      fontFamily:"'DM Sans',sans-serif" }}>
+      <div style={{ fontSize:48 }}>🔒</div>
+      <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:30, color:C.text,
+        letterSpacing:'.04em' }}>ACESSO RESTRITO</div>
+      <div style={{ fontSize:14, color:C.muted }}>Este painel é exclusivo para o Comercial</div>
+      <button onClick={signOut} style={{ marginTop:8, padding:'10px 24px', borderRadius:8,
+        background:C.blueG, border:`1px solid ${C.border}`, color:C.text,
+        cursor:'pointer', fontSize:13, fontFamily:"'DM Sans',sans-serif" }}>
+        Voltar ao login
+      </button>
+    </div>
+  );
 
   /* Loading */
   if (!ready) return (
