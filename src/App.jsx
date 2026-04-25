@@ -5,8 +5,6 @@ import { useAuth } from "./hooks/useAuth";
 import { INIT, R } from "./store";
 import { stg, TODAY } from "./utils";
 import { OPERATORS } from "./constants";
-import { EcommerceApp } from "./views/ecommerce/EcommerceApp";
-import { ExternosApp } from './views/externos/ExternosApp';
 
 // [OTM-3] Import de LEADS0 removido — seed desativado para reduzir Disk IO
 
@@ -26,6 +24,7 @@ import { GestaoEquipe } from "./views/GestaoEquipe";
 import { OperadorApp } from "./views/OperadorApp";
 import { CorbanApp } from "./views/corbans/CorbanApp";
 import { BKOApp } from "./views/bko/BKOApp";
+import { TVApp } from "./views/tv/TVApp";
 
 // ─── ROOT ─────────────────────────────────────────────────────────────────────
 
@@ -203,6 +202,14 @@ export default function App(){
     </>
   );
 
+  // ── TV Dashboard — rota /tv (exclusivo role comercial) ──
+  if(window.location.pathname==='/tv') return(
+    <>
+      <GlobalStyles/>
+      <TVApp profile={profile} session={session} signOut={signOut}/>
+    </>
+  );
+
   // ── Corbans — módulo totalmente isolado ──
   if(profile.modulo==='corbans') return(
     <>
@@ -231,21 +238,6 @@ export default function App(){
     </>
   );
 
-  // Modulo ecommerce
-  if (profile.modulo === 'ecommerce') return (
-    <>
-      <GlobalStyles/>
-      {/* Substitua pelo seu componente real */}
-      <EcommerceApp
-        profile={profile}
-        session={session}
-        signOut={signOut}
-        onAlterarSenha={() => setShowAlterarSenha(true)}
-      />
-      {showAlterarSenha && <AlterarSenha onClose={() => setShowAlterarSenha(false)}/>}
-    </>
-  );
-
   // ── Operador — app separado com visão filtrada ──
   if(profile.role==='operador') return(
     <>
@@ -262,20 +254,7 @@ export default function App(){
     </>
   );
 
-  if (profile.modulo === 'externos') return (
-    <>
-      <GlobalStyles />
-      <ExternosApp
-        profile={profile}
-        session={session}
-        signOut={signOut}
-        onAlterarSenha={() => setShowAlterarSenha(true)}
-      />
-      {showAlterarSenha && <AlterarSenha onClose={() => setShowAlterarSenha(false)} />}
-    </>
-  );
-
-  // Main app
+  // ── Main app ──
   return(
     <>
       <GlobalStyles/>
