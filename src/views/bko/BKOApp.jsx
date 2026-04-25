@@ -4,6 +4,7 @@ import { gid, TODAY, fmtD } from '../../utils';
 import { Avatar } from '../../components/shared';
 import { AlterarSenha } from '../../components/AlterarSenha';
 import { BKODetail } from './BKODetail';
+import { BKOSearch } from './BKOSearch';
 import ReactDOM from 'react-dom';
 
 const B_DARK  = '#1C2033';
@@ -44,7 +45,9 @@ function R(s,{type:t,...a}){
     case'SEL':   return{...s,sel:a.id};
     case'CLOSE': return{...s,sel:null};
     case'TNEW':  return{...s,newOpen:!s.newOpen};
-    case'MOVE':  return{...s,clientes:s.clientes.map(c=>c.id!==a.cid?c:{...c,estagio:a.st,ultimoContato:TODAY,activities:[...(c.activities||[]),{id:gid(),type:'stage_change',date:TODAY,user:a.user,text:`Movido para "${BKO_STAGES.find(s=>s.id===a.st)?.label}"`}]})};
+    case'MOVE':      return{...s,clientes:s.clientes.map(c=>c.id!==a.cid?c:{...c,estagio:a.st,ultimoContato:TODAY,activities:[...(c.activities||[]),{id:gid(),type:'stage_change',date:TODAY,user:a.user,text:`Movido para "${BKO_STAGES.find(s=>s.id===a.st)?.label}"`}]})};
+    case'MOVE_FUNIL': return{...s,clientes:s.clientes.map(c=>c.id!==a.cid?c:{...c,funil_id:a.funil_id,funil_mes:a.funil_mes,funil_nome:a.funil_nome,ultimoContato:TODAY,activities:[...(c.activities||[]),{id:gid(),type:'stage_change',date:TODAY,user:a.user,text:`Arquivado no funil "${a.funil_nome}" · ${a.funil_mes_label}`}]})};
+    case'REMOVE_FUNIL': return{...s,clientes:s.clientes.map(c=>c.id!==a.cid?c:{...c,funil_id:null,funil_mes:null,funil_nome:null,ultimoContato:TODAY,activities:[...(c.activities||[]),{id:gid(),type:'stage_change',date:TODAY,user:a.user,text:'Retornou ao pipeline'}]})};
     case'UPD':   return{...s,clientes:s.clientes.map(c=>c.id!==a.c.id?c:{...c,...a.c})};
     case'ADD':   return{...s,newOpen:false,clientes:[{...a.c,activities:[{id:gid(),type:'stage_change',date:TODAY,user:a.user,text:'Cliente cadastrado'}]},...s.clientes]};
     case'RT_ADD': return s.clientes.find(c=>c.id===a.c.id)?s:{...s,clientes:[a.c,...s.clientes]};
@@ -52,7 +55,7 @@ function R(s,{type:t,...a}){
   }
 }
 
-function BKOSidebar({view,setView,profile,onLogout,onAlterarSenha}){
+function BKOSidebar({view,setView,profile,onLogout,onAlterarSenha,onSearch,collapsed,setCollapsed}){
   const r=profile?.role;
   const items=[
     {id:'dashboard',icon:'◈',label:'Dashboard'},
@@ -61,34 +64,76 @@ function BKOSidebar({view,setView,profile,onLogout,onAlterarSenha}){
     ...(r==='comercial'||r==='corban_bko'?[{id:'cadastrar',icon:'＋',label:'Cadastrar'}]:[]),
     ...(r==='comercial'?[{id:'auditoria',icon:'🔍',label:'Auditoria'}]:[]),
   ];
+  const W = collapsed ? 56 : 200;
   return(
-    <div style={{width:220,background:B_DARK,borderRight:'1px solid rgba(59,91,219,.2)',display:'flex',flexDirection:'column',flexShrink:0,height:'100vh',position:'sticky',top:0}}>
-      <div style={{padding:'18px 16px 14px',borderBottom:'1px solid rgba(59,91,219,.15)'}}>
-        <div style={{flex:1,overflow:'hidden',borderRadius:8}}>
-          <img src="/starflow.gif" alt="StarFlow" style={{display:'block',width:'100%',height:'auto',maxHeight:44,objectFit:'cover',objectPosition:'center',borderRadius:8}}/>
-        </div>
-        <div style={{marginTop:8,fontSize:9,fontWeight:700,color:B_TEXT,letterSpacing:'.12em',textTransform:'uppercase'}}>BKO — Backoffice</div>
+    <div style={{width:W,minWidth:W,background:B_DARK,borderRight:'1px solid rgba(59,91,219,.2)',display:'flex',flexDirection:'column',flexShrink:0,height:'100vh',position:'sticky',top:0,transition:'width .22s cubic-bezier(.4,0,.2,1)',overflow:'hidden'}}>
+      {/* Header */}
+      <div style={{padding: collapsed?'12px 0':'16px 14px 12px',borderBottom:'1px solid rgba(59,91,219,.15)',display:'flex',alignItems:'center',justifyContent:collapsed?'center':'space-between',gap:8,flexShrink:0,minHeight:64}}>
+        {!collapsed&&(
+          <div style={{flex:1,overflow:'hidden',minWidth:0}}>
+            <div style={{borderRadius:7,overflow:'hidden',width:'100%'}}>
+              <img src="/starflow.gif" alt="StarFlow" style={{display:'block',width:'100%',height:'auto',maxHeight:38,objectFit:'cover',objectPosition:'center'}}/>
+            </div>
+            <div style={{marginTop:6,fontSize:8,fontWeight:700,color:B_TEXT,letterSpacing:'.12em',textTransform:'uppercase',whiteSpace:'nowrap'}}>BKO — Backoffice</div>
+          </div>
+        )}
+        <button
+          onClick={()=>setCollapsed(v=>!v)}
+          title={collapsed?'Expandir menu':'Recolher menu'}
+          style={{background:'rgba(255,255,255,.07)',border:'1px solid rgba(255,255,255,.1)',borderRadius:7,cursor:'pointer',width:26,height:26,display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,color:'rgba(255,255,255,.5)',flexShrink:0,transition:'all .15s'}}
+          onMouseEnter={e=>{e.currentTarget.style.background='rgba(255,255,255,.14)';e.currentTarget.style.color='#fff';}}
+          onMouseLeave={e=>{e.currentTarget.style.background='rgba(255,255,255,.07)';e.currentTarget.style.color='rgba(255,255,255,.5)';}}>
+          {collapsed?'›':'‹'}
+        </button>
       </div>
-      <nav style={{padding:'10px 8px',flex:1}}>
-        <div style={{fontSize:9,fontWeight:700,color:'rgba(255,255,255,.25)',textTransform:'uppercase',letterSpacing:'.09em',padding:'10px 8px 6px'}}>Menu</div>
+      {/* Botão de busca */}
+      <div style={{padding:collapsed?'8px 4px 0':'8px 8px 0'}}>
+        <button onClick={onSearch} title={collapsed?'Buscar cliente (Ctrl+K)':''} style={{display:'flex',alignItems:'center',gap:collapsed?0:8,width:'100%',padding:collapsed?'8px 0':'7px 10px',justifyContent:collapsed?'center':'flex-start',borderRadius:8,background:'rgba(255,255,255,.05)',border:'1px solid rgba(255,255,255,.08)',cursor:'pointer',color:'rgba(255,255,255,.45)',fontSize:12,fontFamily:'var(--font)',transition:'all .15s'}}
+          onMouseEnter={e=>{e.currentTarget.style.background='rgba(59,91,219,.18)';e.currentTarget.style.color=B_TEXT;}}
+          onMouseLeave={e=>{e.currentTarget.style.background='rgba(255,255,255,.05)';e.currentTarget.style.color='rgba(255,255,255,.45)';}}>
+          <span style={{fontSize:15,flexShrink:0}}>⌕</span>
+          {!collapsed&&<><span style={{flex:1,textAlign:'left',fontSize:11}}>Buscar…</span><kbd style={{fontSize:8,padding:'1px 4px',borderRadius:4,background:'rgba(255,255,255,.1)',border:'1px solid rgba(255,255,255,.12)',color:'rgba(255,255,255,.4)'}}>K</kbd></>}
+        </button>
+      </div>
+      {/* Nav */}
+      <nav style={{padding:collapsed?'8px 4px':'8px',flex:1,overflow:'hidden'}}>
+        {!collapsed&&<div style={{fontSize:8,fontWeight:700,color:'rgba(255,255,255,.25)',textTransform:'uppercase',letterSpacing:'.09em',padding:'8px 8px 4px'}}>Menu</div>}
         {items.map(it=>(
-          <button key={it.id} onClick={()=>setView(it.id)} style={{display:'flex',alignItems:'center',gap:10,padding:'9px 12px',borderRadius:8,fontSize:13,fontWeight:view===it.id?600:400,cursor:'pointer',border:'none',width:'100%',textAlign:'left',transition:'all .15s',position:'relative',background:view===it.id?B_LIGHT:'transparent',color:view===it.id?B_TEXT:'rgba(255,255,255,.5)',fontFamily:'var(--font)'}}>
-            {view===it.id&&<div style={{position:'absolute',left:0,top:'18%',bottom:'18%',width:3,background:B_MID,borderRadius:'0 3px 3px 0'}}/>}
-            <span style={{fontSize:14,width:20,textAlign:'center'}}>{it.icon}</span>{it.label}
+          <button key={it.id} onClick={()=>setView(it.id)}
+            title={collapsed?it.label:''}
+            style={{display:'flex',alignItems:'center',gap:collapsed?0:9,padding:collapsed?'9px 0':'8px 10px',justifyContent:collapsed?'center':'flex-start',borderRadius:8,fontSize:12,fontWeight:view===it.id?600:400,cursor:'pointer',border:'none',width:'100%',textAlign:'left',transition:'all .15s',position:'relative',background:view===it.id?B_LIGHT:'transparent',color:view===it.id?B_TEXT:'rgba(255,255,255,.5)',fontFamily:'var(--font)',marginBottom:2}}
+            onMouseEnter={e=>{if(view!==it.id){e.currentTarget.style.background='rgba(255,255,255,.05)';e.currentTarget.style.color='rgba(255,255,255,.75)';}}}
+            onMouseLeave={e=>{if(view!==it.id){e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.5)';}}}
+          >
+            {view===it.id&&<div style={{position:'absolute',left:0,top:'20%',bottom:'20%',width:3,background:B_MID,borderRadius:'0 3px 3px 0'}}/>}
+            <span style={{fontSize:15,width:20,textAlign:'center',flexShrink:0}}>{it.icon}</span>
+            {!collapsed&&<span style={{whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{it.label}</span>}
           </button>
         ))}
       </nav>
-      <div style={{padding:'12px 14px',borderTop:'1px solid rgba(59,91,219,.15)'}}>
-        <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:8}}>
-          <Avatar name={profile?.nome||'U'} size={28} color={ROLE_COLORS[r]||B_MID}/>
-          <div style={{minWidth:0}}>
-            <div style={{fontSize:11,fontWeight:600,color:'#fff',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{profile?.nome}</div>
-            <div style={{fontSize:9,fontWeight:700,color:B_TEXT,textTransform:'uppercase',letterSpacing:'.07em'}}>{ROLE_LABELS[r]||r}</div>
+      {/* Footer */}
+      <div style={{padding:collapsed?'10px 4px':'10px 12px',borderTop:'1px solid rgba(59,91,219,.15)',flexShrink:0}}>
+        {collapsed?(
+          <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:6}}>
+            <Avatar name={profile?.nome||'U'} size={26} color={ROLE_COLORS[r]||B_MID}/>
+            <div style={{width:6,height:6,borderRadius:'50%',background:'#22C55E',boxShadow:'0 0 5px #22C55E'}}/>
+            <button onClick={onAlterarSenha} title="Alterar senha" style={{width:30,height:26,borderRadius:6,background:'rgba(255,255,255,.05)',border:'1px solid rgba(255,255,255,.08)',color:'rgba(255,255,255,.5)',fontSize:12,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}>🔑</button>
+            <button onClick={onLogout} title="Sair" style={{width:30,height:26,borderRadius:6,background:'rgba(239,68,68,.1)',border:'1px solid rgba(239,68,68,.2)',color:'#FCA5A5',fontSize:13,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}>⏻</button>
           </div>
-          <div style={{marginLeft:'auto',width:6,height:6,borderRadius:'50%',background:'#22C55E',boxShadow:'0 0 5px #22C55E',flexShrink:0}}/>
-        </div>
-        <button onClick={onAlterarSenha} style={{width:'100%',padding:'6px 0',borderRadius:6,background:'rgba(255,255,255,.05)',border:'1px solid rgba(255,255,255,.08)',color:'rgba(255,255,255,.5)',fontSize:11,fontWeight:500,cursor:'pointer',fontFamily:'var(--font)',marginBottom:5}}>🔑 Alterar senha</button>
-        <button onClick={onLogout} style={{width:'100%',padding:'6px 0',borderRadius:6,background:'rgba(239,68,68,.1)',border:'1px solid rgba(239,68,68,.2)',color:'#FCA5A5',fontSize:11,fontWeight:600,cursor:'pointer',fontFamily:'var(--font)'}}>Sair da conta</button>
+        ):(
+          <>
+            <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:8}}>
+              <Avatar name={profile?.nome||'U'} size={26} color={ROLE_COLORS[r]||B_MID}/>
+              <div style={{minWidth:0}}>
+                <div style={{fontSize:10,fontWeight:600,color:'#fff',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{profile?.nome}</div>
+                <div style={{fontSize:8,fontWeight:700,color:B_TEXT,textTransform:'uppercase',letterSpacing:'.07em'}}>{ROLE_LABELS[r]||r}</div>
+              </div>
+              <div style={{marginLeft:'auto',width:6,height:6,borderRadius:'50%',background:'#22C55E',boxShadow:'0 0 5px #22C55E',flexShrink:0}}/>
+            </div>
+            <button onClick={onAlterarSenha} style={{width:'100%',padding:'5px 0',borderRadius:6,background:'rgba(255,255,255,.05)',border:'1px solid rgba(255,255,255,.08)',color:'rgba(255,255,255,.5)',fontSize:10,fontWeight:500,cursor:'pointer',fontFamily:'var(--font)',marginBottom:4}}>🔑 Alterar senha</button>
+            <button onClick={onLogout} style={{width:'100%',padding:'5px 0',borderRadius:6,background:'rgba(239,68,68,.1)',border:'1px solid rgba(239,68,68,.2)',color:'#FCA5A5',fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'var(--font)'}}>Sair da conta</button>
+          </>
+        )}
       </div>
     </div>
   );
@@ -165,7 +210,7 @@ function BKODashboard({clientes,setView,setFiltroEstagio}){
   );
 }
 
-function KCard({c, onSelect, dispatch, profile, setDragId}){
+function KCard({c, onSelect, dispatch, profile, setDragId, funis=[]}){
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuPos, setMenuPos] = useState({top:0, left:0});
   const btnRef = useRef(null);
@@ -185,17 +230,27 @@ function KCard({c, onSelect, dispatch, profile, setDragId}){
     e.preventDefault();
     e.stopPropagation();
     const rect = btnRef.current.getBoundingClientRect();
-    setMenuPos({ top: rect.bottom + 4, left: rect.right - 200 });
+    setMenuPos({ top: rect.bottom + 4, left: rect.right - 220 });
     setMenuOpen(v=>!v);
+  };
+
+  const moverFunil = (funil) => {
+    const now = new Date();
+    const funil_mes = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+    const meses = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+    const funil_mes_label = `${meses[now.getMonth()]} ${now.getFullYear()}`;
+    dispatch({type:'MOVE_FUNIL', cid:c.id, funil_id:funil.id, funil_mes, funil_nome:funil.nome, funil_mes_label, user:profile?.nome||'Usuário'});
+    setMenuOpen(false);
   };
 
   return(
     <>
-      <div className="kcard" style={{position:'relative'}} draggable onDragStart={()=>setDragId(c.id)} onClick={(e)=>{if(!e.defaultPrevented)onSelect(c.id);}}>
+      <div className="kcard" style={{position:'relative', opacity:c.funil_id?0.55:1}} draggable onDragStart={()=>setDragId(c.id)} onClick={(e)=>{if(!e.defaultPrevented)onSelect(c.id);}}>
         <div style={{fontSize:12,fontWeight:600,color:'var(--text-primary)',marginBottom:4,paddingRight:20}}>{c.nomeCliente}</div>
         <div style={{fontSize:10,color:'var(--text-muted)',marginBottom:c.prefeitura?3:5}}>{c.cpfCliente||'—'}</div>
         {c.prefeitura&&<div style={{fontSize:9,color:'var(--text-muted)',marginBottom:4}}>🏛 {c.prefeitura}</div>}
         {c.saldoDevedor&&<div style={{fontSize:10,fontWeight:700,color:'#10B981',marginBottom:4}}>💰 {c.saldoDevedor}</div>}
+        {c.funil_nome&&<div style={{fontSize:9,fontWeight:600,color:'var(--text-muted)',marginBottom:4}}>📦 {c.funil_nome}</div>}
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
           <span style={{fontSize:9,color:'var(--text-faint)'}}>{fmtD(c.dataEntrada)}</span>
           <span style={{fontSize:9,fontWeight:600,color:c.documentoStatus==='Aprovado'?'var(--success)':c.documentoStatus==='Não solicitado'?'var(--text-faint)':'var(--amber)'}}>{c.documentoStatus}</span>
@@ -213,14 +268,15 @@ function KCard({c, onSelect, dispatch, profile, setDragId}){
         <div
           data-kcard-menu="1"
           onMouseDown={e=>e.stopPropagation()}
-          style={{position:'fixed',top:menuPos.top,left:Math.max(8,menuPos.left),zIndex:9999,background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:10,boxShadow:'0 8px 24px rgba(0,0,0,.18)',minWidth:200,overflow:'hidden'}}
+          style={{position:'fixed',top:menuPos.top,left:Math.max(8,menuPos.left),zIndex:9999,background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:10,boxShadow:'0 8px 24px rgba(0,0,0,.18)',minWidth:220,overflow:'hidden'}}
         >
-          <div style={{padding:'7px 12px',fontSize:9,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.08em',borderBottom:'1px solid var(--border)'}}>Mover para…</div>
+          {/* Mover para estágio */}
+          <div style={{padding:'7px 12px',fontSize:9,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.08em',borderBottom:'1px solid var(--border)'}}>Mover para estágio…</div>
           {BKO_STAGES.filter(st=>st.id!==c.estagio).map(st=>(
             <button
               key={st.id}
               onMouseDown={e=>{e.stopPropagation();dispatch({type:'MOVE',cid:c.id,st:st.id,user:profile?.nome||'Usuário'});setMenuOpen(false);}}
-              style={{display:'flex',alignItems:'center',gap:8,width:'100%',padding:'8px 12px',background:'none',border:'none',cursor:'pointer',textAlign:'left',fontSize:12,color:'var(--text-primary)',fontFamily:'var(--font)',transition:'background .1s'}}
+              style={{display:'flex',alignItems:'center',gap:8,width:'100%',padding:'7px 12px',background:'none',border:'none',cursor:'pointer',textAlign:'left',fontSize:12,color:'var(--text-primary)',fontFamily:'var(--font)',transition:'background .1s'}}
               onMouseEnter={e=>e.currentTarget.style.background='rgba(0,0,0,.04)'}
               onMouseLeave={e=>e.currentTarget.style.background='none'}
             >
@@ -228,6 +284,36 @@ function KCard({c, onSelect, dispatch, profile, setDragId}){
               {st.label}
             </button>
           ))}
+
+          {/* Mover para funil */}
+          {funis.length > 0 && (
+            <>
+              <div style={{padding:'7px 12px',fontSize:9,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.08em',borderTop:'1px solid var(--border)',borderBottom:'1px solid var(--border)'}}>Arquivar no funil…</div>
+              {c.funil_id && (
+                <button
+                  onMouseDown={e=>{e.stopPropagation();dispatch({type:'REMOVE_FUNIL',cid:c.id,user:profile?.nome||'Usuário'});setMenuOpen(false);}}
+                  style={{display:'flex',alignItems:'center',gap:8,width:'100%',padding:'7px 12px',background:'none',border:'none',cursor:'pointer',textAlign:'left',fontSize:12,color:'var(--danger)',fontFamily:'var(--font)',transition:'background .1s'}}
+                  onMouseEnter={e=>e.currentTarget.style.background='rgba(239,68,68,.04)'}
+                  onMouseLeave={e=>e.currentTarget.style.background='none'}
+                >
+                  ← Remover do funil
+                </button>
+              )}
+              {funis.filter(f=>f.ativo).map(f=>(
+                <button
+                  key={f.id}
+                  onMouseDown={e=>{e.stopPropagation();moverFunil(f);}}
+                  style={{display:'flex',alignItems:'center',gap:8,width:'100%',padding:'7px 12px',background:c.funil_id===f.id?`${f.cor}10`:'none',border:'none',cursor:'pointer',textAlign:'left',fontSize:12,color:c.funil_id===f.id?f.cor:'var(--text-primary)',fontFamily:'var(--font)',transition:'background .1s'}}
+                  onMouseEnter={e=>e.currentTarget.style.background=`${f.cor}08`}
+                  onMouseLeave={e=>e.currentTarget.style.background=c.funil_id===f.id?`${f.cor}10`:'none'}
+                >
+                  <div style={{width:7,height:7,borderRadius:'50%',background:f.cor,flexShrink:0}}/>
+                  {f.nome}
+                  {c.funil_id===f.id&&<span style={{marginLeft:'auto',fontSize:9,color:f.cor}}>✓ atual</span>}
+                </button>
+              ))}
+            </>
+          )}
         </div>,
         document.body
       )}
@@ -235,11 +321,11 @@ function KCard({c, onSelect, dispatch, profile, setDragId}){
   );
 }
 
-function BKOKanbanCol({s,clientes,dragId,setDragId,dispatch,onSelect,profile,highlight,selected,onToggleSel}){
+function BKOKanbanCol({s,clientes,dragId,setDragId,dispatch,onSelect,profile,highlight,funis}){
   const [over,setOver]=useState(false);
-  const sl=clientes.filter(c=>c.estagio===s.id);
+  const sl=clientes.filter(c=>c.estagio===s.id&&!c.funil_id);
   return(
-    <div style={{minWidth:200,width:210,flexShrink:0,background:highlight?`${s.color}08`:'rgba(0,0,0,.03)',border:`1px solid ${highlight?s.color+'40':'var(--border)'}`,borderRadius:14,padding:'11px 9px',transition:'all .2s',boxShadow:highlight?`0 0 0 2px ${s.color}30`:''}}
+    <div style={{minWidth:170,width:201,flexShrink:0,background:highlight?`${s.color}08`:'rgba(0,0,0,.03)',border:`1px solid ${highlight?s.color+'40':'var(--border)'}`,borderRadius:12,padding:'10px 8px',transition:'all .2s',boxShadow:highlight?`0 0 0 2px ${s.color}30`:''}}
       onDragOver={e=>{e.preventDefault();setOver(true);}}
       onDragLeave={()=>setOver(false)}
       onDrop={()=>{setOver(false);if(dragId)dispatch({type:'MOVE',cid:dragId,st:s.id,user:profile?.nome||'Usuário'});setDragId(null);}}>
@@ -249,21 +335,9 @@ function BKOKanbanCol({s,clientes,dragId,setDragId,dispatch,onSelect,profile,hig
         <span style={{fontSize:10,fontWeight:700,background:s.bg,color:s.color,borderRadius:99,padding:'1px 6px'}}>{sl.length}</span>
       </div>
       <div style={{minHeight:40}}>
-        {sl.map(c=>{
-          const isSel=selected?.has(c.id);
-          return(
-            <div key={c.id} style={{position:'relative'}}>
-              {/* Checkbox de seleção */}
-              {(selected?.size>0||isSel)&&(
-                <div onClick={e=>{e.stopPropagation();onToggleSel(c.id);}}
-                  style={{position:'absolute',top:7,left:7,zIndex:2,width:16,height:16,borderRadius:4,border:`1.5px solid ${isSel?B_MID:'rgba(0,0,0,.25)'}`,background:isSel?B_MID:'rgba(255,255,255,.9)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,color:'#fff',cursor:'pointer',transition:'all .15s'}}>
-                  {isSel&&'✓'}
-                </div>
-              )}
-              <KCard c={c} onSelect={onSelect} dispatch={dispatch} profile={profile} setDragId={setDragId}/>
-            </div>
-          );
-        })}
+        {sl.map(c=>(
+          <KCard key={c.id} c={c} onSelect={onSelect} dispatch={dispatch} profile={profile} setDragId={setDragId} funis={funis}/>
+        ))}
         {sl.length===0&&<div style={{textAlign:'center',padding:'16px 0',fontSize:10,color:'var(--text-faint)'}}>Solte aqui</div>}
       </div>
     </div>
@@ -271,270 +345,232 @@ function BKOKanbanCol({s,clientes,dragId,setDragId,dispatch,onSelect,profile,hig
 }
 
 
-// ─── PIPELINE COM BULK SELECT (todos os 8 estágios) ──────────────────────────
-function BKOPipeline({clientes,profile,dispatch,onSelect,filtroEstagio,setFiltroEstagio}){
-  const [dragId,setDragId]=useState(null);
+// ─── HELPERS DE MÊS ──────────────────────────────────────────────────────────
+const MESES_FULL = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
+function parseMes(funil_mes){
+  if(!funil_mes) return null;
+  const [ano,mes]=funil_mes.split('-');
+  return{ano:parseInt(ano),mes:parseInt(mes),label:`${MESES_FULL[parseInt(mes)-1]} ${ano}`};
+}
+
+// ─── FUNIL POR MESES ─────────────────────────────────────────────────────────
+function BKOFunilMeses({funil,clientes,onSelect,dispatch,profile}){
   const [search,setSearch]=useState('');
-  const [selected,setSelected]=useState(new Set());
-  const [bulkTarget,setBulkTarget]=useState('');
-  const [bulkApplying,setBulkApplying]=useState(false);
-  const colsRef=useRef(null);
 
-  useEffect(()=>{if(filtroEstagio&&colsRef.current){const idx=BKO_STAGES.findIndex(s=>s.id===filtroEstagio);if(idx>-1)colsRef.current.scrollLeft=idx*215;}},[filtroEstagio]);
+  const clientesFunil=useMemo(()=>
+    clientes.filter(c=>c.funil_id===funil.id&&(
+      !search.trim()||
+      c.nomeCliente?.toLowerCase().includes(search.toLowerCase())||
+      c.cpfCliente?.includes(search)
+    ))
+  ,[clientes,funil.id,search]);
 
-  const filtered = search.trim()
-    ? clientes.filter(c=>c.nomeCliente?.toLowerCase().includes(search.toLowerCase())||c.cpfCliente?.includes(search))
-    : clientes;
-
-  const toggleSel=(id)=>setSelected(s=>{const n=new Set(s);n.has(id)?n.delete(id):n.add(id);return n;});
-  const selectAll=()=>setSelected(new Set(filtered.map(c=>c.id)));
-  const clearSel=()=>setSelected(new Set());
-
-  const applyBulk=()=>{
-    if(!bulkTarget||selected.size===0) return;
-    setBulkApplying(true);
-    dispatch({type:'BULK_MOVE',ids:[...selected],st:bulkTarget,user:profile?.nome||'Usuário'});
-    clearSel(); setBulkTarget(''); setBulkApplying(false);
-  };
-
-  return(
-    <div style={{padding:'28px 32px',overflowX:'hidden'}}>
-      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20,gap:16,flexWrap:'wrap'}}>
-        <div>
-          <div className="section-title">Pipeline</div>
-          <div className="section-sub">
-            {clientes.length} clientes
-            {selected.size>0&&<span style={{marginLeft:8,fontWeight:700,color:B_MID}}> · {selected.size} selecionado{selected.size>1?'s':''}</span>}
-          </div>
-        </div>
-        <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
-          {filtroEstagio&&(<div style={{display:'flex',alignItems:'center',gap:6,padding:'5px 12px',borderRadius:99,background:B_LIGHT,border:`1px solid ${B_MID}30`,fontSize:11,color:B_MID,fontWeight:600}}>{BKO_STAGES.find(s=>s.id===filtroEstagio)?.label}<button onClick={()=>setFiltroEstagio(null)} style={{background:'none',border:'none',cursor:'pointer',color:B_MID,fontSize:13,lineHeight:1,padding:0}}>×</button></div>)}
-          <div style={{position:'relative',width:220}}>
-            <span style={{position:'absolute',left:10,top:'50%',transform:'translateY(-50%)',color:'var(--text-faint)',fontSize:12}}>⌕</span>
-            <input className="inp" style={{paddingLeft:30,height:34,fontSize:12}} placeholder="Buscar cliente…" value={search} onChange={e=>setSearch(e.target.value)}/>
-          </div>
-        </div>
-      </div>
-
-      <div ref={colsRef} style={{display:'flex',gap:10,overflowX:'auto',paddingBottom: selected.size>0?80:16}}>
-        {BKO_STAGES.map(s=>(
-          <BKOKanbanCol key={s.id} s={s} clientes={filtered} dragId={dragId} setDragId={setDragId}
-            dispatch={dispatch} onSelect={id=>{if(selected.size>0){toggleSel(id);}else{onSelect(id);}}}
-            profile={profile} highlight={filtroEstagio===s.id}
-            selected={selected} onToggleSel={toggleSel}/>
-        ))}
-      </div>
-
-      {/* Barra de bulk action flutuante */}
-      {selected.size>0&&(
-        <div style={{position:'fixed',bottom:24,left:'50%',transform:'translateX(-50%)',background:'#1A1F3A',borderRadius:14,padding:'12px 20px',display:'flex',alignItems:'center',gap:12,boxShadow:'0 8px 32px rgba(26,31,58,0.4)',zIndex:200,whiteSpace:'nowrap',border:'1px solid rgba(255,255,255,.1)'}}>
-          <span style={{fontSize:13,fontWeight:700,color:'#fff'}}>{selected.size} selecionado{selected.size>1?'s':''}</span>
-          <div style={{width:1,height:20,background:'rgba(255,255,255,.15)'}}/>
-          <span style={{fontSize:11,color:'rgba(255,255,255,.6)'}}>Mover para:</span>
-          <select value={bulkTarget} onChange={e=>setBulkTarget(e.target.value)}
-            style={{padding:'6px 10px',borderRadius:8,border:'1px solid rgba(255,255,255,.2)',background:'rgba(255,255,255,.1)',color:'#fff',fontSize:12,outline:'none',cursor:'pointer',minWidth:200}}>
-            <option value="">— escolha o estágio —</option>
-            {BKO_STAGES.map(st=>(
-              <option key={st.id} value={st.id}>{st.id==='integrado'?'✓ ':st.id==='perdido'?'✕ ':''}{st.label}</option>
-            ))}
-          </select>
-          <button onClick={applyBulk} disabled={!bulkTarget||bulkApplying}
-            style={{padding:'8px 18px',borderRadius:8,background:bulkTarget?B_MID:'rgba(255,255,255,.1)',color:'#fff',border:'none',fontSize:12,fontWeight:700,cursor:bulkTarget?'pointer':'not-allowed',opacity:bulkApplying?.7:1,transition:'all .15s'}}>
-            {bulkApplying?'Movendo…':'Aplicar'}
-          </button>
-          <button onClick={clearSel} style={{padding:'8px 10px',borderRadius:8,background:'rgba(255,255,255,.08)',border:'none',color:'rgba(255,255,255,.6)',fontSize:12,cursor:'pointer'}}>✕</button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── ARQUIVO — Funis por Mês ──────────────────────────────────────────────────
-const MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
-
-function getDataFinalização(c){
-  // Pega a data da última activity de stage_change para integrado/perdido
-  // Se não achar, usa ultimoContato
-  const acts = (c.activities||[]).filter(a=>a.type==='stage_change'&&(a.text?.includes('Integrado')||a.text?.includes('Perdido')));
-  if(acts.length>0) return acts[acts.length-1].date || c.ultimoContato || c.dataEntrada;
-  return c.ultimoContato || c.dataEntrada || TODAY;
-}
-
-function fmtMesAno(dateStr){
-  if(!dateStr) return null;
-  const d = new Date(dateStr+'T12:00:00');
-  if(isNaN(d)) return null;
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-}
-
-function BKOFunilMes({tab,clientes,profile,dispatch,onSelect,selected,onToggleSel,search}){
-  // Agrupar por mês/ano de finalização, ordenar desc (mais recente primeiro)
-  const grupos = useMemo(()=>{
-    const filtered = search.trim()
-      ? clientes.filter(c=>c.nomeCliente?.toLowerCase().includes(search.toLowerCase())||c.cpfCliente?.includes(search))
-      : clientes;
-    const map = {};
-    filtered.forEach(c=>{
-      const key = fmtMesAno(getDataFinalização(c)) || 'sem-data';
+  // Agrupa por funil_mes, ordena desc (mais recente primeiro)
+  const grupos=useMemo(()=>{
+    const map={};
+    clientesFunil.forEach(c=>{
+      const key=c.funil_mes||'sem-data';
       if(!map[key]) map[key]=[];
       map[key].push(c);
     });
     return Object.entries(map)
-      .sort(([a],[b])=> b.localeCompare(a)) // desc: mais recente primeiro
+      .sort(([a],[b])=>b.localeCompare(a))
       .map(([key,items])=>{
-        if(key==='sem-data') return {key, label:'Sem data', sub:'', items};
-        const [ano,mes] = key.split('-');
-        return { key, label: MESES[parseInt(mes,10)-1]||mes, sub: ano, items };
+        const p=parseMes(key);
+        return{key,label:p?p.label:'Sem data',items};
       });
-  },[clientes,search]);
-
-  const stgColor = tab==='integrado' ? '#22C55E' : '#EF4444';
-  const stgBg    = tab==='integrado' ? 'rgba(34,197,94,.08)' : 'rgba(239,68,68,.06)';
+  },[clientesFunil]);
 
   if(grupos.length===0) return(
     <div style={{textAlign:'center',padding:'60px 0'}}>
-      <div style={{fontSize:32,marginBottom:12}}>{tab==='integrado'?'✅':'❌'}</div>
+      <div style={{fontSize:36,marginBottom:12}}>📦</div>
       <div style={{fontSize:14,fontWeight:600,color:'var(--text-primary)',marginBottom:6}}>
-        Nenhum cliente {tab==='integrado'?'integrado':'perdido'} ainda
+        Nenhum cliente em <b>{funil.nome}</b>
       </div>
       <div style={{fontSize:12,color:'var(--text-muted)'}}>
-        Mova clientes do pipeline para este funil
+        Clique em ⋯ em qualquer card do pipeline → Arquivar no funil
       </div>
     </div>
   );
 
   return(
-    <div style={{display:'flex',gap:14,overflowX:'auto',paddingBottom:24,alignItems:'flex-start'}}>
-      {grupos.map(({key,label,sub,items})=>(
-        <div key={key} style={{minWidth:220,width:230,flexShrink:0}}>
-          {/* Cabeçalho do mês */}
-          <div style={{display:'flex',alignItems:'baseline',gap:7,marginBottom:10,padding:'0 2px'}}>
-            <span style={{fontSize:13,fontWeight:700,color:'var(--text-primary)'}}>{label}</span>
-            {sub&&<span style={{fontSize:11,color:'var(--text-muted)',fontWeight:500}}>{sub}</span>}
-            <span style={{marginLeft:'auto',fontSize:11,fontWeight:700,padding:'1px 7px',borderRadius:99,background:`${stgColor}15`,color:stgColor}}>{items.length}</span>
-          </div>
-          {/* Cards */}
-          <div style={{display:'flex',flexDirection:'column',gap:7}}>
-            {items.map(c=>{
-              const isSel=selected.has(c.id);
-              const dataFin = getDataFinalização(c);
-              return(
+    <>
+      <div style={{display:'flex',gap:10,overflowX:'auto',paddingBottom:24,alignItems:'flex-start'}}>
+        {grupos.map(({key,label,items})=>(
+          <div key={key} style={{minWidth:210,width:220,flexShrink:0}}>
+            {/* Cabeçalho do mês */}
+            <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:10,padding:'8px 10px',background:`${funil.cor}10`,borderRadius:10,border:`1px solid ${funil.cor}30`}}>
+              <div style={{width:7,height:7,borderRadius:'50%',background:funil.cor,boxShadow:`0 0 5px ${funil.cor}80`,flexShrink:0}}/>
+              <span style={{fontSize:12,fontWeight:700,color:'var(--text-primary)',flex:1}}>{label}</span>
+              <span style={{fontSize:11,fontWeight:700,padding:'1px 7px',borderRadius:99,background:`${funil.cor}15`,color:funil.cor}}>{items.length}</span>
+            </div>
+            {/* Cards */}
+            <div style={{display:'flex',flexDirection:'column',gap:7}}>
+              {items.map(c=>(
                 <div key={c.id}
-                  onClick={()=>{ if(selected.size>0){onToggleSel(c.id);}else{onSelect(c.id);} }}
-                  style={{background:'var(--bg-card)',border:`1.5px solid ${isSel?B_MID:stgColor+'30'}`,borderRadius:11,padding:'11px 12px',cursor:'pointer',transition:'all .15s',boxShadow:isSel?`0 0 0 2px ${B_MID}30`:'0 1px 4px rgba(0,0,0,.05)',position:'relative'}}
-                  onMouseEnter={e=>{if(!isSel){e.currentTarget.style.borderColor=stgColor+'70';e.currentTarget.style.boxShadow=`0 3px 10px ${stgColor}18`;}}}
-                  onMouseLeave={e=>{if(!isSel){e.currentTarget.style.borderColor=stgColor+'30';e.currentTarget.style.boxShadow='0 1px 4px rgba(0,0,0,.05)';}}}
-                >
-                  {/* Checkbox */}
-                  <div onClick={e=>{e.stopPropagation();onToggleSel(c.id);}}
-                    style={{position:'absolute',top:8,right:8,width:16,height:16,borderRadius:4,border:`1.5px solid ${isSel?B_MID:'rgba(0,0,0,.2)'}`,background:isSel?B_MID:'rgba(255,255,255,.9)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,color:'#fff',cursor:'pointer',opacity:isSel||selected.size>0?1:0,transition:'opacity .15s'}}>
-                    {isSel&&'✓'}
-                  </div>
-                  <div style={{fontSize:12,fontWeight:700,color:'var(--text-primary)',marginBottom:3,paddingRight:20,lineHeight:1.3}}>{c.nomeCliente}</div>
-                  <div style={{fontSize:10,color:'var(--text-muted)',marginBottom:c.prefeitura?3:5}}>{c.cpfCliente||'—'}</div>
-                  {c.prefeitura&&<div style={{fontSize:9,color:'var(--text-muted)',marginBottom:4}}>🏛 {c.prefeitura}</div>}
-                  {c.saldoDevedor&&<div style={{fontSize:10,fontWeight:700,color:'#10B981',marginBottom:4}}>💰 {c.saldoDevedor}</div>}
-                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:4,paddingTop:4,borderTop:'1px solid var(--border)'}}>
-                    <span style={{fontSize:9,color:'var(--text-faint)'}}>{fmtD(dataFin)}</span>
-                    {c.criado_por_nome&&<span style={{fontSize:9,color:'var(--text-faint)'}}>{c.criado_por_nome}</span>}
+                  onClick={()=>onSelect(c.id)}
+                  style={{background:'var(--bg-card)',border:`1px solid ${funil.cor}25`,borderRadius:11,padding:'11px 12px',cursor:'pointer',transition:'all .15s'}}
+                  onMouseEnter={e=>{e.currentTarget.style.borderColor=funil.cor+'60';e.currentTarget.style.boxShadow=`0 3px 10px ${funil.cor}15`;}}
+                  onMouseLeave={e=>{e.currentTarget.style.borderColor=funil.cor+'25';e.currentTarget.style.boxShadow='';}}>
+                  <div style={{fontSize:12,fontWeight:700,color:'var(--text-primary)',marginBottom:3,lineHeight:1.3}}>{c.nomeCliente}</div>
+                  <div style={{fontSize:10,color:'var(--text-muted)',marginBottom:c.prefeitura?3:0}}>{c.cpfCliente||'—'}</div>
+                  {c.prefeitura&&<div style={{fontSize:9,color:'var(--text-muted)',marginBottom:3}}>🏛 {c.prefeitura}</div>}
+                  {c.saldoDevedor&&<div style={{fontSize:10,fontWeight:700,color:'#10B981'}}>💰 {c.saldoDevedor}</div>}
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:6,paddingTop:5,borderTop:'1px solid var(--border)'}}>
+                    <span style={{fontSize:9,color:'var(--text-faint)'}}>{fmtD(c.dataEntrada)}</span>
+                    <button
+                      onClick={e=>{e.stopPropagation();dispatch({type:'REMOVE_FUNIL',cid:c.id,user:profile?.nome||'Usuário'});}}
+                      style={{fontSize:9,padding:'1px 6px',borderRadius:5,background:'rgba(0,0,0,.05)',border:'1px solid var(--border)',color:'var(--text-muted)',cursor:'pointer'}}
+                      title="Remover do funil">← pipeline</button>
                   </div>
                 </div>
-              );
-            })}
+              ))}
+            </div>
           </div>
-        </div>
-      ))}
-    </div>
+        ))}
+      </div>
+    </>
   );
 }
 
-function BKOArquivo({clientes,profile,dispatch,onSelect}){
-  const [tab,setTab]=useState('integrado');
+// ─── PIPELINE ────────────────────────────────────────────────────────────────
+function BKOPipeline({clientes,profile,dispatch,onSelect,filtroEstagio,setFiltroEstagio,funis}){
+  const [dragId,setDragId]=useState(null);
   const [search,setSearch]=useState('');
-  const [selected,setSelected]=useState(new Set());
-  const [bulkTarget,setBulkTarget]=useState('');
-  const [bulkApplying,setBulkApplying]=useState(false);
+  const [funilSel,setFunilSel]=useState(null); // funil selecionado (objeto) ou null
+  const [funilSearch,setFunilSearch]=useState('');
+  const [funilOpen,setFunilOpen]=useState(false);
+  const funilRef=useRef(null);
+  const colsRef=useRef(null);
 
-  const stageClientes = clientes.filter(c=>c.estagio===tab);
-  const integrados=clientes.filter(c=>c.estagio==='integrado').length;
-  const perdidos=clientes.filter(c=>c.estagio==='perdido').length;
+  useEffect(()=>{
+    if(filtroEstagio&&colsRef.current){
+      const idx=BKO_STAGES.findIndex(s=>s.id===filtroEstagio);
+      if(idx>-1) colsRef.current.scrollLeft=idx*215;
+    }
+  },[filtroEstagio]);
 
-  const toggleSel=(id)=>setSelected(s=>{const n=new Set(s);n.has(id)?n.delete(id):n.add(id);return n;});
-  const selectAll=()=>{
-    const filtered=search.trim()?stageClientes.filter(c=>c.nomeCliente?.toLowerCase().includes(search.toLowerCase())||c.cpfCliente?.includes(search)):stageClientes;
-    setSelected(new Set(filtered.map(c=>c.id)));
-  };
-  const clearSel=()=>{setSelected(new Set());setBulkTarget('');};
+  useEffect(()=>{
+    if(!funilOpen) return;
+    const h=(e)=>{if(funilRef.current&&!funilRef.current.contains(e.target)) setFunilOpen(false);};
+    document.addEventListener('mousedown',h);
+    return ()=>document.removeEventListener('mousedown',h);
+  },[funilOpen]);
 
-  const applyBulk=()=>{
-    if(!bulkTarget||selected.size===0) return;
-    setBulkApplying(true);
-    dispatch({type:'BULK_MOVE',ids:[...selected],st:bulkTarget,user:profile?.nome||'Usuário'});
-    clearSel(); setBulkApplying(false);
-  };
+  const pipelineClientes=clientes.filter(c=>!c.funil_id);
+  const filtered=search.trim()
+    ?pipelineClientes.filter(c=>c.nomeCliente?.toLowerCase().includes(search.toLowerCase())||c.cpfCliente?.includes(search))
+    :pipelineClientes;
 
-  const stgColor = tab==='integrado' ? '#22C55E' : '#EF4444';
+  // Contagem de arquivados nos funis
+  const funisComContagem=useMemo(()=>funis.map(f=>({
+    ...f,
+    count:clientes.filter(c=>c.funil_id===f.id).length,
+  })),[funis,clientes]);
 
   return(
-    <div style={{padding:'28px 32px',overflowX:'hidden'}}>
-      <div style={{marginBottom:20}}>
-        <div className="section-title">Arquivo</div>
-        <div className="section-sub">Clientes finalizados agrupados por mês · mova de volta ao pipeline quando necessário</div>
-      </div>
-
-      {/* Seletor de funil */}
-      <div style={{display:'flex',gap:0,marginBottom:20,background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:11,overflow:'hidden',width:'fit-content'}}>
-        {[
-          {id:'integrado', label:'Integrados', color:'#22C55E', count:integrados, icon:'✓'},
-          {id:'perdido',   label:'Perdidos',   color:'#EF4444', count:perdidos,   icon:'✕'},
-        ].map(t=>(
-          <button key={t.id} onClick={()=>{setTab(t.id);clearSel();setSearch('');}}
-            style={{padding:'10px 24px',border:'none',cursor:'pointer',fontSize:13,fontWeight:tab===t.id?700:500,fontFamily:'var(--font)',transition:'all .15s',background:tab===t.id?`${t.color}12`:'transparent',color:tab===t.id?t.color:'var(--text-muted)',borderBottom:tab===t.id?`2.5px solid ${t.color}`:'2.5px solid transparent'}}>
-            {t.icon} {t.label}
-            <span style={{marginLeft:8,fontSize:11,fontWeight:700,padding:'2px 8px',borderRadius:99,background:tab===t.id?`${t.color}18`:'rgba(0,0,0,.06)',color:tab===t.id?t.color:'var(--text-muted)'}}>{t.count}</span>
-          </button>
-        ))}
-      </div>
-
-      {/* Toolbar */}
-      <div style={{display:'flex',gap:8,marginBottom:18,alignItems:'center',flexWrap:'wrap'}}>
-        <div style={{position:'relative',width:280}}>
-          <span style={{position:'absolute',left:10,top:'50%',transform:'translateY(-50%)',color:'var(--text-faint)',fontSize:12}}>⌕</span>
-          <input className="inp" style={{paddingLeft:30,height:34,fontSize:12}} placeholder="Buscar nome ou CPF…" value={search} onChange={e=>setSearch(e.target.value)}/>
+    <div style={{padding:'16px 20px',overflowX:'hidden'}}>
+      {/* ── Header ── */}
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20,gap:16,flexWrap:'wrap'}}>
+        <div>
+          {funilSel
+            ?<><div style={{fontSize:11,color:'var(--text-muted)',marginBottom:2,cursor:'pointer'}} onClick={()=>setFunilSel(null)}>← Pipeline</div>
+               <div className="section-title" style={{color:funilSel.cor}}>{funilSel.nome}</div>
+               <div className="section-sub">{clientes.filter(c=>c.funil_id===funilSel.id).length} clientes arquivados · agrupados por mês</div></>
+            :<><div className="section-title">Pipeline</div>
+               <div className="section-sub">{pipelineClientes.length} clientes ativos · arraste para mover</div></>
+          }
         </div>
-        <button onClick={selected.size>0?clearSel:selectAll}
-          style={{padding:'7px 14px',borderRadius:8,border:`1px solid ${selected.size>0?stgColor:'var(--border)'}`,background:selected.size>0?`${stgColor}10`:'transparent',color:selected.size>0?stgColor:'var(--text-muted)',fontSize:12,fontWeight:600,cursor:'pointer',fontFamily:'var(--font)',whiteSpace:'nowrap',transition:'all .15s'}}>
-          {selected.size>0?`✕ Limpar seleção (${selected.size})`:'☐ Selecionar tudo'}
-        </button>
-        {selected.size>0&&(
-          <>
-            <select value={bulkTarget} onChange={e=>setBulkTarget(e.target.value)}
-              style={{padding:'7px 12px',borderRadius:8,border:`1.5px solid ${B_MID}40`,background:B_LIGHT,color:B_MID,fontSize:12,fontWeight:600,outline:'none',cursor:'pointer',minWidth:220}}>
-              <option value="">Mover para o estágio…</option>
-              {BKO_STAGES.filter(s=>s.id!==tab).map(st=>(
-                <option key={st.id} value={st.id}>{st.label}</option>
-              ))}
-            </select>
-            <button onClick={applyBulk} disabled={!bulkTarget||bulkApplying}
-              style={{padding:'7px 18px',borderRadius:8,background:bulkTarget?B_MID:'rgba(0,0,0,.06)',color:bulkTarget?'#fff':'var(--text-muted)',border:'none',fontSize:12,fontWeight:700,cursor:bulkTarget?'pointer':'not-allowed',boxShadow:bulkTarget?`0 3px 12px ${B_GLOW}`:'none',transition:'all .15s'}}>
-              {bulkApplying?'Movendo…':`Mover ${selected.size} para o pipeline`}
-            </button>
-          </>
-        )}
+        <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
+          {/* Filtro de estágio */}
+          {!funilSel&&filtroEstagio&&(
+            <div style={{display:'flex',alignItems:'center',gap:6,padding:'5px 12px',borderRadius:99,background:B_LIGHT,border:`1px solid ${B_MID}30`,fontSize:11,color:B_MID,fontWeight:600}}>
+              {BKO_STAGES.find(s=>s.id===filtroEstagio)?.label}
+              <button onClick={()=>setFiltroEstagio(null)} style={{background:'none',border:'none',cursor:'pointer',color:B_MID,fontSize:13,lineHeight:1,padding:0}}>×</button>
+            </div>
+          )}
+          {/* Busca */}
+          {!funilSel&&(
+            <div style={{position:'relative',width:220}}>
+              <span style={{position:'absolute',left:10,top:'50%',transform:'translateY(-50%)',color:'var(--text-faint)',fontSize:12}}>⌕</span>
+              <input className="inp" style={{paddingLeft:30,height:34,fontSize:12}} placeholder="Buscar cliente…" value={search} onChange={e=>setSearch(e.target.value)}/>
+            </div>
+          )}
+          {/* Busca no funil */}
+          {funilSel&&(
+            <div style={{position:'relative',width:220}}>
+              <span style={{position:'absolute',left:10,top:'50%',transform:'translateY(-50%)',color:'var(--text-faint)',fontSize:12}}>⌕</span>
+              <input className="inp" style={{paddingLeft:30,height:34,fontSize:12}} placeholder="Buscar no funil…" value={funilSearch} onChange={e=>setFunilSearch(e.target.value)}/>
+            </div>
+          )}
+          {/* Dropdown Funis */}
+          {funisComContagem.length>0&&(
+            <div ref={funilRef} style={{position:'relative'}}>
+              <button
+                onClick={()=>setFunilOpen(v=>!v)}
+                style={{display:'flex',alignItems:'center',gap:6,padding:'7px 14px',borderRadius:8,
+                  border:`1px solid ${funilSel?funilSel.cor+'60':'var(--border)'}`,
+                  background:funilSel?`${funilSel.cor}10`:'var(--bg-card)',
+                  color:funilSel?funilSel.cor:'var(--text-secondary)',
+                  fontSize:12,fontWeight:600,cursor:'pointer',fontFamily:'var(--font)',whiteSpace:'nowrap'}}>
+                <span style={{fontSize:13}}></span> Funis de Venda
+                {funilSel&&<span style={{marginLeft:4,padding:'1px 7px',borderRadius:99,background:`${funilSel.cor}20`,fontSize:11}}>{funilSel.nome}</span>}
+              </button>
+              {funilOpen&&(
+                <div style={{position:'absolute',right:0,top:'calc(100% + 6px)',background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:12,boxShadow:'0 8px 28px rgba(0,0,0,.14)',zIndex:300,overflow:'hidden',minWidth:220}}>
+                  <div style={{padding:'8px 12px',fontSize:9,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.08em',borderBottom:'1px solid var(--border)'}}>Funis de arquivo</div>
+                  {funilSel&&(
+                    <button onClick={()=>{setFunilSel(null);setFunilSearch('');setFunilOpen(false);}}
+                      style={{display:'flex',alignItems:'center',gap:8,width:'100%',padding:'10px 14px',background:'none',border:'none',cursor:'pointer',fontFamily:'var(--font)',fontSize:12,color:'var(--text-secondary)'}}
+                      onMouseEnter={e=>e.currentTarget.style.background='rgba(0,0,0,.04)'}
+                      onMouseLeave={e=>e.currentTarget.style.background='none'}>
+                      ← Pipeline (todos)
+                    </button>
+                  )}
+                  {funisComContagem.filter(f=>f.ativo).map(f=>(
+                    <button key={f.id}
+                      onClick={()=>{setFunilSel(f);setFunilSearch('');setFiltroEstagio(null);setFunilOpen(false);}}
+                      style={{display:'flex',alignItems:'center',gap:10,width:'100%',padding:'10px 14px',
+                        background:funilSel?.id===f.id?`${f.cor}08`:'none',border:'none',cursor:'pointer',
+                        fontFamily:'var(--font)',fontSize:12,fontWeight:funilSel?.id===f.id?700:400,
+                        color:funilSel?.id===f.id?f.cor:'var(--text-primary)'}}
+                      onMouseEnter={e=>{if(funilSel?.id!==f.id)e.currentTarget.style.background='rgba(0,0,0,.04)';}}
+                      onMouseLeave={e=>{if(funilSel?.id!==f.id)e.currentTarget.style.background='none';}}>
+                      <div style={{width:8,height:8,borderRadius:'50%',background:f.cor,boxShadow:`0 0 5px ${f.cor}60`,flexShrink:0}}/>
+                      <span style={{flex:1,textAlign:'left'}}>{f.nome}</span>
+                      <span style={{fontSize:11,fontWeight:700,padding:'1px 7px',borderRadius:99,background:`${f.cor}15`,color:f.cor}}>{f.count}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Funil por meses */}
-      <BKOFunilMes
-        key={tab}
-        tab={tab}
-        clientes={stageClientes}
-        profile={profile}
-        dispatch={dispatch}
-        onSelect={onSelect}
-        selected={selected}
-        onToggleSel={toggleSel}
-        search={search}
-      />
+      {/* ── Kanban principal ── */}
+      {!funilSel&&(
+        <div ref={colsRef} style={{display:'flex',gap:7,overflowX:'auto',paddingBottom:16}}>
+          {BKO_STAGES.map(s=>(
+            <BKOKanbanCol key={s.id} s={s} clientes={filtered} dragId={dragId} setDragId={setDragId}
+              dispatch={dispatch} onSelect={onSelect} profile={profile}
+              highlight={filtroEstagio===s.id} funis={funisComContagem}/>
+          ))}
+        </div>
+      )}
+
+      {/* ── Vista de funil por meses ── */}
+      {funilSel&&(
+        <BKOFunilMeses
+          key={funilSel.id}
+          funil={funilSel}
+          clientes={clientes}
+          onSelect={onSelect}
+          dispatch={dispatch}
+          profile={profile}
+        />
+      )}
     </div>
   );
 }
@@ -702,7 +738,28 @@ function NovoClienteModal({profile,dispatch,clientes,onClose}){
   );
 }
 
-function BKOCadastrar({profile,session}){
+function BKOCadastrar({profile,session,funis=[],setFunis}){
+  /* ── Gestão de funis ── */
+  const [funilForm,setFunilForm]=useState({nome:'',cor:'#3B5BDB'});
+  const [funilSaving,setFunilSaving]=useState(false);
+  const [funilMsg,setFunilMsg]=useState(null);
+  const CORES_FUNIL=['#3B5BDB','#22C55E','#EF4444','#F59E0B','#7C3AED','#0EA5E9','#F97316','#10B981','#EC4899'];
+
+  const salvarFunil=async()=>{
+    if(!funilForm.nome.trim()){setFunilMsg({t:'error',text:'Nome do funil é obrigatório.'});return;}
+    setFunilSaving(true);setFunilMsg(null);
+    const {data,error}=await supabase.from('bko_funis').insert({nome:funilForm.nome.trim(),cor:funilForm.cor,ordem:funis.length+1}).select().single();
+    setFunilSaving(false);
+    if(error){setFunilMsg({t:'error',text:error.message});return;}
+    setFunis(prev=>[...prev,data]);
+    setFunilForm({nome:'',cor:'#3B5BDB'});
+    setFunilMsg({t:'success',text:`Funil "${data.nome}" criado!`});
+  };
+
+  const arquivarFunil=async(f)=>{
+    await supabase.from('bko_funis').update({ativo:false}).eq('id',f.id);
+    setFunis(prev=>prev.filter(x=>x.id!==f.id));
+  };
   const [usuarios,setUsuarios]=useState([]);
   const [loading,setLoading]=useState(true);
   const [showModal,setShowModal]=useState(false);
@@ -881,6 +938,52 @@ function BKOCadastrar({profile,session}){
           </div>
         </div>
       </div>)}
+
+      {/* ── Gestão de Funis (só Comercial) ── */}
+      {isComercial&&(
+        <div style={{marginTop:32,paddingTop:28,borderTop:'1px solid var(--border)'}}>
+          <div style={{marginBottom:18}}>
+            <div className="section-title" style={{fontSize:16}}>Funis de arquivo</div>
+            <div className="section-sub">Configure os funis para organizar clientes integrados, perdidos e outros</div>
+          </div>
+          {funilMsg&&<div style={{padding:'8px 12px',borderRadius:8,marginBottom:14,background:funilMsg.t==='success'?'var(--success-dim)':'var(--danger-dim)',border:`1px solid ${funilMsg.t==='success'?'rgba(61,155,107,.2)':'rgba(192,65,58,.2)'}`,fontSize:12,color:funilMsg.t==='success'?'var(--success)':'var(--danger)'}}>{funilMsg.text}</div>}
+          {/* Lista de funis */}
+          <div style={{display:'flex',flexDirection:'column',gap:8,marginBottom:20}}>
+            {funis.length===0&&<div style={{fontSize:12,color:'var(--text-muted)',padding:'12px 0'}}>Nenhum funil cadastrado ainda.</div>}
+            {funis.map(f=>(
+              <div key={f.id} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 14px',borderRadius:10,background:'var(--bg-card)',border:'1px solid var(--border)'}}>
+                <div style={{width:10,height:10,borderRadius:'50%',background:f.cor,boxShadow:`0 0 5px ${f.cor}60`,flexShrink:0}}/>
+                <div style={{fontWeight:600,fontSize:13,flex:1}}>{f.nome}</div>
+                <button onClick={()=>arquivarFunil(f)} style={{fontSize:10,padding:'3px 10px',borderRadius:6,background:'var(--danger-dim)',color:'var(--danger)',border:'none',cursor:'pointer'}}>Arquivar</button>
+              </div>
+            ))}
+          </div>
+          {/* Criar novo funil */}
+          <div style={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:12,padding:'16px 18px'}}>
+            <div style={{fontSize:11,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:12}}>Novo funil</div>
+            <div style={{display:'flex',gap:10,alignItems:'flex-end',flexWrap:'wrap'}}>
+              <div style={{flex:1,minWidth:160}}>
+                <label style={{display:'block',fontSize:10,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:5}}>Nome</label>
+                <input className="inp" value={funilForm.nome} onChange={e=>setFunilForm(f=>({...f,nome:e.target.value}))} placeholder="Ex: Integrados 2026"/>
+              </div>
+              <div>
+                <label style={{display:'block',fontSize:10,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:5}}>Cor</label>
+                <div style={{display:'flex',gap:5}}>
+                  {CORES_FUNIL.map(c=>(
+                    <div key={c} onClick={()=>setFunilForm(f=>({...f,cor:c}))}
+                      style={{width:20,height:20,borderRadius:'50%',background:c,cursor:'pointer',
+                        border:funilForm.cor===c?'2px solid var(--text-primary)':'2px solid transparent',
+                        transition:'all .15s'}}/>
+                  ))}
+                </div>
+              </div>
+              <button className="btn" style={{background:B_MID,color:'#fff',height:36}} onClick={salvarFunil} disabled={funilSaving}>
+                {funilSaving?'Salvando…':'+ Criar funil'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -939,7 +1042,19 @@ export function BKOApp({profile,session,signOut,onAlterarSenha}){
   const [s,dispatch]=useReducer(R,INIT);
   const {clientes,view,sel,newOpen}=s;
   const [ready,setReady]=useState(false);
-  const [sidebarCollapsed,setSidebarCollapsed]=useState(false);
+  const [funis,setFunis]=useState([]);
+  const [searchOpen,setSearchOpen]=useState(false);
+  // Sidebar: inicia recolhida se já tiver preferência salva, senão expandida
+  const [sidebarCollapsed,setSidebarCollapsed]=useState(()=>{
+    try{ return localStorage.getItem('bko_sidebar_collapsed')==='1'; }catch{ return false; }
+  });
+  const toggleSidebar=useCallback(v=>{
+    setSidebarCollapsed(prev=>{
+      const next=typeof v==='boolean'?v:!prev;
+      try{ localStorage.setItem('bko_sidebar_collapsed',next?'1':'0'); }catch{}
+      return next;
+    });
+  },[]);
   const clientesRef=useRef(clientes);
   const syncTimerRef=useRef(null);
   const syncQueueRef=useRef(new Map());
@@ -947,8 +1062,30 @@ export function BKOApp({profile,session,signOut,onAlterarSenha}){
   const auditQueueRef=useRef([]);
   const [showAS,setShowAS]=useState(false);
   const [filtroEstagio,setFiltroEstagio]=useState(null);
-  const setView=useCallback(v=>dispatch({type:'VIEW',v}),[]);
+  const setView=useCallback(v=>{
+    dispatch({type:'VIEW',v});
+    // Auto-colapsa ao entrar no pipeline para ganhar espaço
+    if(v==='pipeline') toggleSidebar(true);
+    else toggleSidebar(false);
+  },[toggleSidebar]);
   const selected=clientes.find(c=>c.id===sel);
+
+  /* Shortcut Ctrl/Cmd+K para busca */
+  useEffect(()=>{
+    const h=e=>{if((e.metaKey||e.ctrlKey)&&e.key==='k'){e.preventDefault();setSearchOpen(v=>!v);}};
+    window.addEventListener('keydown',h);
+    return ()=>window.removeEventListener('keydown',h);
+  },[]);
+
+  /* Carregar funis */
+  useEffect(()=>{
+    supabase.from('bko_funis').select('*').eq('ativo',true).order('ordem').then(({data})=>setFunis(data||[]));
+    const ch=supabase.channel('bko_funis_rt')
+      .on('postgres_changes',{event:'*',schema:'public',table:'bko_funis'},()=>{
+        supabase.from('bko_funis').select('*').eq('ativo',true).order('ordem').then(({data})=>setFunis(data||[]));
+      }).subscribe();
+    return ()=>supabase.removeChannel(ch);
+  },[]);
 
   useEffect(()=>{
     if(!session) return;
@@ -994,10 +1131,11 @@ export function BKOApp({profile,session,signOut,onAlterarSenha}){
       if(error){console.error('BKO ADD error:',error);alert(`Erro: ${error.message}`);}
     }
     const auditMap={
-      MOVE:     ()=>({action:'Moveu cliente',      details:`→ "${BKO_STAGES.find(s=>s.id===action.st)?.label}"`,clienteId:action.cid}),
-      BULK_MOVE:()=>({action:'Movimento em lote',   details:`${action.ids?.length} clientes → "${BKO_STAGES.find(s=>s.id===action.st)?.label}"`,clienteId:null}),
-      UPD:      ()=>({action:'Editou cliente',      details:'Campos atualizados',clienteId:action.c?.id}),
-      ADD:      ()=>({action:'Cadastrou cliente',   details:`Nome: ${action.c?.nomeCliente}`,clienteId:action.c?.id}),
+      MOVE:      ()=>({action:'Moveu cliente',details:`→ "${BKO_STAGES.find(s=>s.id===action.st)?.label}"`,clienteId:action.cid}),
+      MOVE_FUNIL:()=>({action:'Arquivou no funil',details:`→ "${action.funil_nome}" · ${action.funil_mes_label}`,clienteId:action.cid}),
+      REMOVE_FUNIL:()=>({action:'Removeu do funil',details:'Retornou ao pipeline',clienteId:action.cid}),
+      UPD:       ()=>({action:'Editou cliente',details:'Campos atualizados',clienteId:action.c?.id}),
+      ADD:       ()=>({action:'Cadastrou cliente',details:`Nome: ${action.c?.nomeCliente}`,clienteId:action.c?.id}),
     };
     const fn=auditMap[action.type];
     if(fn){
@@ -1017,27 +1155,24 @@ export function BKOApp({profile,session,signOut,onAlterarSenha}){
   return(
     <>
       <div style={{display:'flex',minHeight:'100vh',background:'var(--bg-base)',fontFamily:'var(--font)'}}>
-        <BKOSidebar
-          view={view}
-          setView={v=>{setView(v);if(v!=='pipeline')setFiltroEstagio(null);}}
-          profile={profile}
-          onLogout={signOut}
-          onAlterarSenha={()=>setShowAS(true)}
-          collapsed={sidebarCollapsed}
-          setCollapsed={setSidebarCollapsed}
-        />
+        <BKOSidebar view={view} setView={v=>{setView(v);if(v!=='pipeline')setFiltroEstagio(null);}} profile={profile} onLogout={signOut} onAlterarSenha={()=>setShowAS(true)} onSearch={()=>setSearchOpen(true)} collapsed={sidebarCollapsed} setCollapsed={toggleSidebar}/>
         <main style={{flex:1,minWidth:0,overflowY:'auto',paddingRight:selected?490:0,transition:'padding-right .3s cubic-bezier(.4,0,.2,1)'}}>
           {view==='dashboard' && <BKODashboard clientes={clientes} setView={v=>{setView(v);}} setFiltroEstagio={setFiltroEstagio}/>}
-          {view==='pipeline'  && <BKOPipeline clientes={clientes} profile={profile} dispatch={auditedDispatch} onSelect={id=>dispatch({type:'SEL',id})} filtroEstagio={filtroEstagio} setFiltroEstagio={setFiltroEstagio}/>}
+          {view==='pipeline'  && <BKOPipeline clientes={clientes} profile={profile} dispatch={auditedDispatch} onSelect={id=>dispatch({type:'SEL',id})} filtroEstagio={filtroEstagio} setFiltroEstagio={setFiltroEstagio} funis={funis}/>}
           {view==='clientes'  && <BKOClientes clientes={clientes} profile={profile} onSelect={id=>dispatch({type:'SEL',id})} onNew={()=>dispatch({type:'TNEW'})}/>}
-          {view==='arquivo'   && <BKOArquivo clientes={clientes} profile={profile} dispatch={auditedDispatch} onSelect={id=>dispatch({type:'SEL',id})}/>}
-          {view==='cadastrar' && <BKOCadastrar profile={profile} session={session}/>}
+          {view==='cadastrar' && <BKOCadastrar profile={profile} session={session} funis={funis} setFunis={setFunis}/>}
           {view==='auditoria' && <BKOAuditoria/>}
         </main>
         {selected&&<BKODetail key={selected.id} cliente={selected} profile={profile} session={session} dispatch={auditedDispatch} onClose={()=>dispatch({type:'CLOSE'})}/>}
         {newOpen&&<NovoClienteModal profile={profile} dispatch={auditedDispatch} clientes={clientes} onClose={()=>dispatch({type:'TNEW'})}/>}
       </div>
       {showAS&&<AlterarSenha onClose={()=>setShowAS(false)}/>}
+      <BKOSearch
+        clientes={clientes}
+        open={searchOpen}
+        onClose={()=>setSearchOpen(false)}
+        onSelect={id=>{dispatch({type:'SEL',id});setSearchOpen(false);}}
+      />
     </>
   );
 }
