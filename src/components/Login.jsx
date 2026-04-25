@@ -32,7 +32,7 @@ export function Login(){
   const Logo=()=>(
     <div style={{display:"flex",justifyContent:"center",marginBottom:28}}>
       <img
-        src="/starflow.gif"
+        src="/logoFlow.png"
         alt="StarFlow"
         style={{
           width:"100%",
