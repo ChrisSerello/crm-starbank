@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../../supabase';
 
 /* ─── Fontes ──────────────────────────────────────────────────────────────── */
@@ -164,71 +164,11 @@ function BrazilMap({ counts }) {
   );
 }
 
-/* ─── Confetti + Celebração ───────────────────────────────────────────────── */
-function Confetti() {
-  const pieces = useMemo(() => {
-    const colors = [C.blue, C.green, C.amber, C.red, C.purple, C.cyan];
-    return Array.from({ length:55 }, (_, i) => ({
-      id:i, left:Math.random()*100,
-      color:colors[i % colors.length],
-      dur:Math.random()*2 + 1.5,
-      delay:Math.random() * 0.8,
-      size:Math.random()*8 + 4,
-      circle:Math.random() > 0.5,
-    }));
-  }, []);
-  return (
-    <div style={{ position:'fixed', inset:0, pointerEvents:'none', overflow:'hidden', zIndex:1001 }}>
-      {pieces.map(p => (
-        <div key={p.id} style={{
-          position:'absolute', top:'-20px', left:`${p.left}%`,
-          width:p.size, height:p.size,
-          borderRadius:p.circle ? '50%' : '2px',
-          background:p.color,
-          animation:`tv-fall ${p.dur}s linear ${p.delay}s forwards`,
-        }}/>
-      ))}
-    </div>
-  );
-}
-
-function Celebration({ data, onDone }) {
-  useEffect(() => { const t = setTimeout(onDone, 5500); return () => clearTimeout(t); }, [onDone]);
-  return (
-    <div style={{ position:'fixed', inset:0, zIndex:1000,
-      background:'rgba(7,9,15,.93)', backdropFilter:'blur(8px)',
-      display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
-      gap:14, animation:'tv-fadeIn .4s ease' }}>
-      <Confetti/>
-      <div style={{ fontSize:68, animation:'tv-bounce .55s ease infinite alternate', position:'relative', zIndex:2 }}>🎉</div>
-      <div style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:46, color:C.green,
-        textShadow:`0 0 50px ${C.green}80`, letterSpacing:'.04em',
-        textAlign:'center', maxWidth:640, lineHeight:1.1, position:'relative', zIndex:2 }}>
-        {data.nome}
-      </div>
-      <div style={{ fontSize:20, color:C.muted, position:'relative', zIndex:2 }}>
-        foi <span style={{ color:C.green, fontWeight:600 }}>integrado</span> com sucesso
-      </div>
-      <div style={{ fontSize:16, color:C.muted, position:'relative', zIndex:2 }}>
-        por <span style={{ color:C.text, fontWeight:600 }}>{data.operador}</span>
-      </div>
-      <div style={{ marginTop:10, background:'rgba(34,197,94,.15)',
-        border:`1px solid rgba(34,197,94,.4)`, borderRadius:99,
-        padding:'9px 26px', fontSize:15, fontWeight:600, color:C.green,
-        position:'relative', zIndex:2 }}>
-        {data.totalMes}ª integração do mês
-      </div>
-    </div>
-  );
-}
-
 /* ─── TVApp principal ─────────────────────────────────────────────────────── */
 export function TVApp({ profile, signOut }) {
   const [clientes, setClientes] = useState([]);
   const [ready, setReady] = useState(false);
   const [time, setTime] = useState(new Date());
-  const [celebration, setCelebration] = useState(null);
-  const integradosSetRef = useRef(new Set());
 
   /* Acesso restrito ao Comercial */
   if (profile?.role !== 'comercial') {
@@ -249,6 +189,16 @@ export function TVApp({ profile, signOut }) {
     );
   }
 
+  /* Normaliza uma linha do banco — garante criado_por_nome de qualquer lugar */
+  const normalize = (r) => ({
+    ...r.data,
+    id: r.id,
+    estagio: r.estagio,
+    criado_por_nome: r.criado_por_nome || r.data?.criado_por_nome || null,
+    criado_por_id:   r.criado_por_id   || r.data?.criado_por_id   || null,
+    atribuido_a_nome:r.atribuido_a_nome|| r.data?.atribuido_a_nome|| null,
+  });
+
   /* Clock */
   useEffect(() => {
     const t = setInterval(() => setTime(new Date()), 1000);
@@ -260,42 +210,18 @@ export function TVApp({ profile, signOut }) {
     supabase.from('bko_clientes').select('*').order('created_at', { ascending:false }).limit(1000)
       .then(({ data, error }) => {
         if (error) { console.error('TVApp load error:', error); setReady(true); return; }
-        const loaded = (data || []).map(r => ({
-          ...r.data, id:r.id, estagio:r.estagio,
-          criado_por_nome:r.criado_por_nome, criado_por_id:r.criado_por_id,
-          atribuido_a_nome:r.atribuido_a_nome,
-        }));
-        setClientes(loaded);
-        integradosSetRef.current = new Set(
-          loaded.filter(c => c.estagio === 'integrado').map(c => c.id)
-        );
+        setClientes((data || []).map(normalize));
         setReady(true);
       });
 
     /* Realtime — UPDATE e INSERT */
     const ch = supabase.channel('tv_dash')
       .on('postgres_changes', { event:'UPDATE', schema:'public', table:'bko_clientes' }, payload => {
-        const r = payload.new;
-        const c = { ...r.data, id:r.id, estagio:r.estagio,
-          criado_por_nome:r.criado_por_nome, atribuido_a_nome:r.atribuido_a_nome };
-        setClientes(prev => {
-          const next = prev.map(x => x.id === c.id ? c : x);
-          /* Detectar nova integração */
-          if (c.estagio === 'integrado' && !integradosSetRef.current.has(c.id)) {
-            integradosSetRef.current.add(c.id);
-            const totalMes = next.filter(x => x.estagio === 'integrado').length;
-            setCelebration({
-              nome: c.nomeCliente || 'Cliente',
-              operador: c.criado_por_nome || 'Operador',
-              totalMes,
-            });
-          }
-          return next;
-        });
+        const c = normalize(payload.new);
+        setClientes(prev => prev.map(x => x.id === c.id ? c : x));
       })
       .on('postgres_changes', { event:'INSERT', schema:'public', table:'bko_clientes' }, payload => {
-        const r = payload.new;
-        const c = { ...r.data, id:r.id, estagio:r.estagio, criado_por_nome:r.criado_por_nome };
+        const c = normalize(payload.new);
         setClientes(prev => [c, ...prev]);
       })
       .subscribe();
@@ -375,9 +301,6 @@ export function TVApp({ profile, signOut }) {
       <style>{`
         *{box-sizing:border-box;margin:0;padding:0;}
         @keyframes tv-ping{0%{transform:scale(1);opacity:1}75%,100%{transform:scale(2.2);opacity:0}}
-        @keyframes tv-fall{0%{transform:translateY(-20px) rotate(0deg);opacity:1}100%{transform:translateY(110vh) rotate(720deg);opacity:0}}
-        @keyframes tv-fadeIn{from{opacity:0}to{opacity:1}}
-        @keyframes tv-bounce{from{transform:translateY(0)}to{transform:translateY(-14px)}}
         @keyframes tv-shimmer{0%,100%{opacity:.35}50%{opacity:1}}
         .tv-card{background:${C.panel};border:1px solid ${C.border};border-radius:16px;padding:16px 18px;overflow:hidden;}
         .tv-eyebrow{font-size:9px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:${C.muted};margin-bottom:10px;font-family:'DM Sans',sans-serif;}
@@ -425,7 +348,7 @@ export function TVApp({ profile, signOut }) {
           gridTemplateRows:'1fr 1fr',
           gap:10, padding:'12px 18px', overflow:'hidden' }}>
 
-          {}
+          {/* [A] Meta + Integrados + Perdidos — col 1, rows 1+2 */}
           <div style={{ gridRow:'1 / 3', display:'flex', flexDirection:'column', gap:10 }}>
             {/* Meta */}
             <div className="tv-card" style={{ flex:'0 0 auto', display:'flex',
@@ -433,6 +356,11 @@ export function TVApp({ profile, signOut }) {
               <div className="tv-eyebrow">{mesNome} · meta {META_MENSAL}</div>
               <Ring pct={pctMeta}
                 color={pctMeta >= 100 ? C.green : pctMeta >= 70 ? C.blue : C.amber}/>
+              <div style={{ fontSize:11, color:C.muted, textAlign:'center' }}>
+                {META_MENSAL - integrados > 0
+                  ? `Faltam ${META_MENSAL - integrados} para a meta`
+                  : '🎉 Meta atingida!'}
+              </div>
             </div>
             {/* Integrados */}
             <div className="tv-card" style={{ flex:1, borderColor:'rgba(34,197,94,.28)' }}>
@@ -688,11 +616,6 @@ export function TVApp({ profile, signOut }) {
           </div>
         </div>
       </div>
-
-      {/* ── CELEBRAÇÃO ── */}
-      {celebration && (
-        <Celebration data={celebration} onDone={() => setCelebration(null)}/>
-      )}
     </>
   );
 }
