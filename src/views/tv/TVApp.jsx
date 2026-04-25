@@ -425,7 +425,7 @@ export function TVApp({ profile, signOut }) {
           gridTemplateRows:'1fr 1fr',
           gap:10, padding:'12px 18px', overflow:'hidden' }}>
 
-          {/* [A] Meta + Integrados + Perdidos — col 1, rows 1+2 */}
+          {}
           <div style={{ gridRow:'1 / 3', display:'flex', flexDirection:'column', gap:10 }}>
             {/* Meta */}
             <div className="tv-card" style={{ flex:'0 0 auto', display:'flex',
@@ -433,11 +433,6 @@ export function TVApp({ profile, signOut }) {
               <div className="tv-eyebrow">{mesNome} · meta {META_MENSAL}</div>
               <Ring pct={pctMeta}
                 color={pctMeta >= 100 ? C.green : pctMeta >= 70 ? C.blue : C.amber}/>
-              <div style={{ fontSize:11, color:C.muted, textAlign:'center' }}>
-                {META_MENSAL - integrados > 0
-                  ? `Faltam ${META_MENSAL - integrados} para a meta`
-                  : '🎉 Meta atingida!'}
-              </div>
             </div>
             {/* Integrados */}
             <div className="tv-card" style={{ flex:1, borderColor:'rgba(34,197,94,.28)' }}>
