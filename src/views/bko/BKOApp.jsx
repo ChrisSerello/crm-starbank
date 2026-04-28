@@ -23,6 +23,7 @@ const BKO_STAGES = [
   { id:'em_negociacao',         label:'Em negociação (Saldo Informado) - Corban',        color:'#0EA5E9', bg:'rgba(14,165,233,.1)'  },
   { id:'abertura_conta',        label:'Abertura de conta - Interno',    color:'#10B981', bg:'rgba(16,185,129,.1)'  },
   { id:'digitar_proposta',      label:'Pronto para Digitar - Corban',     color:'#F59E0B', bg:'rgba(245,158,11,.1)'  },
+  { id:'banksoft',               label:'Banksoft - Tratativas',                       color:'#EF4444', bg:'rgba(239,68,68,.1)'   },
   { id:'integrado',             label:'Finalizado - Interno',                     color:'#22C55E', bg:'rgba(34,197,94,.1)'   },
   { id:'perdido',               label:'Perdidos',                       color:'#EF4444', bg:'rgba(239,68,68,.1)'   },
 ];
