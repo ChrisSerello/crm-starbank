@@ -22,13 +22,13 @@ const B_LIGHT = 'rgba(59,91,219,0.10)';
 const B_GLOW  = 'rgba(59,91,219,0.28)';
 
 const BKO_STAGES = [
-  { id:'clientes_novos',   label:'Clientes Novos',              color:'#3B5BDB', bg:'rgba(59,91,219,.1)'  },
-  { id:'saldo_andamento',  label:'Saldo em Andamento - BKO',    color:'#7C3AED', bg:'rgba(124,58,237,.1)' },
-  { id:'em_negociacao',    label:'Em Negociação - Corban',      color:'#0EA5E9', bg:'rgba(14,165,233,.1)' },
-  { id:'abertura_conta',   label:'Abertura de Conta - Corban',  color:'#10B981', bg:'rgba(16,185,129,.1)' },
-  { id:'digitar_proposta', label:'Digitar Proposta - Corban',   color:'#F59E0B', bg:'rgba(245,158,11,.1)' },
-  { id:'integrado',        label:'Integrado',                   color:'#22C55E', bg:'rgba(34,197,94,.1)'  },
-  { id:'perdido',          label:'Perdido',                     color:'#EF4444', bg:'rgba(239,68,68,.1)'  },
+  { id:'clientes_novos',   label:'Corb novos entrantes',              color:'#3B5BDB', bg:'rgba(59,91,219,.1)'  },
+  { id:'saldo_andamento',  label:'BKO - Saldo Devedor',    color:'#7C3AED', bg:'rgba(124,58,237,.1)' },
+  { id:'em_negociacao',    label:'Em negociação - Corban',      color:'#0EA5E9', bg:'rgba(14,165,233,.1)' },
+  { id:'abertura_conta',   label:'Abertura de conta - Interno',  color:'#10B981', bg:'rgba(16,185,129,.1)' },
+  { id:'digitar_proposta', label:'Pronto p digitar - Corban',   color:'#F59E0B', bg:'rgba(245,158,11,.1)' },
+  { id:'integrado',        label:'Finalizado - Interno',                   color:'#22C55E', bg:'rgba(34,197,94,.1)'  },
+  { id:'perdido',          label:'Perdidos',                     color:'#EF4444', bg:'rgba(239,68,68,.1)'  },
 ];
 
 // Mapa de cores e labels por setor — igual ao chat

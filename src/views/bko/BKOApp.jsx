@@ -17,14 +17,14 @@ const ROLE_LABELS = { comercial:'Comercial', corban_bko:'Corban', bko:'BKO' };
 const ROLE_COLORS = { comercial:'#3B5BDB', corban_bko:'#0EA5E9', bko:'#7C3AED' };
 
 const BKO_STAGES = [
-  { id:'clientes_novos',        label:'Clientes Novos',                color:'#3B5BDB', bg:'rgba(59,91,219,.1)'   },
-  { id:'saldo_andamento',       label:'Saldo em Andamento - BKO',      color:'#7C3AED', bg:'rgba(124,58,237,.1)'  },
-  { id:'pendencia_financeiro',  label:'Pendência Análise Financeiro',  color:'#F97316', bg:'rgba(249,115,22,.1)'  },
-  { id:'em_negociacao',         label:'Em Negociação - Corban',        color:'#0EA5E9', bg:'rgba(14,165,233,.1)'  },
-  { id:'abertura_conta',        label:'Abertura de Conta - Corban',    color:'#10B981', bg:'rgba(16,185,129,.1)'  },
-  { id:'digitar_proposta',      label:'Digitar Proposta - Corban',     color:'#F59E0B', bg:'rgba(245,158,11,.1)'  },
-  { id:'integrado',             label:'Integrado',                     color:'#22C55E', bg:'rgba(34,197,94,.1)'   },
-  { id:'perdido',               label:'Perdido',                       color:'#EF4444', bg:'rgba(239,68,68,.1)'   },
+  { id:'clientes_novos',        label:'Clientes Novos - Corban',                color:'#3B5BDB', bg:'rgba(59,91,219,.1)'   },
+  { id:'saldo_andamento',       label:'BKO - Saldo Devedor',      color:'#7C3AED', bg:'rgba(124,58,237,.1)'  },
+  { id:'pendencia_financeiro',  label:'Pendência Análise Financeira',  color:'#F97316', bg:'rgba(249,115,22,.1)'  },
+  { id:'em_negociacao',         label:'Em negociação (Saldo Informado) - Corban',        color:'#0EA5E9', bg:'rgba(14,165,233,.1)'  },
+  { id:'abertura_conta',        label:'Abertura de conta - Interno',    color:'#10B981', bg:'rgba(16,185,129,.1)'  },
+  { id:'digitar_proposta',      label:'Pronto para Digitar - Corban',     color:'#F59E0B', bg:'rgba(245,158,11,.1)'  },
+  { id:'integrado',             label:'Finalizado - Interno',                     color:'#22C55E', bg:'rgba(34,197,94,.1)'   },
+  { id:'perdido',               label:'Perdidos',                       color:'#EF4444', bg:'rgba(239,68,68,.1)'   },
 ];
 
 const blankCliente = () => ({
@@ -470,9 +470,9 @@ function BKOPipeline({clientes,profile,dispatch,onSelect,filtroEstagio,setFiltro
   })),[funis,clientes]);
 
   return(
-    <div style={{padding:'16px 20px',overflowX:'hidden'}}>
+    <div style={{display:'flex',flexDirection:'column',height:'100%',overflow:'hidden'}}>
       {/* ── Header ── */}
-      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20,gap:16,flexWrap:'wrap'}}>
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20,gap:16,flexWrap:'wrap',padding:'16px 20px 0',flexShrink:0}}>
         <div>
           {funilSel
             ?<><div style={{fontSize:11,color:'var(--text-muted)',marginBottom:2,cursor:'pointer'}} onClick={()=>setFunilSel(null)}>← Pipeline</div>
@@ -551,7 +551,7 @@ function BKOPipeline({clientes,profile,dispatch,onSelect,filtroEstagio,setFiltro
 
       {/* ── Kanban principal ── */}
       {!funilSel&&(
-        <div ref={colsRef} style={{display:'flex',gap:7,overflowX:'auto',paddingBottom:16}}>
+        <div ref={colsRef} style={{display:'flex',gap:7,overflowX:'auto',overflowY:'hidden',padding:'0 20px 16px',flex:1,minHeight:0,alignItems:'flex-start'}}>
           {BKO_STAGES.map(s=>(
             <BKOKanbanCol key={s.id} s={s} clientes={filtered} dragId={dragId} setDragId={setDragId}
               dispatch={dispatch} onSelect={onSelect} profile={profile}
@@ -1156,7 +1156,7 @@ export function BKOApp({profile,session,signOut,onAlterarSenha}){
     <>
       <div style={{display:'flex',minHeight:'100vh',background:'var(--bg-base)',fontFamily:'var(--font)'}}>
         <BKOSidebar view={view} setView={v=>{setView(v);if(v!=='pipeline')setFiltroEstagio(null);}} profile={profile} onLogout={signOut} onAlterarSenha={()=>setShowAS(true)} onSearch={()=>setSearchOpen(true)} collapsed={sidebarCollapsed} setCollapsed={toggleSidebar}/>
-        <main style={{flex:1,minWidth:0,overflowY:'auto',paddingRight:selected?490:0,transition:'padding-right .3s cubic-bezier(.4,0,.2,1)'}}>
+        <main style={{flex:1,minWidth:0,overflowY:view==='pipeline'?'hidden':'auto',paddingRight:selected?490:0,transition:'padding-right .3s cubic-bezier(.4,0,.2,1)'}}>
           {view==='dashboard' && <BKODashboard clientes={clientes} setView={v=>{setView(v);}} setFiltroEstagio={setFiltroEstagio}/>}
           {view==='pipeline'  && <BKOPipeline clientes={clientes} profile={profile} dispatch={auditedDispatch} onSelect={id=>dispatch({type:'SEL',id})} filtroEstagio={filtroEstagio} setFiltroEstagio={setFiltroEstagio} funis={funis}/>}
           {view==='clientes'  && <BKOClientes clientes={clientes} profile={profile} onSelect={id=>dispatch({type:'SEL',id})} onNew={()=>dispatch({type:'TNEW'})}/>}

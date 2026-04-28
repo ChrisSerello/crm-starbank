@@ -26,12 +26,12 @@ const MES_FULL = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho',
 const META_MENSAL = 200; // Altere conforme a meta real da equipe
 
 const BKO_STAGES = [
-  { id:'clientes_novos',       label:'Clientes Novos',           color:'#3B5BDB' },
-  { id:'saldo_andamento',      label:'Saldo em Andamento',       color:'#7C3AED' },
-  { id:'pendencia_financeiro', label:'Pendência Financeiro',     color:'#F97316' },
-  { id:'em_negociacao',        label:'Em Negociação',            color:'#0EA5E9' },
-  { id:'abertura_conta',       label:'Abertura de Conta',        color:'#10B981' },
-  { id:'digitar_proposta',     label:'Digitar Proposta',         color:'#F59E0B' },
+  { id:'clientes_novos',       label:'Corb novos entrantes',           color:'#3B5BDB' },
+  { id:'saldo_andamento',      label:'BKO - Saldo Devedor',       color:'#7C3AED' },
+  { id:'pendencia_financeiro', label:'Pend. Analise Financeira',     color:'#F97316' },
+  { id:'em_negociacao',        label:'Em negociação - Corban',            color:'#0EA5E9' },
+  { id:'abertura_conta',       label:'Abertura de conta - Interno',        color:'#10B981' },
+  { id:'digitar_proposta',     label:'Pronto p digitar - Corban',         color:'#F59E0B' },
 ];
 
 /* ─── Extração de estado a partir do campo prefeitura ─────────────────────── */
