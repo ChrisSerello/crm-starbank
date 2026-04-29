@@ -6,8 +6,6 @@ import { INIT, R } from "./store";
 import { stg, TODAY } from "./utils";
 import { OPERATORS } from "./constants";
 
-// [OTM-3] Import de LEADS0 removido — seed desativado para reduzir Disk IO
-
 import { Sidebar } from "./components/Sidebar";
 import { Detail } from "./components/Detail";
 import { NewLead } from "./components/NewLead";
@@ -26,10 +24,84 @@ import { CorbanApp } from "./views/corbans/CorbanApp";
 import { BKOApp } from "./views/bko/BKOApp";
 import { TVApp } from "./views/tv/TVApp";
 
+// ─── CONFIG DE MÓDULOS ────────────────────────────────────────────────────────
+
+const MODULE_CONFIG = {
+  indicacoes: { label:'Indicações',   desc:'Gestão de leads e pipeline',      icon:'◈', color:'#6366F1' },
+  bko:        { label:'BKO',          desc:'Backoffice e operações',           icon:'⊞', color:'#0EA5E9' },
+  corbans:    { label:'Corbans',       desc:'Gestão de correspondentes',        icon:'⬡', color:'#10B981' },
+  externos:   { label:'Externos',      desc:'Acesso externo',                   icon:'◎', color:'#F59E0B' },
+  ecommerce:  { label:'E-commerce',   desc:'Plataforma de vendas',             icon:'◇', color:'#EC4899' },
+  tv:         { label:'TV Dashboard', desc:'Painel em tempo real',             icon:'▣', color:'#8B5CF6' },
+};
+
+// ─── TELA DE SELEÇÃO DE MÓDULO ────────────────────────────────────────────────
+
+function ModuleSelector({ userModules, profile, onSelect, onLogout }){
+  return(
+    <div style={{minHeight:'100vh',background:'var(--bg-base)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',fontFamily:'var(--font)',padding:24}}>
+      <div style={{fontSize:36,marginBottom:16}}>◈</div>
+      <div style={{fontFamily:'var(--font-display)',fontSize:24,fontWeight:700,color:'var(--text-primary)',marginBottom:6}}>
+        Olá, {profile?.nome?.split(' ')[0]}!
+      </div>
+      <div style={{fontSize:14,color:'var(--text-secondary)',marginBottom:48}}>
+        Qual módulo deseja acessar?
+      </div>
+      <div style={{display:'flex',gap:16,flexWrap:'wrap',justifyContent:'center',maxWidth:720}}>
+        {userModules.map(({modulo,role})=>{
+          const cfg=MODULE_CONFIG[modulo]||{label:modulo,desc:'Módulo',icon:'◇',color:'#6366F1'};
+          return(
+            <button
+              key={modulo}
+              onClick={()=>onSelect(modulo,role)}
+              style={{
+                background:'var(--bg-elevated)',
+                border:'2px solid var(--border-mid)',
+                borderRadius:16,
+                padding:'28px 32px',
+                cursor:'pointer',
+                textAlign:'left',
+                minWidth:200,
+                transition:'border-color .15s, transform .15s, box-shadow .15s',
+                outline:'none',
+              }}
+              onMouseEnter={e=>{
+                e.currentTarget.style.borderColor=cfg.color;
+                e.currentTarget.style.transform='translateY(-3px)';
+                e.currentTarget.style.boxShadow=`0 8px 24px ${cfg.color}33`;
+              }}
+              onMouseLeave={e=>{
+                e.currentTarget.style.borderColor='var(--border-mid)';
+                e.currentTarget.style.transform='translateY(0)';
+                e.currentTarget.style.boxShadow='none';
+              }}
+            >
+              <div style={{fontSize:30,marginBottom:12}}>{cfg.icon}</div>
+              <div style={{fontSize:16,fontWeight:700,color:'var(--text-primary)',marginBottom:4}}>{cfg.label}</div>
+              <div style={{fontSize:12,color:'var(--text-secondary)',marginBottom:10}}>{cfg.desc}</div>
+              <div style={{fontSize:11,color:cfg.color,fontWeight:700,textTransform:'uppercase',letterSpacing:'.06em'}}>{role}</div>
+            </button>
+          );
+        })}
+      </div>
+      <button
+        onClick={onLogout}
+        style={{marginTop:52,background:'none',border:'none',cursor:'pointer',fontSize:13,color:'var(--text-muted)',padding:'8px 16px'}}
+      >
+        Sair da conta
+      </button>
+    </div>
+  );
+}
+
+
 // ─── ROOT ─────────────────────────────────────────────────────────────────────
 
 export default function App(){
-  const {session,profile,authLoading,unauthorized,signOut,configError,isRecovery}=useAuth();
+  const {
+    session,profile,authLoading,unauthorized,signOut,configError,isRecovery,
+    userModules,needsModuleSelect,selectModule,
+  }=useAuth();
   const [s,dispatch]=useReducer(R,INIT);
   const {leads,view,sel,newOpen,filters,rules,dragId}=s;
   const selected=leads.find(l=>l.id===sel);
@@ -42,39 +114,34 @@ export default function App(){
 
   // ── Load leads from Supabase on login ──
   useEffect(()=>{
-    if(!session) return;
-    // [OTM-1] Limite de 500 registros para reduzir Disk IO no carregamento inicial
+    if(!session||!profile) return;
+    // BKO, Corbans e Externos têm seus próprios dados — não usam a tabela de leads
+    if(profile.modulo&&profile.modulo!=='indicacoes') return;
     supabase.from('leads').select('data').limit(500).then(async({data,error})=>{
       if(error) console.error('Erro ao carregar leads:', error);
-      // [OTM-2] Bloco de seed removido — elimina upsert em chunks que esgotava o Disk IO Budget
       const remoteLeads = data?.map(r=>r.data) || [];
       dispatch({type:'SET_LEADS', leads:remoteLeads});
       setLeadsReady(true);
     });
-  },[session]);
+  },[session,profile?.modulo]);
 
-  // ── Watch leads e sync com debounce por lead (sem lock contention) ──
+  // ── Watch leads e sync com debounce por lead ──
   const pendingSyncRef = useRef({});
   const leadsMapRef = useRef(new Map());
 
   useEffect(()=>{
     if(!leadsReady||!session) return;
+    // Só sincroniza leads no módulo indicacoes
+    if(profile?.modulo&&profile.modulo!=='indicacoes') return;
     const prevMap = leadsMapRef.current;
     leads.forEach(l=>{
       if(prevMap.get(l.id) !== l){
-        if(pendingSyncRef.current[l.id]){
-          clearTimeout(pendingSyncRef.current[l.id]);
-        }
-        // [OTM-DEBOUNCE] Aumentado de 800ms para 3000ms — reduz upserts em ~70%
-        // Usuários raramente editam o mesmo lead em menos de 3s; 
-        // o dado ainda é salvo com segurança antes de qualquer navegação.
+        if(pendingSyncRef.current[l.id]) clearTimeout(pendingSyncRef.current[l.id]);
         pendingSyncRef.current[l.id] = setTimeout(async ()=>{
-          const {error} = await supabase
-            .from('leads')
-            .upsert({id:l.id, data:l},{onConflict:'id'});
+          const {error} = await supabase.from('leads').upsert({id:l.id, data:l},{onConflict:'id'});
           if(error) console.error('Sync error:',l.id,error);
           delete pendingSyncRef.current[l.id];
-        }, 3000); // [OTM] era 800ms
+        }, 3000);
       }
     });
     leadsMapRef.current = new Map(leads.map(l=>[l.id,l]));
@@ -137,7 +204,6 @@ export default function App(){
           ?action.lead?.nomeIndicado
           :leads.find(l=>l.id===leadId)?.nomeIndicado||'—';
 
-        // [OTM-4] Audit log em batch — acumula itens por 3s e envia em uma única requisição
         auditQueueRef.current.push({
           user_id:session.user.id,
           user_nome:profile.nome,
@@ -202,6 +268,19 @@ export default function App(){
     </>
   );
 
+  // ── Seleção de módulo (apenas para quem tem 2+ módulos) ──
+  if(needsModuleSelect) return(
+    <>
+      <GlobalStyles/>
+      <ModuleSelector
+        userModules={userModules}
+        profile={profile}
+        onSelect={selectModule}
+        onLogout={signOut}
+      />
+    </>
+  );
+
   // ── TV Dashboard — rota /tv (exclusivo role comercial) ──
   if(window.location.pathname==='/tv') return(
     <>
@@ -233,6 +312,8 @@ export default function App(){
         session={session}
         signOut={signOut}
         onAlterarSenha={()=>setShowAlterarSenha(true)}
+        userModules={userModules}
+        onSwitchModule={selectModule}
       />
       {showAlterarSenha&&<AlterarSenha onClose={()=>setShowAlterarSenha(false)}/>}
     </>
@@ -254,7 +335,7 @@ export default function App(){
     </>
   );
 
-  // ── Main app ──
+  // ── Main app (indicacoes / externos) ──
   return(
     <>
       <GlobalStyles/>
@@ -265,6 +346,8 @@ export default function App(){
           onLogout={signOut}
           onAlterarSenha={()=>setShowAlterarSenha(true)}
           profile={profile}
+          userModules={userModules}
+          onSwitchModule={selectModule}
         />
         <main style={{flex:1,minWidth:0,overflowY:"auto",paddingRight:selected?490:0,transition:"padding-right .3s cubic-bezier(.4,0,.2,1)"}}>
           {view==="dashboard"   && <Dashboard leads={leads}/>}

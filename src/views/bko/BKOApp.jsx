@@ -7,6 +7,16 @@ import { BKODetail } from './BKODetail';
 import { BKOSearch } from './BKOSearch';
 import ReactDOM from 'react-dom';
 
+
+const MODULE_CONFIG = {
+  indicacoes: { label:'Indicações',  icon:'◈', color:'#6366F1' },
+  bko:        { label:'BKO',         icon:'⊞', color:'#3B5BDB' },
+  corbans:    { label:'Corbans',      icon:'⬡', color:'#10B981' },
+  externos:   { label:'Externos',     icon:'◎', color:'#F59E0B' },
+  ecommerce:  { label:'E-commerce',  icon:'◇', color:'#EC4899' },
+  tv:         { label:'TV',          icon:'▣', color:'#8B5CF6' },
+};
+
 const B_DARK  = '#1C2033';
 const B_MID   = '#3B5BDB';
 const B_LIGHT = 'rgba(59,91,219,0.10)';
@@ -56,7 +66,106 @@ function R(s,{type:t,...a}){
   }
 }
 
-function BKOSidebar({view,setView,profile,onLogout,onAlterarSenha,onSearch,collapsed,setCollapsed}){
+
+// ─── MODULE SWITCHER (multi-módulo) ──────────────────────────────────────────
+function ModuleSwitcherBKO({ userModules, profile, onSwitch, collapsed }){
+  const [open, setOpen] = useState(false);
+  const [dropPos, setDropPos] = useState({top:0, left:0, width:0});
+  const btnRef = useRef(null);
+  const current = MODULE_CONFIG[profile?.modulo] || { label: profile?.modulo || 'Módulo', icon:'◇', color:'#3B5BDB' };
+  const others = (userModules||[]).filter(m => m.modulo !== profile?.modulo);
+
+  useEffect(()=>{
+    const handler = (e) => {
+      if(btnRef.current && !btnRef.current.closest('[data-bko-switcher]')?.contains(e.target))
+        setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  },[]);
+
+  const handleOpen = () => {
+    if(btnRef.current){
+      const rect = btnRef.current.getBoundingClientRect();
+      setDropPos({ top: rect.bottom + 6, left: rect.left, width: rect.width });
+    }
+    setOpen(o => !o);
+  };
+
+  if(!userModules || userModules.length <= 1) return null;
+
+  return(
+    <div data-bko-switcher="1" style={{margin: collapsed ? '0 4px 4px' : '0 8px 4px'}}>
+      {/* Dropdown em portal com position:fixed — escapa do overflow:hidden da sidebar */}
+      {open && ReactDOM.createPortal(
+        <div
+          data-bko-switcher="1"
+          onMouseDown={e=>e.stopPropagation()}
+          style={{
+            position:'fixed', top:dropPos.top, left:dropPos.left, width: collapsed ? 180 : dropPos.width,
+            background:'#1C2033', border:'1px solid rgba(59,91,219,.35)',
+            borderRadius:10, padding:4, zIndex:9999,
+            boxShadow:'0 8px 32px rgba(0,0,0,.5)',
+          }}
+        >
+          <div style={{fontSize:9,color:'rgba(255,255,255,.35)',fontWeight:700,textTransform:'uppercase',letterSpacing:'.08em',padding:'5px 10px 4px'}}>
+            Trocar módulo
+          </div>
+          {others.map(({modulo, role})=>{
+            const cfg = MODULE_CONFIG[modulo] || {label:modulo, icon:'◇', color:'#3B5BDB'};
+            return(
+              <button
+                key={modulo}
+                onClick={()=>{ onSwitch(modulo, role); setOpen(false); }}
+                style={{
+                  display:'flex', alignItems:'center', gap:10, width:'100%',
+                  padding:'9px 12px', border:'none', background:'none',
+                  cursor:'pointer', borderRadius:7, textAlign:'left',
+                  transition:'background .1s',
+                }}
+                onMouseEnter={e=>e.currentTarget.style.background='rgba(59,91,219,.18)'}
+                onMouseLeave={e=>e.currentTarget.style.background='none'}
+              >
+                <span style={{fontSize:15,width:20,textAlign:'center',color:cfg.color,flexShrink:0}}>{cfg.icon}</span>
+                <div>
+                  <div style={{fontSize:12,fontWeight:600,color:'rgba(255,255,255,.85)'}}>{cfg.label}</div>
+                  <div style={{fontSize:10,color:'rgba(255,255,255,.4)',marginTop:1,textTransform:'uppercase',letterSpacing:'.05em'}}>{role}</div>
+                </div>
+              </button>
+            );
+          })}
+        </div>,
+        document.body
+      )}
+
+      <button
+        ref={btnRef}
+        onClick={handleOpen}
+        title={collapsed ? `Módulo: ${current.label}` : ''}
+        style={{
+          display:'flex', alignItems:'center', gap: collapsed ? 0 : 8,
+          justifyContent: collapsed ? 'center' : 'flex-start',
+          width:'100%', padding: collapsed ? '8px 0' : '8px 10px',
+          borderRadius:8, border:'1px solid rgba(59,91,219,.25)',
+          background:'rgba(59,91,219,.1)', cursor:'pointer',
+          transition:'all .15s',
+        }}
+        onMouseEnter={e=>{e.currentTarget.style.background='rgba(59,91,219,.2)';e.currentTarget.style.borderColor='rgba(59,91,219,.5)';}}
+        onMouseLeave={e=>{e.currentTarget.style.background='rgba(59,91,219,.1)';e.currentTarget.style.borderColor='rgba(59,91,219,.25)';}}
+      >
+        <span style={{fontSize:14, color:current.color, width:20, textAlign:'center', flexShrink:0}}>{current.icon}</span>
+        {!collapsed && (
+          <>
+            <span style={{fontSize:11,fontWeight:600,color:'rgba(255,255,255,.8)',flex:1,textAlign:'left'}}>{current.label}</span>
+            <span style={{fontSize:9,color:'rgba(255,255,255,.35)'}}>{open?'▲':'▼'}</span>
+          </>
+        )}
+      </button>
+    </div>
+  );
+}
+
+function BKOSidebar({view,setView,profile,onLogout,onAlterarSenha,onSearch,collapsed,setCollapsed,userModules,onSwitchModule}){
   const r=profile?.role;
   const items=[
     {id:'dashboard',icon:'◈',label:'Dashboard'},
@@ -98,7 +207,11 @@ function BKOSidebar({view,setView,profile,onLogout,onAlterarSenha,onSearch,colla
       </div>
       {/* Nav */}
       <nav style={{padding:collapsed?'8px 4px':'8px',flex:1,overflow:'hidden'}}>
-        {!collapsed&&<div style={{fontSize:8,fontWeight:700,color:'rgba(255,255,255,.25)',textTransform:'uppercase',letterSpacing:'.09em',padding:'8px 8px 4px'}}>Menu</div>}
+        <ModuleSwitcherBKO userModules={userModules} profile={profile} onSwitch={onSwitchModule} collapsed={collapsed}/>
+      {userModules && userModules.length > 1 && (
+        <div style={{height:1, background:'rgba(59,91,219,.2)', margin: collapsed ? '4px 6px 4px' : '4px 8px 6px'}}/>
+      )}
+      {!collapsed&&<div style={{fontSize:8,fontWeight:700,color:'rgba(255,255,255,.25)',textTransform:'uppercase',letterSpacing:'.09em',padding:'8px 8px 4px'}}>Menu</div>}
         {items.map(it=>(
           <button key={it.id} onClick={()=>setView(it.id)}
             title={collapsed?it.label:''}
@@ -1039,7 +1152,7 @@ function BKOAuditoria(){
   );
 }
 
-export function BKOApp({profile,session,signOut,onAlterarSenha}){
+export function BKOApp({profile,session,signOut,onAlterarSenha,userModules,onSwitchModule}){
   const [s,dispatch]=useReducer(R,INIT);
   const {clientes,view,sel,newOpen}=s;
   const [ready,setReady]=useState(false);
@@ -1156,7 +1269,7 @@ export function BKOApp({profile,session,signOut,onAlterarSenha}){
   return(
     <>
       <div style={{display:'flex',minHeight:'100vh',background:'var(--bg-base)',fontFamily:'var(--font)'}}>
-        <BKOSidebar view={view} setView={v=>{setView(v);if(v!=='pipeline')setFiltroEstagio(null);}} profile={profile} onLogout={signOut} onAlterarSenha={()=>setShowAS(true)} onSearch={()=>setSearchOpen(true)} collapsed={sidebarCollapsed} setCollapsed={toggleSidebar}/>
+        <BKOSidebar view={view} setView={v=>{setView(v);if(v!=='pipeline')setFiltroEstagio(null);}} profile={profile} onLogout={signOut} onAlterarSenha={()=>setShowAS(true)} onSearch={()=>setSearchOpen(true)} collapsed={sidebarCollapsed} setCollapsed={toggleSidebar} userModules={userModules} onSwitchModule={onSwitchModule}/>
         <main style={{flex:1,minWidth:0,overflowY:view==='pipeline'?'hidden':'auto',paddingRight:selected?490:0,transition:'padding-right .3s cubic-bezier(.4,0,.2,1)'}}>
           {view==='dashboard' && <BKODashboard clientes={clientes} setView={v=>{setView(v);}} setFiltroEstagio={setFiltroEstagio}/>}
           {view==='pipeline'  && <BKOPipeline clientes={clientes} profile={profile} dispatch={auditedDispatch} onSelect={id=>dispatch({type:'SEL',id})} filtroEstagio={filtroEstagio} setFiltroEstagio={setFiltroEstagio} funis={funis}/>}
