@@ -32,8 +32,8 @@ const BKO_STAGES = [
 ];
 
 // Mapa de cores e labels por setor — igual ao chat
-const ROLE_COLOR = { comercial:'#3B5BDB', corban_bko:'#0EA5E9', bko:'#7C3AED' };
-const ROLE_LABEL = { comercial:'Comercial', corban_bko:'Corban',  bko:'BKO'     };
+const ROLE_COLOR = { comercial:'#3B5BDB', corban_bko:'#0EA5E9', bko:'#7C3AED', startec:'#059669', supervisor_startec:'#0D9488' };
+const ROLE_LABEL = { comercial:'Comercial', corban_bko:'Corban', bko:'BKO', startec:'Startec', supervisor_startec:'Supervisor' };
 
 export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
   const [tab, setTab]         = useState('info');
@@ -45,11 +45,14 @@ export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
   const [uploading, setUploading] = useState(false);
   const [uploadMsg, setUploadMsg] = useState(null);
 
-  // Atribuição (só Comercial)
-  const [corbans, setCorbans]     = useState([]);
+  // Atribuição Corban (só Comercial)
+  const [corbans, setCorbans]         = useState([]);
   const [atribuidoId, setAtribuidoId] = useState(cliente.atribuido_a_id || '');
   const [atribuindo, setAtribuindo]   = useState(false);
   const [atribMsg, setAtribMsg]       = useState(null);
+
+  // Atribuição Startec (usa mesmo campo atribuido_a_id)
+  const [operadoresStartec, setOperadoresStartec] = useState([]);
 
   // Responsável BKO
   const [respMsg, setRespMsg]         = useState(null);
@@ -68,15 +71,32 @@ export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
   const [chatLoading, setChatLoading] = useState(false);
   const chatEndRef = useRef(null);
 
-  const r            = profile?.role;
-  const isBko        = r === 'bko';
-  const isComercial  = r === 'comercial';
-  const isCorban     = r === 'corban_bko';
+  const r                   = profile?.role;
+  const isBko               = r === 'bko';
+  const isComercial         = r === 'comercial';
+  const isCorban            = r === 'corban_bko';
+  const isStartec           = r === 'startec';
+  const isSupervisorStartec = r === 'supervisor_startec';
 
-  // Observações: qualquer um dos 3 perfis pode adicionar entradas
-  const podeInteragir = isBko || isComercial || isCorban;
+  // Observações: todos os perfis podem adicionar entradas
+  const podeInteragir   = isBko || isComercial || isCorban || isStartec || isSupervisorStartec;
   // Saldo Devedor: apenas BKO pode editar
   const podeEditarSaldo = isBko;
+  // Atribuição Startec: supervisor_startec pode atribuir/reatribuir operadores startec
+  const podeAtribuirStartec = isSupervisorStartec || isComercial;
+
+  const salvarAtribuicaoStartecDireto = async () => {
+    const opSel = operadoresStartec.find(o => o.id === atribuidoId);
+    setAtribuindo(true);
+    setAtribMsg(null);
+    const { error } = await supabase.from('bko_clientes')
+      .update({ atribuido_a_id: atribuidoId || null, atribuido_a_nome: opSel?.nome || null })
+      .eq('id', cliente.id);
+    setAtribuindo(false);
+    if (error) { setAtribMsg({ t: 'error', text: 'Erro ao atribuir.' }); return; }
+    dispatch({ type: 'UPD', c: { ...cliente, atribuido_a_id: atribuidoId || null, atribuido_a_nome: opSel?.nome || null } });
+    setAtribMsg({ t: 'success', text: `Atribuído a ${opSel?.nome || 'ninguém'}!` });
+  };
 
   const euSouResponsavel = isBko && cliente.responsavel_bko_id === profile?.id;
   const temResponsavel   = !!cliente.responsavel_bko_id;
@@ -98,6 +118,14 @@ export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
       setCorbans(data || []);
     });
   }, [isComercial]);
+
+  // ── Carregar operadores startec (só supervisor_startec) ──
+  useEffect(() => {
+    if (!isSupervisorStartec && !isComercial) return;
+    supabase.from('profiles').select('id,nome,email')
+      .eq('modulo', 'bko').eq('role', 'startec').order('nome')
+      .then(({ data }) => setOperadoresStartec(data || []));
+  }, [isSupervisorStartec]);
 
   // ── Chat realtime ──
   useEffect(() => {
@@ -195,6 +223,19 @@ export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
     setAtribMsg({ t: 'success', text: `Atribuído a ${corbanSel?.nome || 'ninguém'}!` });
   };
 
+  const salvarAtribuicaoStartec = async () => {
+    const opSel = operadoresStartec.find(o => o.id === atribStartecId);
+    setAtribuindoStartec(true);
+    setAtribStartecMsg(null);
+    const { error } = await supabase.from('bko_clientes')
+      .update({ atribuido_a_id: atribStartecId || null, atribuido_a_nome: opSel?.nome || null })
+      .eq('id', cliente.id);
+    setAtribuindoStartec(false);
+    if (error) { setAtribStartecMsg({ t: 'error', text: 'Erro ao atribuir.' }); return; }
+    dispatch({ type: 'UPD', c: { ...cliente, atribuido_a_id: atribStartecId || null, atribuido_a_nome: opSel?.nome || null } });
+    setAtribStartecMsg({ t: 'success', text: `Atribuído a ${opSel?.nome || 'ninguém'}!` });
+  };
+
   const salvarInfo = () => {
     const upd = { ...cliente, estagio: es, documentoStatus: ed, saldoDevedor: saldo, documentos: docs, prefeitura: prefeituraEdit };
     if (es !== cliente.estagio) dispatch({ type: 'MOVE', cid: cliente.id, st: es, user: profile?.nome || 'Usuário' });
@@ -257,6 +298,7 @@ export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
               {stg && <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: stg.bg, color: stg.color, fontWeight: 700 }}>{stg.label}</span>}
               {cliente.prefeitura && <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: 'rgba(0,0,0,.05)', color: 'var(--text-secondary)', fontWeight: 600 }}>🏛 {cliente.prefeitura}</span>}
               {cliente.atribuido_a_nome && <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: B_LIGHT, color: B_MID, fontWeight: 700 }}>→ {cliente.atribuido_a_nome}</span>}
+              {cliente.atribuido_startec_nome && <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: 'rgba(5,150,105,.1)', color: '#059669', fontWeight: 700 }}>⚡ {cliente.atribuido_startec_nome}</span>}
               {cliente.responsavel_bko_nome && <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: 'rgba(124,58,237,.1)', color: '#7C3AED', fontWeight: 700 }}>🔒 {cliente.responsavel_bko_nome}</span>}
               {cliente.saldoDevedor && <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: 'rgba(16,185,129,.1)', color: '#10B981', fontWeight: 700 }}>💰 {cliente.saldoDevedor}</span>}
             </div>
@@ -291,6 +333,7 @@ export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
                 ['Criado por',      cliente.criado_por_nome || '—'],
                 ['Atribuído a',     cliente.atribuido_a_nome || 'Não atribuído'],
                 ['Responsável BKO', cliente.responsavel_bko_nome || 'Sem responsável'],
+                ['Operador Startec', cliente.atribuido_startec_nome || 'Não atribuído'],
                 ['Último contato',  fmtD(cliente.ultimoContato)],
               ].map(([k, v]) => (
                 <div key={k} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', borderBottom: '1px solid var(--border)' }}>
@@ -314,6 +357,25 @@ export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
                 </select>
                 {atribMsg && <div style={{ fontSize: 11, padding: '6px 10px', borderRadius: 7, marginBottom: 8, background: atribMsg.t === 'success' ? 'var(--success-dim)' : 'var(--danger-dim)', color: atribMsg.t === 'success' ? 'var(--success)' : 'var(--danger)' }}>{atribMsg.text}</div>}
                 <button style={{ width: '100%', padding: '8px 0', borderRadius: 8, background: B_MID, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', border: 'none', opacity: atribuindo ? 0.7 : 1 }} onClick={salvarAtribuicao} disabled={atribuindo}>{atribuindo ? 'Salvando…' : '✓ Confirmar atribuição'}</button>
+              </div>
+            )}
+
+            {/* Atribuição Startec — usa mesmo campo atribuido_a_id */}
+            {podeAtribuirStartec && (
+              <div style={{ marginBottom: 16, padding: 14, background: 'rgba(5,150,105,.08)', borderRadius: 10, border: '1px solid rgba(5,150,105,.2)' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#059669', marginBottom: 8 }}>⚡ Atribuir à Operação Startec</div>
+                {operadoresStartec.length === 0 ? (
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Nenhum operador Startec cadastrado ainda.</div>
+                ) : (
+                  <>
+                    <select className="sel" style={{ marginBottom: 8 }} value={atribuidoId} onChange={e => setAtribuidoId(e.target.value)}>
+                      <option value="">— Sem atribuição —</option>
+                      {operadoresStartec.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
+                    </select>
+                    {atribMsg && <div style={{ fontSize: 11, padding: '6px 10px', borderRadius: 7, marginBottom: 8, background: atribMsg.t === 'success' ? 'var(--success-dim)' : 'var(--danger-dim)', color: atribMsg.t === 'success' ? 'var(--success)' : 'var(--danger)' }}>{atribMsg.text}</div>}
+                    <button style={{ width: '100%', padding: '8px 0', borderRadius: 8, background: '#059669', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', border: 'none', opacity: atribuindo ? 0.7 : 1 }} onClick={salvarAtribuicao} disabled={atribuindo}>{atribuindo ? 'Salvando…' : '✓ Confirmar atribuição'}</button>
+                  </>
+                )}
               </div>
             )}
 

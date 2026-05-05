@@ -31,7 +31,7 @@ const BKO_STAGES = [
   { id:'pendencia_financeiro', label:'Pend. Analise Financeira',     color:'#F97316' },
   { id:'em_negociacao',        label:'Em negociação - Corban',            color:'#0EA5E9' },
   { id:'abertura_conta',       label:'Abertura de conta - Interno',        color:'#10B981' },
-  { id:'digitar_proposta',     label:'Pronto p digitar - Corban',         color:'#F59E0B' },
+  { id:'digitar_proposta',     label:'Pronto para digitar - Corban',         color:'#F59E0B' },
 ];
 
 /* ─── Extração de estado a partir do campo prefeitura ─────────────────────── */
