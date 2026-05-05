@@ -223,18 +223,38 @@ function StatCard({label,value,color,icon,onClick}){
 
 // ─── DASHBOARD ───────────────────────────────────────────────────────────────
 // startec vê só os próprios; bko/comercial veem tudo
-function BKODashboard({clientes,setView,setFiltroEstagio,profile}){
-  const clientesFiltrados=useMemo(()=>
-    (profile?.role==='startec'||profile?.role==='corban_bko')
-      ? clientes.filter(c=>c.atribuido_a_id===profile?.id)
-      : clientes
-  ,[clientes,profile]);
+function BKODashboard({clientes,setView,setFiltroEstagio,profile,origemFiltro,setOrigemFiltro}){
+  const isComercial=profile?.role==='comercial';
+  const clientesFiltrados=useMemo(()=>{
+    if(profile?.role==='startec'||profile?.role==='corban_bko')
+      return clientes.filter(c=>c.atribuido_a_id===profile?.id);
+    if(isComercial&&origemFiltro)
+      return clientes.filter(c=>c.origem===origemFiltro);
+    return clientes;
+  },[clientes,profile,origemFiltro]);
   const counts=useMemo(()=>{const m={};BKO_STAGES.forEach(s=>{m[s.id]=clientesFiltrados.filter(c=>c.estagio===s.id).length;});return m;},[clientesFiltrados]);
   const handleCard=(stageId)=>{setFiltroEstagio(stageId);setView('pipeline');};
   const recent=useMemo(()=>clientesFiltrados.flatMap(c=>(c.activities||[]).map(a=>({...a,clienteName:c.nomeCliente}))).sort((a,b)=>(b.date||'').localeCompare(a.date||'')).slice(0,8),[clientesFiltrados]);
   return(
     <div style={{padding:'28px 32px'}}>
-      <div style={{marginBottom:24}}><div className="section-title">Dashboard</div><div className="section-sub">BKO Backoffice · {fmtD(TODAY)}</div></div>
+      <div style={{marginBottom:24,display:'flex',alignItems:'flex-start',justifyContent:'space-between',flexWrap:'wrap',gap:12}}>
+        <div><div className="section-title">Dashboard</div><div className="section-sub">BKO Backoffice · {fmtD(TODAY)}</div></div>
+        {isComercial&&(
+          <div style={{display:'flex',gap:6,alignItems:'center'}}>
+            <span style={{fontSize:11,color:'var(--text-muted)',marginRight:4}}>Equipe:</span>
+            {[['todos',null,'Todos'],['corban','corban','Corbans'],['startec','startec','Startec']].map(([key,val,label])=>(
+              <button key={key} onClick={()=>setOrigemFiltro(val)}
+                style={{padding:'5px 14px',borderRadius:99,fontSize:12,fontWeight:600,cursor:'pointer',transition:'all .15s',
+                  background:origemFiltro===val?(val==='startec'?'#059669':val==='corban'?B_MID:'rgba(0,0,0,.08)'):'transparent',
+                  color:origemFiltro===val?'#fff':'var(--text-muted)',
+                  border:`1px solid ${origemFiltro===val?(val==='startec'?'#059669':val==='corban'?B_MID:'rgba(0,0,0,.15)'):'var(--border)'}`,
+                }}>
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
       <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:12}}>
         {BKO_STAGES.slice(0,4).map(s=>(
           <StatCard key={s.id} label={s.label} value={counts[s.id]||0} color={s.color}
@@ -460,7 +480,7 @@ function BKOFunilMeses({funil,clientes,onSelect,dispatch,profile}){
 }
 
 // ─── PIPELINE ────────────────────────────────────────────────────────────────
-function BKOPipeline({clientes,profile,dispatch,onSelect,filtroEstagio,setFiltroEstagio,funis}){
+function BKOPipeline({clientes,profile,dispatch,onSelect,filtroEstagio,setFiltroEstagio,funis,origemFiltro,setOrigemFiltro}){
   const [dragId,setDragId]=useState(null);
   const [search,setSearch]=useState('');
   const [collapsedCols,setCollapsedCols]=useState(new Set());
@@ -483,11 +503,13 @@ function BKOPipeline({clientes,profile,dispatch,onSelect,filtroEstagio,setFiltro
   },[funilOpen]);
 
   // startec e corban_bko veem só os próprios; bko e comercial veem tudo
-  const clientesVisiveis=useMemo(()=>
-    (profile?.role==='startec'||profile?.role==='corban_bko')
-      ? clientes.filter(c=>c.atribuido_a_id===profile?.id)
-      : clientes
-  ,[clientes,profile]);
+  const clientesVisiveis=useMemo(()=>{
+    if(profile?.role==='startec'||profile?.role==='corban_bko')
+      return clientes.filter(c=>c.atribuido_a_id===profile?.id);
+    if(profile?.role==='comercial'&&origemFiltro)
+      return clientes.filter(c=>c.origem===origemFiltro);
+    return clientes;
+  },[clientes,profile,origemFiltro]);
 
   const pipelineClientes=clientesVisiveis.filter(c=>!c.funil_id);
   const filtered=search.trim()
@@ -508,6 +530,19 @@ function BKOPipeline({clientes,profile,dispatch,onSelect,filtroEstagio,setFiltro
           }
         </div>
         <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
+          {/* Badge de filtro de equipe */}
+          {profile?.role==='comercial'&&(
+            <div style={{display:'flex',gap:5}}>
+              {[['todos',null,'Todos'],['corban','corban','Corbans'],['startec','startec','Startec']].map(([key,val,label])=>(
+                <button key={key} onClick={()=>setOrigemFiltro(val)}
+                  style={{padding:'4px 12px',borderRadius:99,fontSize:11,fontWeight:600,cursor:'pointer',transition:'all .15s',
+                    background:origemFiltro===val?(val==='startec'?'#059669':val==='corban'?B_MID:'rgba(0,0,0,.08)'):'transparent',
+                    color:origemFiltro===val?'#fff':'var(--text-muted)',
+                    border:`1px solid ${origemFiltro===val?(val==='startec'?'#059669':val==='corban'?B_MID:'rgba(0,0,0,.15)'):'var(--border)'}`,
+                  }}>{label}</button>
+              ))}
+            </div>
+          )}
           {!funilSel&&filtroEstagio&&(
             <div style={{display:'flex',alignItems:'center',gap:6,padding:'5px 12px',borderRadius:99,background:B_LIGHT,border:`1px solid ${B_MID}30`,fontSize:11,color:B_MID,fontWeight:600}}>
               {BKO_STAGES.find(s=>s.id===filtroEstagio)?.label}
@@ -576,7 +611,7 @@ function BKOPipeline({clientes,profile,dispatch,onSelect,filtroEstagio,setFiltro
 }
 
 // ─── CLIENTES ────────────────────────────────────────────────────────────────
-function BKOClientes({clientes,profile,onSelect,onNew}){
+function BKOClientes({clientes,profile,onSelect,onNew,origemFiltro,setOrigemFiltro}){
   const [search,setSearch]=useState('');
   const [estagio,setEstagio]=useState('');
   const [prefeitura,setPrefeitura]=useState('');
@@ -589,12 +624,14 @@ function BKOClientes({clientes,profile,onSelect,onNew}){
   const criadoresList=useMemo(()=>[...new Set(clientes.map(c=>c.criado_por_nome).filter(Boolean))].sort(),[clientes]);
   const atribuidosList=useMemo(()=>[...new Set(clientes.map(c=>c.atribuido_a_nome).filter(Boolean))].sort(),[clientes]);
 
-  // startec e corban_bko veem só os próprios
-  const clientesBase=useMemo(()=>
-    (profile?.role==='startec'||profile?.role==='corban_bko')
-      ? clientes.filter(c=>c.atribuido_a_id===profile?.id)
-      : clientes
-  ,[clientes,profile]);
+  // startec e corban_bko veem só os próprios; comercial respeita origemFiltro
+  const clientesBase=useMemo(()=>{
+    if(profile?.role==='startec'||profile?.role==='corban_bko')
+      return clientes.filter(c=>c.atribuido_a_id===profile?.id);
+    if(profile?.role==='comercial'&&origemFiltro)
+      return clientes.filter(c=>c.origem===origemFiltro);
+    return clientes;
+  },[clientes,profile,origemFiltro]);
 
   const filtered=useMemo(()=>clientesBase.filter(c=>{
     if(estagio&&c.estagio!==estagio) return false;
@@ -612,9 +649,23 @@ function BKOClientes({clientes,profile,onSelect,onNew}){
 
   return(
     <div style={{padding:'28px 32px'}}>
-      <div className="fu" style={{display:'flex',justifyContent:'space-between',alignItems:'flex-end',marginBottom:16}}>
+      <div className="fu" style={{display:'flex',justifyContent:'space-between',alignItems:'flex-end',marginBottom:16,flexWrap:'wrap',gap:10}}>
         <div><div className="section-title">Clientes</div><div className="section-sub">{filtered.length} de {clientesBase.length} registros</div></div>
-        <button className="btn" style={{background:B_MID,color:'#fff',boxShadow:`0 3px 14px ${B_GLOW}`}} onClick={onNew}>+ Novo Cliente</button>
+        <div style={{display:'flex',gap:8,alignItems:'center'}}>
+          {profile?.role==='comercial'&&(
+            <div style={{display:'flex',gap:5}}>
+              {[['todos',null,'Todos'],['corban','corban','Corbans'],['startec','startec','Startec']].map(([key,val,label])=>(
+                <button key={key} onClick={()=>setOrigemFiltro(val)}
+                  style={{padding:'5px 12px',borderRadius:99,fontSize:11,fontWeight:600,cursor:'pointer',transition:'all .15s',
+                    background:origemFiltro===val?(val==='startec'?'#059669':val==='corban'?B_MID:'rgba(0,0,0,.08)'):'transparent',
+                    color:origemFiltro===val?'#fff':'var(--text-muted)',
+                    border:`1px solid ${origemFiltro===val?(val==='startec'?'#059669':val==='corban'?B_MID:'rgba(0,0,0,.15)'):'var(--border)'}`,
+                  }}>{label}</button>
+              ))}
+            </div>
+          )}
+          <button className="btn" style={{background:B_MID,color:'#fff',boxShadow:`0 3px 14px ${B_GLOW}`}} onClick={onNew}>+ Novo Cliente</button>
+        </div>
       </div>
       <div className="fu1" style={{display:'flex',gap:8,marginBottom:14,flexWrap:'wrap'}}>
         <div className="search-wrap" style={{flex:1,minWidth:200}}>
@@ -1093,6 +1144,8 @@ export function BKOApp({profile,session,signOut,onAlterarSenha,userModules,onSwi
   const auditQueueRef=useRef([]);
   const [showAS,setShowAS]=useState(false);
   const [filtroEstagio,setFiltroEstagio]=useState(null);
+  // Filtro de equipe (só Comercial): null=todos | 'corban'=Corbans | 'startec'=Startec
+  const [origemFiltro,setOrigemFiltro]=useState(null);
   const setView=useCallback(v=>{
     dispatch({type:'VIEW',v});
     if(v==='pipeline') toggleSidebar(true);
@@ -1119,17 +1172,17 @@ export function BKOApp({profile,session,signOut,onAlterarSenha,userModules,onSwi
     supabase.from('bko_clientes').select('*').order('created_at',{ascending:false}).limit(500)
       .then(({data,error})=>{
         if(error){console.error('BKO load error:',error);setReady(true);return;}
-        const loaded=(data||[]).map(r=>({...r.data,id:r.id,estagio:r.estagio,criado_por_id:r.criado_por_id,criado_por_nome:r.criado_por_nome,criado_por_role:r.criado_por_role,atribuido_a_id:r.atribuido_a_id||null,atribuido_a_nome:r.atribuido_a_nome||null,responsavel_bko_id:r.responsavel_bko_id||null,responsavel_bko_nome:r.responsavel_bko_nome||null}));
+        const loaded=(data||[]).map(r=>({...r.data,id:r.id,estagio:r.estagio,criado_por_id:r.criado_por_id,criado_por_nome:r.criado_por_nome,criado_por_role:r.criado_por_role,atribuido_a_id:r.atribuido_a_id||null,atribuido_a_nome:r.atribuido_a_nome||null,responsavel_bko_id:r.responsavel_bko_id||null,responsavel_bko_nome:r.responsavel_bko_nome||null,origem:r.origem||null}));
         dispatch({type:'SET_C',clientes:loaded});clientesRef.current=loaded;setReady(true);
       });
     const ch=supabase.channel('bko_clientes_rt')
       .on('postgres_changes',{event:'INSERT',schema:'public',table:'bko_clientes'},payload=>{
         const r=payload.new;
-        dispatch({type:'RT_ADD',c:{...r.data,id:r.id,estagio:r.estagio,criado_por_id:r.criado_por_id,criado_por_nome:r.criado_por_nome,criado_por_role:r.criado_por_role,atribuido_a_id:r.atribuido_a_id||null,atribuido_a_nome:r.atribuido_a_nome||null,responsavel_bko_id:r.responsavel_bko_id||null,responsavel_bko_nome:r.responsavel_bko_nome||null}});
+        dispatch({type:'RT_ADD',c:{...r.data,id:r.id,estagio:r.estagio,criado_por_id:r.criado_por_id,criado_por_nome:r.criado_por_nome,criado_por_role:r.criado_por_role,atribuido_a_id:r.atribuido_a_id||null,atribuido_a_nome:r.atribuido_a_nome||null,responsavel_bko_id:r.responsavel_bko_id||null,responsavel_bko_nome:r.responsavel_bko_nome||null,origem:r.origem||null}});
       })
       .on('postgres_changes',{event:'UPDATE',schema:'public',table:'bko_clientes'},payload=>{
         const r=payload.new;
-        dispatch({type:'UPD',c:{...r.data,id:r.id,estagio:r.estagio,criado_por_id:r.criado_por_id,criado_por_nome:r.criado_por_nome,criado_por_role:r.criado_por_role,atribuido_a_id:r.atribuido_a_id||null,atribuido_a_nome:r.atribuido_a_nome||null,responsavel_bko_id:r.responsavel_bko_id||null,responsavel_bko_nome:r.responsavel_bko_nome||null}});
+        dispatch({type:'UPD',c:{...r.data,id:r.id,estagio:r.estagio,criado_por_id:r.criado_por_id,criado_por_nome:r.criado_por_nome,criado_por_role:r.criado_por_role,atribuido_a_id:r.atribuido_a_id||null,atribuido_a_nome:r.atribuido_a_nome||null,responsavel_bko_id:r.responsavel_bko_id||null,responsavel_bko_nome:r.responsavel_bko_nome||null,origem:r.origem||null}});
       })
       .subscribe();
     return()=>supabase.removeChannel(ch);
@@ -1165,11 +1218,13 @@ export function BKOApp({profile,session,signOut,onAlterarSenha,userModules,onSwi
     if(action.type==='ADD'){
       const c=action.c;
       const autoAtrib=(profile.role==='startec');
+      const origemCliente=profile.role==='startec'?'startec':profile.role==='corban_bko'?'corban':'interno';
       const {error}=await supabase.from('bko_clientes').insert({
         id:c.id,data:{...c},estagio:c.estagio||'clientes_novos',
         criado_por_id:session.user.id,criado_por_nome:profile.nome,criado_por_role:profile.role,
         atribuido_a_id:autoAtrib?session.user.id:null,
         atribuido_a_nome:autoAtrib?profile.nome:null,
+        origem:origemCliente,
       });
       if(error){console.error('BKO ADD error:',error);alert(`Erro: ${error.message}`);}
     }
@@ -1211,9 +1266,9 @@ export function BKOApp({profile,session,signOut,onAlterarSenha,userModules,onSwi
           onSwitchModule={onSwitchModule}
         />
         <main style={{flex:1,minWidth:0,overflowY:view==='pipeline'?'hidden':'auto',paddingRight:selected?490:0,transition:'padding-right .3s cubic-bezier(.4,0,.2,1)'}}>
-          {view==='dashboard' && <BKODashboard clientes={clientes} setView={v=>{setView(v);}} setFiltroEstagio={setFiltroEstagio} profile={profile}/>}
-          {view==='pipeline'  && <BKOPipeline  clientes={clientes} profile={profile} dispatch={auditedDispatch} onSelect={id=>dispatch({type:'SEL',id})} filtroEstagio={filtroEstagio} setFiltroEstagio={setFiltroEstagio} funis={funis}/>}
-          {view==='clientes'  && <BKOClientes  clientes={clientes} profile={profile} onSelect={id=>dispatch({type:'SEL',id})} onNew={()=>dispatch({type:'TNEW'})}/>}
+          {view==='dashboard' && <BKODashboard clientes={clientes} setView={v=>{setView(v);}} setFiltroEstagio={setFiltroEstagio} profile={profile} origemFiltro={origemFiltro} setOrigemFiltro={setOrigemFiltro}/>}
+          {view==='pipeline'  && <BKOPipeline  clientes={clientes} profile={profile} dispatch={auditedDispatch} onSelect={id=>dispatch({type:'SEL',id})} filtroEstagio={filtroEstagio} setFiltroEstagio={setFiltroEstagio} funis={funis} origemFiltro={origemFiltro} setOrigemFiltro={setOrigemFiltro}/>}
+          {view==='clientes'  && <BKOClientes  clientes={clientes} profile={profile} onSelect={id=>dispatch({type:'SEL',id})} onNew={()=>dispatch({type:'TNEW'})} origemFiltro={origemFiltro} setOrigemFiltro={setOrigemFiltro}/>}
           {view==='cadastrar' && <BKOCadastrar profile={profile} session={session} funis={funis} setFunis={setFunis}/>}
           {view==='auditoria' && <BKOAuditoria/>}
         </main>
