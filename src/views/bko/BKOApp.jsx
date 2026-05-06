@@ -223,15 +223,24 @@ function StatCard({label,value,color,icon,onClick}){
 
 // ─── DASHBOARD ───────────────────────────────────────────────────────────────
 // startec vê só os próprios; bko/comercial veem tudo
-function BKODashboard({clientes,setView,setFiltroEstagio,profile,origemFiltro,setOrigemFiltro}){
+function BKODashboard({clientes,setView,setFiltroEstagio,profile,origemFiltro,setOrigemFiltro,supervisorTeam}){
   const isComercial=profile?.role==='comercial';
+  const isSupervisor=profile?.is_supervisor===true;
   const clientesFiltrados=useMemo(()=>{
     if(profile?.role==='startec'||profile?.role==='corban_bko')
       return clientes.filter(c=>c.atribuido_a_id===profile?.id);
-    if(isComercial&&origemFiltro)
-      return clientes.filter(c=>c.origem===origemFiltro);
+    if(isComercial){
+      // Supervisor: filtra por equipe própria quando 'startec', corbans quando 'corban', tudo quando null
+      if(isSupervisor){
+        if(origemFiltro==='startec') return clientes.filter(c=>c.origem==='startec'&&supervisorTeam.includes(c.atribuido_a_id));
+        if(origemFiltro==='corban')  return clientes.filter(c=>c.origem==='corban');
+        // Todos: corbans + equipe própria startec
+        return clientes.filter(c=>c.origem==='corban'||(c.origem==='startec'&&supervisorTeam.includes(c.atribuido_a_id)));
+      }
+      if(origemFiltro) return clientes.filter(c=>c.origem===origemFiltro);
+    }
     return clientes;
-  },[clientes,profile,origemFiltro]);
+  },[clientes,profile,origemFiltro,supervisorTeam]);
   const counts=useMemo(()=>{const m={};BKO_STAGES.forEach(s=>{m[s.id]=clientesFiltrados.filter(c=>c.estagio===s.id).length;});return m;},[clientesFiltrados]);
   const handleCard=(stageId)=>{setFiltroEstagio(stageId);setView('pipeline');};
   const recent=useMemo(()=>clientesFiltrados.flatMap(c=>(c.activities||[]).map(a=>({...a,clienteName:c.nomeCliente}))).sort((a,b)=>(b.date||'').localeCompare(a.date||'')).slice(0,8),[clientesFiltrados]);
@@ -480,7 +489,7 @@ function BKOFunilMeses({funil,clientes,onSelect,dispatch,profile}){
 }
 
 // ─── PIPELINE ────────────────────────────────────────────────────────────────
-function BKOPipeline({clientes,profile,dispatch,onSelect,filtroEstagio,setFiltroEstagio,funis,origemFiltro,setOrigemFiltro}){
+function BKOPipeline({clientes,profile,dispatch,onSelect,filtroEstagio,setFiltroEstagio,funis,origemFiltro,setOrigemFiltro,supervisorTeam}){
   const [dragId,setDragId]=useState(null);
   const [search,setSearch]=useState('');
   const [collapsedCols,setCollapsedCols]=useState(new Set());
@@ -502,14 +511,21 @@ function BKOPipeline({clientes,profile,dispatch,onSelect,filtroEstagio,setFiltro
     return()=>document.removeEventListener('mousedown',h);
   },[funilOpen]);
 
-  // startec e corban_bko veem só os próprios; bko e comercial veem tudo
+  // startec e corban_bko veem só os próprios; supervisor vê equipe+corbans; comercial normal vê tudo
+  const isSupervisorP=profile?.is_supervisor===true;
   const clientesVisiveis=useMemo(()=>{
     if(profile?.role==='startec'||profile?.role==='corban_bko')
       return clientes.filter(c=>c.atribuido_a_id===profile?.id);
-    if(profile?.role==='comercial'&&origemFiltro)
-      return clientes.filter(c=>c.origem===origemFiltro);
+    if(profile?.role==='comercial'){
+      if(isSupervisorP){
+        if(origemFiltro==='startec') return clientes.filter(c=>c.origem==='startec'&&supervisorTeam.includes(c.atribuido_a_id));
+        if(origemFiltro==='corban')  return clientes.filter(c=>c.origem==='corban');
+        return clientes.filter(c=>c.origem==='corban'||(c.origem==='startec'&&supervisorTeam.includes(c.atribuido_a_id)));
+      }
+      if(origemFiltro) return clientes.filter(c=>c.origem===origemFiltro);
+    }
     return clientes;
-  },[clientes,profile,origemFiltro]);
+  },[clientes,profile,origemFiltro,supervisorTeam,isSupervisorP]);
 
   const pipelineClientes=clientesVisiveis.filter(c=>!c.funil_id);
   const filtered=search.trim()
@@ -611,7 +627,7 @@ function BKOPipeline({clientes,profile,dispatch,onSelect,filtroEstagio,setFiltro
 }
 
 // ─── CLIENTES ────────────────────────────────────────────────────────────────
-function BKOClientes({clientes,profile,onSelect,onNew,origemFiltro,setOrigemFiltro}){
+function BKOClientes({clientes,profile,onSelect,onNew,origemFiltro,setOrigemFiltro,supervisorTeam}){
   const [search,setSearch]=useState('');
   const [estagio,setEstagio]=useState('');
   const [prefeitura,setPrefeitura]=useState('');
@@ -624,14 +640,21 @@ function BKOClientes({clientes,profile,onSelect,onNew,origemFiltro,setOrigemFilt
   const criadoresList=useMemo(()=>[...new Set(clientes.map(c=>c.criado_por_nome).filter(Boolean))].sort(),[clientes]);
   const atribuidosList=useMemo(()=>[...new Set(clientes.map(c=>c.atribuido_a_nome).filter(Boolean))].sort(),[clientes]);
 
-  // startec e corban_bko veem só os próprios; comercial respeita origemFiltro
+  // startec e corban_bko veem só os próprios; supervisor vê equipe+corbans
+  const isSupervisorC=profile?.is_supervisor===true;
   const clientesBase=useMemo(()=>{
     if(profile?.role==='startec'||profile?.role==='corban_bko')
       return clientes.filter(c=>c.atribuido_a_id===profile?.id);
-    if(profile?.role==='comercial'&&origemFiltro)
-      return clientes.filter(c=>c.origem===origemFiltro);
+    if(profile?.role==='comercial'){
+      if(isSupervisorC){
+        if(origemFiltro==='startec') return clientes.filter(c=>c.origem==='startec'&&supervisorTeam.includes(c.atribuido_a_id));
+        if(origemFiltro==='corban')  return clientes.filter(c=>c.origem==='corban');
+        return clientes.filter(c=>c.origem==='corban'||(c.origem==='startec'&&supervisorTeam.includes(c.atribuido_a_id)));
+      }
+      if(origemFiltro) return clientes.filter(c=>c.origem===origemFiltro);
+    }
     return clientes;
-  },[clientes,profile,origemFiltro]);
+  },[clientes,profile,origemFiltro,supervisorTeam,isSupervisorC]);
 
   const filtered=useMemo(()=>clientesBase.filter(c=>{
     if(estagio&&c.estagio!==estagio) return false;
@@ -797,6 +820,25 @@ function NovoClienteModal({profile,dispatch,clientes,onClose}){
   );
 }
 
+// ─── SUPERVISOR SELECT ───────────────────────────────────────────────────────
+function SupervisorSelect({value,onChange}){
+  const [supervisores,setSupervisores]=useState([]);
+  useEffect(()=>{
+    supabase.from('profiles')
+      .select('id,nome')
+      .eq('modulo','bko')
+      .eq('is_supervisor',true)
+      .order('nome')
+      .then(({data})=>setSupervisores(data||[]));
+  },[]);
+  return(
+    <select className="sel" value={value} onChange={e=>onChange(e.target.value)}>
+      <option value="">— Sem supervisor —</option>
+      {supervisores.map(s=><option key={s.id} value={s.id}>{s.nome}</option>)}
+    </select>
+  );
+}
+
 // ─── CADASTRAR ───────────────────────────────────────────────────────────────
 function BKOCadastrar({profile,session,funis=[],setFunis}){
   const [funilForm,setFunilForm]=useState({nome:'',cor:'#3B5BDB'});
@@ -824,10 +866,10 @@ function BKOCadastrar({profile,session,funis=[],setFunis}){
   const [loading,setLoading]=useState(true);
   const [showModal,setShowModal]=useState(false);
   const [editUser,setEditUser]=useState(null);
-  const [editForm,setEditForm]=useState({nome:'',novaSenha:'',confirmarSenha:''});
+  const [editForm,setEditForm]=useState({nome:'',novaSenha:'',confirmarSenha:'',supervisor_id:''});
   const [editSaving,setEditSaving]=useState(false);
   const [editMsg,setEditMsg]=useState(null);
-  const [form,setForm]=useState({nome:'',email:'',senha:'',role:'corban_bko'});
+  const [form,setForm]=useState({nome:'',email:'',senha:'',role:'corban_bko',supervisor_id:''});
   const [saving,setSaving]=useState(false);
   const [msg,setMsg]=useState(null);
   const [confirmDelete,setConfirmDelete]=useState(null);
@@ -836,7 +878,13 @@ function BKOCadastrar({profile,session,funis=[],setFunis}){
   const load=useCallback(async()=>{setLoading(true);const {data}=await supabase.from('allowed_users').select('*').eq('modulo','bko').order('nome');setUsuarios(data||[]);setLoading(false);},[]);
   useEffect(()=>{load();},[load]);
 
-  const openEdit=(u)=>{setEditUser(u);setEditForm({nome:u.nome||'',novaSenha:'',confirmarSenha:''});setEditMsg(null);};
+  const openEdit=(u)=>{
+    setEditUser(u);
+    setEditMsg(null);
+    // Buscar supervisor_id atual do perfil para pré-preencher o campo
+    supabase.from('profiles').select('supervisor_id').ilike('email',u.email).maybeSingle()
+      .then(({data})=>setEditForm({nome:u.nome||'',novaSenha:'',confirmarSenha:'',supervisor_id:data?.supervisor_id||''}));
+  };
 
   const saveEdit=async()=>{
     if(!editForm.nome.trim()){setEditMsg({t:'error',text:'Nome é obrigatório.'});return;}
@@ -859,6 +907,12 @@ function BKOCadastrar({profile,session,funis=[],setFunis}){
         if(!res.ok||result.error){passwordError=result.error||`Erro ao redefinir senha (status ${res.status}).`;}
       }catch(e){passwordError='Erro de conexão ao redefinir senha.';}
     }
+    // Salvar supervisor_id se for startec
+    if(editUser.role==='startec'){
+      await supabase.from('profiles')
+        .update({supervisor_id:editForm.supervisor_id||null})
+        .ilike('email',editUser.email);
+    }
     setEditSaving(false);
     if(e1||e2||passwordError){setEditMsg({t:'error',text:passwordError||'Erro ao salvar. Tente novamente.'});return;}
     setEditMsg({t:'success',text:vaiAlterarSenha?'Nome e senha atualizados com sucesso!':'Nome atualizado com sucesso!'});
@@ -874,7 +928,18 @@ function BKOCadastrar({profile,session,funis=[],setFunis}){
       const res=await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-bko-user`,{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${s?.access_token}`},body:JSON.stringify({email:form.email.trim().toLowerCase(),password:form.senha,role:form.role,nome:form.nome.trim(),modulo:'bko'})});
       const result=await res.json();setSaving(false);
       if(!res.ok||result.error){setMsg({t:'error',text:result.error||'Erro ao criar usuário.'});}
-      else{setMsg({t:'success',text:`✓ ${form.nome} criado! Já pode fazer login.`});setShowModal(false);setForm({nome:'',email:'',senha:'',role:'corban_bko'});load();}
+      else{
+          // Se for startec e tiver supervisor selecionado, vincular
+          if(form.role==='startec'&&form.supervisor_id){
+            await supabase.from('profiles')
+              .update({supervisor_id:form.supervisor_id})
+              .ilike('email',form.email.trim().toLowerCase());
+          }
+          setMsg({t:'success',text:`✓ ${form.nome} criado! Já pode fazer login.`});
+          setShowModal(false);
+          setForm({nome:'',email:'',senha:'',role:'corban_bko',supervisor_id:''});
+          load();
+        }
     }catch(e){setSaving(false);setMsg({t:'error',text:'Erro de conexão.'});}
   };
 
@@ -898,7 +963,7 @@ function BKOCadastrar({profile,session,funis=[],setFunis}){
     <div style={{padding:'28px 32px'}}>
       <div className="fu" style={{display:'flex',justifyContent:'space-between',alignItems:'flex-end',marginBottom:22}}>
         <div><div className="section-title">Cadastrar</div><div className="section-sub">Usuários do módulo BKO</div></div>
-        <button className="btn" style={{background:B_MID,color:'#fff',boxShadow:`0 3px 12px ${B_GLOW}`}} onClick={()=>{setForm({nome:'',email:'',senha:'',role:'corban_bko'});setMsg(null);setShowModal(true);}}>+ Adicionar usuário</button>
+        <button className="btn" style={{background:B_MID,color:'#fff',boxShadow:`0 3px 12px ${B_GLOW}`}} onClick={()=>{setForm({nome:'',email:'',senha:'',role:'corban_bko',supervisor_id:''});setMsg(null);setShowModal(true);}}>+ Adicionar usuário</button>
       </div>
       {msg&&(
         <div className="fu" style={{display:'flex',alignItems:'center',gap:8,padding:'9px 14px',borderRadius:9,marginBottom:14,background:msg.t==='success'?'var(--success-dim)':'var(--danger-dim)',border:`1px solid ${msg.t==='success'?'rgba(61,155,107,.2)':'rgba(192,65,58,.2)'}`,fontSize:13,color:msg.t==='success'?'var(--success)':'var(--danger)'}}>
@@ -950,6 +1015,13 @@ function BKOCadastrar({profile,session,funis=[],setFunis}){
               <input className="inp" value={editUser.email} readOnly style={{background:'var(--bg-surface)',cursor:'not-allowed',color:'var(--text-muted)'}}/>
               <div style={{fontSize:10,color:'var(--text-faint)',marginTop:4}}>E-mail não pode ser alterado.</div>
             </div>
+            {editUser.role==='startec'&&(
+              <div style={{marginBottom:12}}>
+                <label style={{display:'block',fontSize:10,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:5}}>Supervisor</label>
+                <SupervisorSelect value={editForm.supervisor_id||''} onChange={v=>setEditForm(f=>({...f,supervisor_id:v}))}/>
+                <div style={{fontSize:10,color:'var(--text-faint)',marginTop:4}}>Define em qual equipe este operador aparece.</div>
+              </div>
+            )}
             {editUser.role==='corban_bko'&&(
               <>
                 <div style={{marginBottom:12}}>
@@ -984,11 +1056,18 @@ function BKOCadastrar({profile,session,funis=[],setFunis}){
               <label style={{display:'block',fontSize:10,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:5}}>Papel</label>
               <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
                 {[['corban_bko','Corban'],['bko','BKO'],['startec','Startec']].map(([v,l])=>(
-                  <button key={v} onClick={()=>setForm(f=>({...f,role:v}))}
+                  <button key={v} onClick={()=>setForm(f=>({...f,role:v,supervisor_id:''}))}
                     style={{flex:1,minWidth:80,padding:'8px 0',borderRadius:8,fontSize:12,fontWeight:600,cursor:'pointer',background:form.role===v?ROLE_COLORS[v]:'rgba(0,0,0,.05)',color:form.role===v?'#fff':'var(--text-secondary)',border:form.role===v?'none':'1px solid var(--border)',transition:'all .15s'}}>{l}</button>
                 ))}
               </div>
             </div>
+            {/* Dropdown de supervisor — só aparece quando role é startec */}
+            {form.role==='startec'&&(
+              <div style={{marginBottom:10}}>
+                <label style={{display:'block',fontSize:10,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:5}}>Supervisor</label>
+                <SupervisorSelect value={form.supervisor_id||''} onChange={v=>setForm(f=>({...f,supervisor_id:v}))}/>
+              </div>
+            )}
             <div style={{marginBottom:10}}><label style={{display:'block',fontSize:10,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:5}}>Nome completo</label><input className="inp" value={form.nome} onChange={e=>setForm(f=>({...f,nome:e.target.value}))} placeholder="Nome"/></div>
             <div style={{marginBottom:10}}><label style={{display:'block',fontSize:10,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:5}}>E-mail</label><input className="inp" type="email" value={form.email} onChange={e=>setForm(f=>({...f,email:e.target.value}))} placeholder="email@empresa.com"/></div>
             <div style={{marginBottom:18}}><label style={{display:'block',fontSize:10,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:5}}>Senha inicial</label><input className="inp" type="password" value={form.senha} onChange={e=>setForm(f=>({...f,senha:e.target.value}))} placeholder="Mínimo 6 caracteres"/></div>
@@ -1146,6 +1225,8 @@ export function BKOApp({profile,session,signOut,onAlterarSenha,userModules,onSwi
   const [filtroEstagio,setFiltroEstagio]=useState(null);
   // Filtro de equipe (só Comercial): null=todos | 'corban'=Corbans | 'startec'=Startec
   const [origemFiltro,setOrigemFiltro]=useState(null);
+  // Equipe do supervisor: IDs dos operadores sob supervisão
+  const [supervisorTeam,setSupervisorTeam]=useState([]);
   const setView=useCallback(v=>{
     dispatch({type:'VIEW',v});
     if(v==='pipeline') toggleSidebar(true);
@@ -1158,6 +1239,17 @@ export function BKOApp({profile,session,signOut,onAlterarSenha,userModules,onSwi
     window.addEventListener('keydown',h);
     return()=>window.removeEventListener('keydown',h);
   },[]);
+
+  // Carregar equipe do supervisor (operadores vinculados a este supervisor)
+  useEffect(()=>{
+    if(!profile?.is_supervisor||!profile?.id) return;
+    supabase.from('profiles')
+      .select('id,nome')
+      .eq('modulo','bko')
+      .eq('role','startec')
+      .eq('supervisor_id',profile.id)
+      .then(({data})=>setSupervisorTeam((data||[]).map(o=>o.id)));
+  },[profile?.id,profile?.is_supervisor]);
 
   useEffect(()=>{
     supabase.from('bko_funis').select('*').eq('ativo',true).order('ordem').then(({data})=>setFunis(data||[]));
@@ -1266,9 +1358,9 @@ export function BKOApp({profile,session,signOut,onAlterarSenha,userModules,onSwi
           onSwitchModule={onSwitchModule}
         />
         <main style={{flex:1,minWidth:0,overflowY:view==='pipeline'?'hidden':'auto',paddingRight:selected?490:0,transition:'padding-right .3s cubic-bezier(.4,0,.2,1)'}}>
-          {view==='dashboard' && <BKODashboard clientes={clientes} setView={v=>{setView(v);}} setFiltroEstagio={setFiltroEstagio} profile={profile} origemFiltro={origemFiltro} setOrigemFiltro={setOrigemFiltro}/>}
-          {view==='pipeline'  && <BKOPipeline  clientes={clientes} profile={profile} dispatch={auditedDispatch} onSelect={id=>dispatch({type:'SEL',id})} filtroEstagio={filtroEstagio} setFiltroEstagio={setFiltroEstagio} funis={funis} origemFiltro={origemFiltro} setOrigemFiltro={setOrigemFiltro}/>}
-          {view==='clientes'  && <BKOClientes  clientes={clientes} profile={profile} onSelect={id=>dispatch({type:'SEL',id})} onNew={()=>dispatch({type:'TNEW'})} origemFiltro={origemFiltro} setOrigemFiltro={setOrigemFiltro}/>}
+          {view==='dashboard' && <BKODashboard clientes={clientes} setView={v=>{setView(v);}} setFiltroEstagio={setFiltroEstagio} profile={profile} origemFiltro={origemFiltro} setOrigemFiltro={setOrigemFiltro} supervisorTeam={supervisorTeam}/>}
+          {view==='pipeline'  && <BKOPipeline  clientes={clientes} profile={profile} dispatch={auditedDispatch} onSelect={id=>dispatch({type:'SEL',id})} filtroEstagio={filtroEstagio} setFiltroEstagio={setFiltroEstagio} funis={funis} origemFiltro={origemFiltro} setOrigemFiltro={setOrigemFiltro} supervisorTeam={supervisorTeam}/>}
+          {view==='clientes'  && <BKOClientes  clientes={clientes} profile={profile} onSelect={id=>dispatch({type:'SEL',id})} onNew={()=>dispatch({type:'TNEW'})} origemFiltro={origemFiltro} setOrigemFiltro={setOrigemFiltro} supervisorTeam={supervisorTeam}/>}
           {view==='cadastrar' && <BKOCadastrar profile={profile} session={session} funis={funis} setFunis={setFunis}/>}
           {view==='auditoria' && <BKOAuditoria/>}
         </main>
