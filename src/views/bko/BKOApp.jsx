@@ -223,24 +223,29 @@ function StatCard({label,value,color,icon,onClick}){
 
 // ─── DASHBOARD ───────────────────────────────────────────────────────────────
 // startec vê só os próprios; bko/comercial veem tudo
-function BKODashboard({clientes,setView,setFiltroEstagio,profile,origemFiltro,setOrigemFiltro,supervisorTeam}){
+// ─── HELPER: filtra clientes para supervisor ─────────────────────────────────
+function filtrarClientesSupervisor(clientes, origemFiltro, allTeams){
+  if(!origemFiltro) return clientes.filter(c=>c.origem==='corban'||c.origem==='startec');
+  if(origemFiltro==='corban') return clientes.filter(c=>c.origem==='corban');
+  if(origemFiltro==='startec') return clientes.filter(c=>c.origem==='startec');
+  // Filtro por equipe específica: origemFiltro = supervisor_id
+  const team=allTeams.find(t=>t.supervisor_id===origemFiltro);
+  if(team) return clientes.filter(c=>c.origem==='startec'&&team.operadores.includes(c.atribuido_a_id));
+  return clientes;
+}
+
+function BKODashboard({clientes,setView,setFiltroEstagio,profile,origemFiltro,setOrigemFiltro,supervisorTeam,allTeams}){
   const isComercial=profile?.role==='comercial';
   const isSupervisor=profile?.is_supervisor===true;
   const clientesFiltrados=useMemo(()=>{
     if(profile?.role==='startec'||profile?.role==='corban_bko')
       return clientes.filter(c=>c.atribuido_a_id===profile?.id);
     if(isComercial){
-      // Supervisor: filtra por equipe própria quando 'startec', corbans quando 'corban', tudo quando null
-      if(isSupervisor){
-        if(origemFiltro==='startec') return clientes.filter(c=>c.origem==='startec'&&supervisorTeam.includes(c.atribuido_a_id));
-        if(origemFiltro==='corban')  return clientes.filter(c=>c.origem==='corban');
-        // Todos: corbans + equipe própria startec
-        return clientes.filter(c=>c.origem==='corban'||(c.origem==='startec'&&supervisorTeam.includes(c.atribuido_a_id)));
-      }
+      if(isSupervisor) return filtrarClientesSupervisor(clientes,origemFiltro,allTeams);
       if(origemFiltro) return clientes.filter(c=>c.origem===origemFiltro);
     }
     return clientes;
-  },[clientes,profile,origemFiltro,supervisorTeam]);
+  },[clientes,profile,origemFiltro,supervisorTeam,allTeams]);
   const counts=useMemo(()=>{const m={};BKO_STAGES.forEach(s=>{m[s.id]=clientesFiltrados.filter(c=>c.estagio===s.id).length;});return m;},[clientesFiltrados]);
   const handleCard=(stageId)=>{setFiltroEstagio(stageId);setView('pipeline');};
   const recent=useMemo(()=>clientesFiltrados.flatMap(c=>(c.activities||[]).map(a=>({...a,clienteName:c.nomeCliente}))).sort((a,b)=>(b.date||'').localeCompare(a.date||'')).slice(0,8),[clientesFiltrados]);
@@ -249,14 +254,16 @@ function BKODashboard({clientes,setView,setFiltroEstagio,profile,origemFiltro,se
       <div style={{marginBottom:24,display:'flex',alignItems:'flex-start',justifyContent:'space-between',flexWrap:'wrap',gap:12}}>
         <div><div className="section-title">Dashboard</div><div className="section-sub">BKO Backoffice · {fmtD(TODAY)}</div></div>
         {isComercial&&(
-          <div style={{display:'flex',gap:6,alignItems:'center'}}>
+          <div style={{display:'flex',gap:6,alignItems:'center',flexWrap:'wrap'}}>
             <span style={{fontSize:11,color:'var(--text-muted)',marginRight:4}}>Equipe:</span>
-            {[['todos',null,'Todos'],['corban','corban','Corbans'],['startec','startec','Startec']].map(([key,val,label])=>(
+            {[['todos',null,'Todos'],['corban','corban','Corbans'],['startec','startec','Startec'],
+              ...(isSupervisor?allTeams.map(t=>[t.supervisor_id,t.supervisor_id,`Eq. ${t.supervisor_nome?.split(' ')[0]}`]):[])
+            ].map(([key,val,label])=>(
               <button key={key} onClick={()=>setOrigemFiltro(val)}
                 style={{padding:'5px 14px',borderRadius:99,fontSize:12,fontWeight:600,cursor:'pointer',transition:'all .15s',
-                  background:origemFiltro===val?(val==='startec'?'#059669':val==='corban'?B_MID:'rgba(0,0,0,.08)'):'transparent',
+                  background:origemFiltro===val?(val==='startec'||allTeams.some(t=>t.supervisor_id===val)?'#059669':val==='corban'?B_MID:'rgba(0,0,0,.08)'):'transparent',
                   color:origemFiltro===val?'#fff':'var(--text-muted)',
-                  border:`1px solid ${origemFiltro===val?(val==='startec'?'#059669':val==='corban'?B_MID:'rgba(0,0,0,.15)'):'var(--border)'}`,
+                  border:`1px solid ${origemFiltro===val?(val==='startec'||allTeams.some(t=>t.supervisor_id===val)?'#059669':val==='corban'?B_MID:'rgba(0,0,0,.15)'):'var(--border)'}`,
                 }}>
                 {label}
               </button>
@@ -489,7 +496,7 @@ function BKOFunilMeses({funil,clientes,onSelect,dispatch,profile}){
 }
 
 // ─── PIPELINE ────────────────────────────────────────────────────────────────
-function BKOPipeline({clientes,profile,dispatch,onSelect,filtroEstagio,setFiltroEstagio,funis,origemFiltro,setOrigemFiltro,supervisorTeam}){
+function BKOPipeline({clientes,profile,dispatch,onSelect,filtroEstagio,setFiltroEstagio,funis,origemFiltro,setOrigemFiltro,supervisorTeam,allTeams}){
   const [dragId,setDragId]=useState(null);
   const [search,setSearch]=useState('');
   const [collapsedCols,setCollapsedCols]=useState(new Set());
@@ -511,21 +518,17 @@ function BKOPipeline({clientes,profile,dispatch,onSelect,filtroEstagio,setFiltro
     return()=>document.removeEventListener('mousedown',h);
   },[funilOpen]);
 
-  // startec e corban_bko veem só os próprios; supervisor vê equipe+corbans; comercial normal vê tudo
+  // startec e corban_bko veem só os próprios; supervisor vê todas as equipes; comercial normal vê tudo
   const isSupervisorP=profile?.is_supervisor===true;
   const clientesVisiveis=useMemo(()=>{
     if(profile?.role==='startec'||profile?.role==='corban_bko')
       return clientes.filter(c=>c.atribuido_a_id===profile?.id);
     if(profile?.role==='comercial'){
-      if(isSupervisorP){
-        if(origemFiltro==='startec') return clientes.filter(c=>c.origem==='startec'&&supervisorTeam.includes(c.atribuido_a_id));
-        if(origemFiltro==='corban')  return clientes.filter(c=>c.origem==='corban');
-        return clientes.filter(c=>c.origem==='corban'||(c.origem==='startec'&&supervisorTeam.includes(c.atribuido_a_id)));
-      }
+      if(isSupervisorP) return filtrarClientesSupervisor(clientes,origemFiltro,allTeams);
       if(origemFiltro) return clientes.filter(c=>c.origem===origemFiltro);
     }
     return clientes;
-  },[clientes,profile,origemFiltro,supervisorTeam,isSupervisorP]);
+  },[clientes,profile,origemFiltro,supervisorTeam,isSupervisorP,allTeams]);
 
   const pipelineClientes=clientesVisiveis.filter(c=>!c.funil_id);
   const filtered=search.trim()
@@ -548,13 +551,15 @@ function BKOPipeline({clientes,profile,dispatch,onSelect,filtroEstagio,setFiltro
         <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
           {/* Badge de filtro de equipe */}
           {profile?.role==='comercial'&&(
-            <div style={{display:'flex',gap:5}}>
-              {[['todos',null,'Todos'],['corban','corban','Corbans'],['startec','startec','Startec']].map(([key,val,label])=>(
+            <div style={{display:'flex',gap:5,flexWrap:'wrap'}}>
+              {[['todos',null,'Todos'],['corban','corban','Corbans'],['startec','startec','Startec'],
+                ...(profile?.is_supervisor?allTeams.map(t=>[t.supervisor_id,t.supervisor_id,`Eq. ${t.supervisor_nome?.split(' ')[0]}`]):[])
+              ].map(([key,val,label])=>(
                 <button key={key} onClick={()=>setOrigemFiltro(val)}
                   style={{padding:'4px 12px',borderRadius:99,fontSize:11,fontWeight:600,cursor:'pointer',transition:'all .15s',
-                    background:origemFiltro===val?(val==='startec'?'#059669':val==='corban'?B_MID:'rgba(0,0,0,.08)'):'transparent',
+                    background:origemFiltro===val?(val==='startec'||allTeams.some(t=>t.supervisor_id===val)?'#059669':val==='corban'?B_MID:'rgba(0,0,0,.08)'):'transparent',
                     color:origemFiltro===val?'#fff':'var(--text-muted)',
-                    border:`1px solid ${origemFiltro===val?(val==='startec'?'#059669':val==='corban'?B_MID:'rgba(0,0,0,.15)'):'var(--border)'}`,
+                    border:`1px solid ${origemFiltro===val?(val==='startec'||allTeams.some(t=>t.supervisor_id===val)?'#059669':val==='corban'?B_MID:'rgba(0,0,0,.15)'):'var(--border)'}`,
                   }}>{label}</button>
               ))}
             </div>
@@ -627,7 +632,7 @@ function BKOPipeline({clientes,profile,dispatch,onSelect,filtroEstagio,setFiltro
 }
 
 // ─── CLIENTES ────────────────────────────────────────────────────────────────
-function BKOClientes({clientes,profile,onSelect,onNew,origemFiltro,setOrigemFiltro,supervisorTeam}){
+function BKOClientes({clientes,profile,onSelect,onNew,origemFiltro,setOrigemFiltro,supervisorTeam,allTeams}){
   const [search,setSearch]=useState('');
   const [estagio,setEstagio]=useState('');
   const [prefeitura,setPrefeitura]=useState('');
@@ -640,21 +645,17 @@ function BKOClientes({clientes,profile,onSelect,onNew,origemFiltro,setOrigemFilt
   const criadoresList=useMemo(()=>[...new Set(clientes.map(c=>c.criado_por_nome).filter(Boolean))].sort(),[clientes]);
   const atribuidosList=useMemo(()=>[...new Set(clientes.map(c=>c.atribuido_a_nome).filter(Boolean))].sort(),[clientes]);
 
-  // startec e corban_bko veem só os próprios; supervisor vê equipe+corbans
+  // startec e corban_bko veem só os próprios; supervisor vê todas as equipes
   const isSupervisorC=profile?.is_supervisor===true;
   const clientesBase=useMemo(()=>{
     if(profile?.role==='startec'||profile?.role==='corban_bko')
       return clientes.filter(c=>c.atribuido_a_id===profile?.id);
     if(profile?.role==='comercial'){
-      if(isSupervisorC){
-        if(origemFiltro==='startec') return clientes.filter(c=>c.origem==='startec'&&supervisorTeam.includes(c.atribuido_a_id));
-        if(origemFiltro==='corban')  return clientes.filter(c=>c.origem==='corban');
-        return clientes.filter(c=>c.origem==='corban'||(c.origem==='startec'&&supervisorTeam.includes(c.atribuido_a_id)));
-      }
+      if(isSupervisorC) return filtrarClientesSupervisor(clientes,origemFiltro,allTeams);
       if(origemFiltro) return clientes.filter(c=>c.origem===origemFiltro);
     }
     return clientes;
-  },[clientes,profile,origemFiltro,supervisorTeam,isSupervisorC]);
+  },[clientes,profile,origemFiltro,supervisorTeam,isSupervisorC,allTeams]);
 
   const filtered=useMemo(()=>clientesBase.filter(c=>{
     if(estagio&&c.estagio!==estagio) return false;
@@ -676,13 +677,15 @@ function BKOClientes({clientes,profile,onSelect,onNew,origemFiltro,setOrigemFilt
         <div><div className="section-title">Clientes</div><div className="section-sub">{filtered.length} de {clientesBase.length} registros</div></div>
         <div style={{display:'flex',gap:8,alignItems:'center'}}>
           {profile?.role==='comercial'&&(
-            <div style={{display:'flex',gap:5}}>
-              {[['todos',null,'Todos'],['corban','corban','Corbans'],['startec','startec','Startec']].map(([key,val,label])=>(
+            <div style={{display:'flex',gap:5,flexWrap:'wrap'}}>
+              {[['todos',null,'Todos'],['corban','corban','Corbans'],['startec','startec','Startec'],
+                ...(profile?.is_supervisor?allTeams.map(t=>[t.supervisor_id,t.supervisor_id,`Eq. ${t.supervisor_nome?.split(' ')[0]}`]):[])
+              ].map(([key,val,label])=>(
                 <button key={key} onClick={()=>setOrigemFiltro(val)}
                   style={{padding:'5px 12px',borderRadius:99,fontSize:11,fontWeight:600,cursor:'pointer',transition:'all .15s',
-                    background:origemFiltro===val?(val==='startec'?'#059669':val==='corban'?B_MID:'rgba(0,0,0,.08)'):'transparent',
+                    background:origemFiltro===val?(val==='startec'||allTeams.some(t=>t.supervisor_id===val)?'#059669':val==='corban'?B_MID:'rgba(0,0,0,.08)'):'transparent',
                     color:origemFiltro===val?'#fff':'var(--text-muted)',
-                    border:`1px solid ${origemFiltro===val?(val==='startec'?'#059669':val==='corban'?B_MID:'rgba(0,0,0,.15)'):'var(--border)'}`,
+                    border:`1px solid ${origemFiltro===val?(val==='startec'||allTeams.some(t=>t.supervisor_id===val)?'#059669':val==='corban'?B_MID:'rgba(0,0,0,.15)'):'var(--border)'}`,
                   }}>{label}</button>
               ))}
             </div>
@@ -1240,15 +1243,25 @@ export function BKOApp({profile,session,signOut,onAlterarSenha,userModules,onSwi
     return()=>window.removeEventListener('keydown',h);
   },[]);
 
-  // Carregar equipe do supervisor (operadores vinculados a este supervisor)
+  // Carregar todas as equipes startec agrupadas por supervisor
+  const [allTeams,setAllTeams]=useState([]); // [{supervisor_id, supervisor_nome, operadores:[id,...]}]
   useEffect(()=>{
-    if(!profile?.is_supervisor||!profile?.id) return;
-    supabase.from('profiles')
-      .select('id,nome')
-      .eq('modulo','bko')
-      .eq('role','startec')
-      .eq('supervisor_id',profile.id)
-      .then(({data})=>setSupervisorTeam((data||[]).map(o=>o.id)));
+    if(!profile?.is_supervisor) return;
+    // Buscar todos operadores startec com seus supervisores
+    Promise.all([
+      supabase.from('profiles').select('id,nome,supervisor_id').eq('modulo','bko').eq('role','startec'),
+      supabase.from('profiles').select('id,nome').eq('modulo','bko').eq('is_supervisor',true),
+    ]).then(([{data:ops},{data:sups}])=>{
+      const teams=(sups||[]).map(s=>({
+        supervisor_id:s.id,
+        supervisor_nome:s.nome,
+        operadores:(ops||[]).filter(o=>o.supervisor_id===s.id).map(o=>o.id),
+      }));
+      setAllTeams(teams);
+      // Manter supervisorTeam com a equipe própria para compatibilidade
+      const myTeam=teams.find(t=>t.supervisor_id===profile.id);
+      setSupervisorTeam(myTeam?.operadores||[]);
+    });
   },[profile?.id,profile?.is_supervisor]);
 
   useEffect(()=>{
@@ -1358,9 +1371,9 @@ export function BKOApp({profile,session,signOut,onAlterarSenha,userModules,onSwi
           onSwitchModule={onSwitchModule}
         />
         <main style={{flex:1,minWidth:0,overflowY:view==='pipeline'?'hidden':'auto',paddingRight:selected?490:0,transition:'padding-right .3s cubic-bezier(.4,0,.2,1)'}}>
-          {view==='dashboard' && <BKODashboard clientes={clientes} setView={v=>{setView(v);}} setFiltroEstagio={setFiltroEstagio} profile={profile} origemFiltro={origemFiltro} setOrigemFiltro={setOrigemFiltro} supervisorTeam={supervisorTeam}/>}
-          {view==='pipeline'  && <BKOPipeline  clientes={clientes} profile={profile} dispatch={auditedDispatch} onSelect={id=>dispatch({type:'SEL',id})} filtroEstagio={filtroEstagio} setFiltroEstagio={setFiltroEstagio} funis={funis} origemFiltro={origemFiltro} setOrigemFiltro={setOrigemFiltro} supervisorTeam={supervisorTeam}/>}
-          {view==='clientes'  && <BKOClientes  clientes={clientes} profile={profile} onSelect={id=>dispatch({type:'SEL',id})} onNew={()=>dispatch({type:'TNEW'})} origemFiltro={origemFiltro} setOrigemFiltro={setOrigemFiltro} supervisorTeam={supervisorTeam}/>}
+          {view==='dashboard' && <BKODashboard clientes={clientes} setView={v=>{setView(v);}} setFiltroEstagio={setFiltroEstagio} profile={profile} origemFiltro={origemFiltro} setOrigemFiltro={setOrigemFiltro} supervisorTeam={supervisorTeam} allTeams={allTeams}/>}
+          {view==='pipeline'  && <BKOPipeline  clientes={clientes} profile={profile} dispatch={auditedDispatch} onSelect={id=>dispatch({type:'SEL',id})} filtroEstagio={filtroEstagio} setFiltroEstagio={setFiltroEstagio} funis={funis} origemFiltro={origemFiltro} setOrigemFiltro={setOrigemFiltro} supervisorTeam={supervisorTeam} allTeams={allTeams}/>}
+          {view==='clientes'  && <BKOClientes  clientes={clientes} profile={profile} onSelect={id=>dispatch({type:'SEL',id})} onNew={()=>dispatch({type:'TNEW'})} origemFiltro={origemFiltro} setOrigemFiltro={setOrigemFiltro} supervisorTeam={supervisorTeam} allTeams={allTeams}/>}
           {view==='cadastrar' && <BKOCadastrar profile={profile} session={session} funis={funis} setFunis={setFunis}/>}
           {view==='auditoria' && <BKOAuditoria/>}
         </main>
