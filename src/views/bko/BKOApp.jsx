@@ -406,19 +406,19 @@ function BKOKanbanCol({s,clientes,dragId,setDragId,dispatch,onSelect,profile,hig
   const [over,setOver]=useState(false);
   const sl=clientes.filter(c=>c.estagio===s.id&&!c.funil_id);
   return(
-    <div style={{minWidth:collapsed?44:170,width:collapsed?44:201,flexShrink:0,background:highlight?`${s.color}08`:'rgba(0,0,0,.03)',border:`1px solid ${highlight?s.color+'40':'var(--border)'}`,borderRadius:12,padding:'10px 8px',transition:'all .22s cubic-bezier(.4,0,.2,1)',boxShadow:highlight?`0 0 0 2px ${s.color}30`:''}}
+    <div style={{minWidth:collapsed?44:170,width:collapsed?44:215,flexShrink:0,background:highlight?`${s.color}08`:'rgba(0,0,0,.03)',border:`1px solid ${highlight?s.color+'40':'var(--border)'}`,borderRadius:12,padding:'10px 8px',transition:'all .22s cubic-bezier(.4,0,.2,1)',boxShadow:highlight?`0 0 0 2px ${s.color}30`:'',display:'flex',flexDirection:'column'}}
       onDragOver={e=>{e.preventDefault();setOver(true);}}
       onDragLeave={()=>setOver(false)}
       onDrop={()=>{setOver(false);if(dragId)dispatch({type:'MOVE',cid:dragId,st:s.id,user:profile?.nome||'Usuário'});setDragId(null);}}>
       {collapsed?(
-        <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:8,cursor:'pointer'}} onClick={onToggleCollapse} title={`Expandir: ${s.label}`}>
+        <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:8,cursor:'pointer',height:'100%',justifyContent:'flex-start',paddingTop:4}} onClick={onToggleCollapse} title={`Expandir: ${s.label}`}>
           <div style={{width:7,height:7,borderRadius:'50%',background:s.color,boxShadow:`0 0 5px ${s.color}60`,marginTop:2}}/>
           <span style={{fontSize:10,fontWeight:700,background:s.bg,color:s.color,borderRadius:99,padding:'2px 6px'}}>{sl.length}</span>
           <span style={{fontSize:9,color:'var(--text-faint)',writingMode:'vertical-rl',textOrientation:'mixed',transform:'rotate(180deg)',marginTop:4,maxHeight:100,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{s.label}</span>
         </div>
       ):(
         <>
-          <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:10,padding:'0 3px'}}>
+          <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:10,padding:'0 3px',flexShrink:0}}>
             <div style={{width:7,height:7,borderRadius:'50%',background:s.color,boxShadow:`0 0 5px ${s.color}60`,flexShrink:0}}/>
             <span style={{fontSize:11,fontWeight:600,color:'var(--text-secondary)',flex:1}}>{s.label}</span>
             <span style={{fontSize:10,fontWeight:700,background:s.bg,color:s.color,borderRadius:99,padding:'1px 6px'}}>{sl.length}</span>
@@ -427,7 +427,7 @@ function BKOKanbanCol({s,clientes,dragId,setDragId,dispatch,onSelect,profile,hig
               onMouseEnter={e=>e.currentTarget.style.color='var(--text-secondary)'}
               onMouseLeave={e=>e.currentTarget.style.color='var(--text-faint)'}>‹</button>
           </div>
-          <div style={{minHeight:40}}>
+          <div style={{flex:1,overflowY:'auto',minHeight:40,paddingRight:2,scrollbarWidth:'thin',scrollbarColor:'rgba(0,0,0,.1) transparent'}}>
             {sl.map(c=>(
               <KCard key={c.id} c={c} onSelect={onSelect} dispatch={dispatch} profile={profile} setDragId={setDragId} funis={funis}/>
             ))}
@@ -537,7 +537,7 @@ function BKOPipeline({clientes,profile,dispatch,onSelect,filtroEstagio,setFiltro
   const funisComContagem=useMemo(()=>funis.map(f=>({...f,count:clientes.filter(c=>c.funil_id===f.id).length})),[funis,clientes]);
 
   return(
-    <div style={{display:'flex',flexDirection:'column',height:'100%',overflow:'hidden'}}>
+    <div style={{display:'flex',flexDirection:'column',flex:1,minHeight:0,overflow:'hidden'}}>
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20,gap:16,flexWrap:'wrap',padding:'16px 20px 0',flexShrink:0}}>
         <div>
           {funilSel
@@ -615,7 +615,7 @@ function BKOPipeline({clientes,profile,dispatch,onSelect,filtroEstagio,setFiltro
         </div>
       </div>
       {!funilSel&&(
-        <div ref={colsRef} style={{display:'flex',gap:7,overflowX:'auto',overflowY:'hidden',padding:'0 20px 16px',flex:1,minHeight:0,alignItems:'flex-start',scrollbarWidth:'thin',scrollbarColor:`${BKO_STAGES[0]?.color}40 transparent`}}>
+        <div ref={colsRef} style={{display:'flex',gap:7,overflowX:'auto',overflowY:'hidden',padding:'0 20px 16px',flex:1,minHeight:0,alignItems:'stretch',scrollbarWidth:'thin',scrollbarColor:`${BKO_STAGES[0]?.color}40 transparent`}}>
           {BKO_STAGES.map(s=>(
             <BKOKanbanCol key={s.id} s={s} clientes={filtered} dragId={dragId} setDragId={setDragId}
               dispatch={dispatch} onSelect={onSelect} profile={profile}
@@ -1357,7 +1357,7 @@ export function BKOApp({profile,session,signOut,onAlterarSenha,userModules,onSwi
 
   return(
     <>
-      <div style={{display:'flex',minHeight:'100vh',background:'var(--bg-base)',fontFamily:'var(--font)'}}>
+      <div style={{display:'flex',height:'100vh',overflow:'hidden',background:'var(--bg-base)',fontFamily:'var(--font)'}}>
         <BKOSidebar
           view={view}
           setView={v=>{setView(v);if(v!=='pipeline')setFiltroEstagio(null);}}
@@ -1370,7 +1370,7 @@ export function BKOApp({profile,session,signOut,onAlterarSenha,userModules,onSwi
           userModules={userModules}
           onSwitchModule={onSwitchModule}
         />
-        <main style={{flex:1,minWidth:0,overflowY:view==='pipeline'?'hidden':'auto',paddingRight:selected?490:0,transition:'padding-right .3s cubic-bezier(.4,0,.2,1)'}}>
+        <main style={{flex:1,minWidth:0,height:'100%',display:'flex',flexDirection:'column',overflow:view==='pipeline'?'hidden':'auto',paddingRight:selected?490:0,transition:'padding-right .3s cubic-bezier(.4,0,.2,1)'}}>
           {view==='dashboard' && <BKODashboard clientes={clientes} setView={v=>{setView(v);}} setFiltroEstagio={setFiltroEstagio} profile={profile} origemFiltro={origemFiltro} setOrigemFiltro={setOrigemFiltro} supervisorTeam={supervisorTeam} allTeams={allTeams}/>}
           {view==='pipeline'  && <BKOPipeline  clientes={clientes} profile={profile} dispatch={auditedDispatch} onSelect={id=>dispatch({type:'SEL',id})} filtroEstagio={filtroEstagio} setFiltroEstagio={setFiltroEstagio} funis={funis} origemFiltro={origemFiltro} setOrigemFiltro={setOrigemFiltro} supervisorTeam={supervisorTeam} allTeams={allTeams}/>}
           {view==='clientes'  && <BKOClientes  clientes={clientes} profile={profile} onSelect={id=>dispatch({type:'SEL',id})} onNew={()=>dispatch({type:'TNEW'})} origemFiltro={origemFiltro} setOrigemFiltro={setOrigemFiltro} supervisorTeam={supervisorTeam} allTeams={allTeams}/>}
