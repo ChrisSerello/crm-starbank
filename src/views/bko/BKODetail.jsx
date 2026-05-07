@@ -17,6 +17,21 @@ import { gid, TODAY, fmtD, sinceD } from '../../utils';
 import { DOC_STATUS } from '../../constants';
 import { Avatar, StageTag } from '../../components/shared';
 
+const fmtDH=(ts)=>{
+  if(!ts) return '—';
+  try{
+    // Se for só data (YYYY-MM-DD), mostra só a data sem horário
+    if(/^\d{4}-\d{2}-\d{2}$/.test(ts)){
+      const [y,m,d]=ts.split('-');
+      return `${d}/${m}/${y.slice(2)}`;
+    }
+    const d=new Date(ts);
+    const data=d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'2-digit',timeZone:'America/Sao_Paulo'});
+    const hora=d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',timeZone:'America/Sao_Paulo'});
+    return `${data} às ${hora}`;
+  }catch{ return ts; }
+};
+
 const B_MID   = '#3B5BDB';
 const B_LIGHT = 'rgba(59,91,219,0.10)';
 const B_GLOW  = 'rgba(59,91,219,0.28)';
@@ -261,7 +276,7 @@ export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
       return;
     }
     const { data: { publicUrl } } = supabase.storage.from('documentos').getPublicUrl(path);
-    const novos = [...docs, { nome: file.name, path, url: publicUrl, data: TODAY, enviadoPor: profile?.nome }];
+    const novos = [...docs, { nome: file.name, path, url: publicUrl, data: new Date().toISOString(), enviadoPor: profile?.nome }];
     setDocs(novos);
     dispatch({ type: 'UPD', c: { ...cliente, documentos: novos } });
     setUploadMsg({ t: 'success', text: `"${file.name}" enviado!` });
@@ -665,7 +680,7 @@ export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
                 <span style={{ fontSize: 18 }}>📄</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 11, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{doc.nome}</div>
-                  <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{fmtD(doc.data)} · {doc.enviadoPor}</div>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{fmtDH(doc.data||doc.created_at||doc.uploadedAt)} · {doc.enviadoPor}</div>
                 </div>
                 <button className="btn btn-ghost" style={{ padding: '4px 8px', fontSize: 10 }} onClick={() => openDoc(doc.path)}>↓ Abrir</button>
                 <button onClick={() => handleDeleteDoc(doc)} style={{ padding: '4px 8px', borderRadius: 6, fontSize: 10, fontWeight: 600, cursor: 'pointer', background: 'var(--danger-dim)', color: 'var(--danger)', border: 'none' }}>✕</button>

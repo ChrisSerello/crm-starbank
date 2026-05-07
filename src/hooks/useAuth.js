@@ -20,6 +20,8 @@ export function useAuth(){
       const {data:{session:s}}=await supabase.auth.getSession();
       if(s?.user?.id){
         await supabase.from('profiles').update({modulo,role}).eq('id',s.user.id);
+        // Salvar módulo escolhido para não mostrar tela de seleção novamente
+        try{ localStorage.setItem('sf_ultimo_modulo_'+s.user.id, modulo); }catch{}
       }
     } catch(e){ console.error('Erro ao atualizar módulo no perfil:',e); }
     setProfile(prev=>({...prev,modulo,role}));
@@ -62,7 +64,26 @@ export function useAuth(){
           existing=await enrichCorbanProfile(existing);
         }
         setProfile(existing);
-        if(hasMultiModule) setNeedsModuleSelect(true);
+        if(hasMultiModule){
+          // Verificar se já tem módulo salvo para este usuário
+          try{
+            const saved=localStorage.getItem('sf_ultimo_modulo_'+uid);
+            const savedModule=modules.find(m=>m.modulo===saved);
+            if(saved&&savedModule&&saved===existing.modulo){
+              // Já está no módulo correto, não mostrar seleção
+              setNeedsModuleSelect(false);
+            } else if(saved&&savedModule&&saved!==existing.modulo){
+              // Tem módulo salvo diferente do atual, mudar silenciosamente
+              await supabase.from('profiles').update({modulo:savedModule.modulo,role:savedModule.role}).eq('id',uid);
+              setProfile(prev=>({...prev,modulo:savedModule.modulo,role:savedModule.role}));
+              setNeedsModuleSelect(false);
+            } else {
+              setNeedsModuleSelect(true);
+            }
+          }catch{
+            setNeedsModuleSelect(true);
+          }
+        }
         setAuthLoading(false);
         return;
       }
@@ -171,6 +192,10 @@ export function useAuth(){
 
   const signOut=async()=>{
     try {
+      const {data:{session:s}}=await supabase.auth.getSession();
+      if(s?.user?.id){
+        try{ localStorage.removeItem('sf_ultimo_modulo_'+s.user.id); }catch{}
+      }
       await supabase.auth.signOut();
       setUserModules([]);
       setNeedsModuleSelect(false);
