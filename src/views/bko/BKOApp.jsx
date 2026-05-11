@@ -5,6 +5,7 @@ import { Avatar } from '../../components/shared';
 import { AlterarSenha } from '../../components/AlterarSenha';
 import { BKODetail } from './BKODetail';
 import { BKOSearch } from './BKOSearch';
+import { BKOGestaoCorbans } from './BKOGestaoCorbans';
 import ReactDOM from 'react-dom';
 
 const MODULE_CONFIG = {
@@ -130,6 +131,7 @@ function BKOSidebar({view,setView,profile,onLogout,onAlterarSenha,onSearch,colla
     {id:'clientes', icon:'≡',label:'Clientes'},
     ...(r==='comercial'||r==='corban_bko'||r==='startec'?[{id:'cadastrar',icon:'＋',label:'Cadastrar'}]:[]),
     ...(r==='comercial'?[{id:'auditoria',icon:'🔍',label:'Auditoria'}]:[]),
+    ...(profile?.acesso_gestao_corban?[{id:'gestao_corban',icon:'⬡',label:'Gestão Corban'}]:[]),
   ];
   const W=collapsed?56:200;
   return(
@@ -1232,7 +1234,7 @@ export function BKOApp({profile,session,signOut,onAlterarSenha,userModules,onSwi
   const [supervisorTeam,setSupervisorTeam]=useState([]);
   const setView=useCallback(v=>{
     dispatch({type:'VIEW',v});
-    if(v==='pipeline') toggleSidebar(true);
+    if(v==='pipeline'||v==='gestao_corban') toggleSidebar(true);
     else toggleSidebar(false);
   },[toggleSidebar]);
   const selected=clientes.find(c=>c.id===sel);
@@ -1376,6 +1378,7 @@ export function BKOApp({profile,session,signOut,onAlterarSenha,userModules,onSwi
           {view==='clientes'  && <BKOClientes  clientes={clientes} profile={profile} onSelect={id=>dispatch({type:'SEL',id})} onNew={()=>dispatch({type:'TNEW'})} origemFiltro={origemFiltro} setOrigemFiltro={setOrigemFiltro} supervisorTeam={supervisorTeam} allTeams={allTeams}/>}
           {view==='cadastrar' && <BKOCadastrar profile={profile} session={session} funis={funis} setFunis={setFunis}/>}
           {view==='auditoria' && <BKOAuditoria/>}
+          {view==='gestao_corban' && <BKOGestaoCorbans profile={profile}/>}
         </main>
         {selected&&<BKODetail key={selected.id} cliente={selected} profile={profile} session={session} dispatch={auditedDispatch} onClose={()=>dispatch({type:'CLOSE'})}/>}
         {newOpen&&<NovoClienteModal profile={profile} dispatch={auditedDispatch} clientes={clientes} onClose={()=>dispatch({type:'TNEW'})}/>}
