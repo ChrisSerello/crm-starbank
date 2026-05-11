@@ -38,7 +38,8 @@ export function useAuth(){
       const modulesPromise=supabase
         .from('user_modules')
         .select('modulo,role')
-        .ilike('email',emailLower);
+        .ilike('email',emailLower)
+        .eq('ativo',true);
 
       // 1. Profile já existe
       let {data:existing}=await supabase.from('profiles').select('*').eq('id',uid).single();
