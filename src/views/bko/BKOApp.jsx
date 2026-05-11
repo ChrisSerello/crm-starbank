@@ -221,11 +221,11 @@ function StatCard({label,value,color,icon,onClick}){
   );
 }
 
-// ─── DASHBOARD ───────────────────────────────────────────────────────────────
+// DASHBOARD 
 // startec vê só os próprios; bko/comercial veem tudo
-// ─── HELPER: filtra clientes para supervisor ─────────────────────────────────
+// HELPER: filtra clientes para supervisor 
 function filtrarClientesSupervisor(clientes, origemFiltro, allTeams){
-  if(!origemFiltro) return clientes.filter(c=>c.origem==='corban'||c.origem==='startec');
+  if(!origemFiltro) return clientes;
   if(origemFiltro==='corban') return clientes.filter(c=>c.origem==='corban');
   if(origemFiltro==='startec') return clientes.filter(c=>c.origem==='startec');
   // Filtro por equipe específica: origemFiltro = supervisor_id
