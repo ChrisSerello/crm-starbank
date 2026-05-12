@@ -253,7 +253,7 @@ function BKODashboard({clientes,setView,setFiltroEstagio,profile,origemFiltro,se
   const isSupervisor=profile?.is_supervisor===true;
   const clientesFiltrados=useMemo(()=>{
     if(profile?.role==='startec'||profile?.role==='corban_bko')
-      return clientes.filter(c=>c.atribuido_a_id===profile?.id);
+      return clientes.filter(c=>c.atribuido_a_id===profile?.id||c.criado_por_id===profile?.id);
     if(isComercial){
       if(isSupervisor) return filtrarClientesSupervisor(clientes,origemFiltro,allTeams);
       if(origemFiltro) return clientes.filter(c=>c.origem===origemFiltro);
@@ -537,7 +537,7 @@ function BKOPipeline({clientes,profile,dispatch,onSelect,filtroEstagio,setFiltro
   const isSupervisorP=profile?.is_supervisor===true;
   const clientesVisiveis=useMemo(()=>{
     if(profile?.role==='startec'||profile?.role==='corban_bko')
-      return clientes.filter(c=>c.atribuido_a_id===profile?.id);
+      return clientes.filter(c=>c.atribuido_a_id===profile?.id||c.criado_por_id===profile?.id);
     if(profile?.role==='comercial'){
       if(isSupervisorP) return filtrarClientesSupervisor(clientes,origemFiltro,allTeams);
       if(origemFiltro) return clientes.filter(c=>c.origem===origemFiltro);
@@ -707,7 +707,7 @@ function BKOClientes({clientes,profile,onSelect,onNew,origemFiltro,setOrigemFilt
   const isSupervisorC=profile?.is_supervisor===true;
   const clientesBase=useMemo(()=>{
     if(profile?.role==='startec'||profile?.role==='corban_bko')
-      return clientes.filter(c=>c.atribuido_a_id===profile?.id);
+      return clientes.filter(c=>c.atribuido_a_id===profile?.id||c.criado_por_id===profile?.id);
     if(profile?.role==='comercial'){
       if(isSupervisorC) return filtrarClientesSupervisor(clientes,origemFiltro,allTeams);
       if(origemFiltro) return clientes.filter(c=>c.origem===origemFiltro);
@@ -1382,14 +1382,14 @@ export function BKOApp({profile,session,signOut,onAlterarSenha,userModules,onSwi
 
   const auditedDispatch=useCallback(async(action)=>{
     // Auto-atribuição local para startec — aparece sem precisar recarregar
-    if(action.type==='ADD'&&profile?.role==='startec'){
+    if(action.type==='ADD'&&(profile?.role==='startec'||profile?.role==='corban_bko')){
       action={...action,c:{...action.c,atribuido_a_id:session?.user?.id,atribuido_a_nome:profile?.nome}};
     }
     dispatch(action);
     if(!session||!profile) return;
     if(action.type==='ADD'){
       const c=action.c;
-      const autoAtrib=(profile.role==='startec');
+      const autoAtrib=(profile.role==='startec'||profile.role==='corban_bko');
       const origemCliente=profile.role==='startec'?'startec':profile.role==='corban_bko'?'corban':'interno';
       const {error}=await supabase.from('bko_clientes').insert({
         id:c.id,data:{...c},estagio:c.estagio||'clientes_novos',
