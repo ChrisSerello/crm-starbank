@@ -8,6 +8,18 @@ import { BKOSearch } from './BKOSearch';
 import { BKOGestaoCorbans } from './BKOGestaoCorbans';
 import ReactDOM from 'react-dom';
 
+// Formata data+hora no fuso de Brasília
+const fmtDH=(ts)=>{
+  if(!ts) return '—';
+  try{
+    const d=new Date(ts);
+    if(isNaN(d.getTime())) return ts;
+    const data=d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'2-digit',timeZone:'America/Sao_Paulo'});
+    const hora=d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',timeZone:'America/Sao_Paulo'});
+    return `${data} às ${hora}`;
+  }catch{ return '—'; }
+};
+
 const MODULE_CONFIG = {
   indicacoes: { label:'Indicações',  icon:'◈', color:'#6366F1' },
   bko:        { label:'BKO',         icon:'⊞', color:'#3B5BDB' },
@@ -359,6 +371,7 @@ function KCard({c,onSelect,dispatch,profile,setDragId,funis=[]}){
           <span style={{fontSize:9,color:'var(--text-faint)'}}>{fmtD(c.dataEntrada)}</span>
           <span style={{fontSize:9,fontWeight:600,color:c.documentoStatus==='Aprovado'?'var(--success)':c.documentoStatus==='Não solicitado'?'var(--text-faint)':'var(--amber)'}}>{c.documentoStatus}</span>
         </div>
+        {c.created_at&&<div style={{marginTop:3,fontSize:9,color:'var(--text-faint)'}}>🕐 {fmtDH(c.created_at)}</div>}
         {c.criado_por_nome&&<div style={{marginTop:5,paddingTop:5,borderTop:'1px solid var(--border)',fontSize:9,color:'var(--text-muted)'}}>{c.criado_por_nome}</div>}
         <button ref={btnRef} onClick={openMenu}
           style={{position:'absolute',top:6,right:6,background:'rgba(0,0,0,.06)',border:'none',borderRadius:5,cursor:'pointer',width:20,height:20,display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,color:'var(--text-muted)',lineHeight:1,padding:0}}>⋯</button>
@@ -634,6 +647,49 @@ function BKOPipeline({clientes,profile,dispatch,onSelect,filtroEstagio,setFiltro
 }
 
 // ─── CLIENTES ────────────────────────────────────────────────────────────────
+function exportarExcel(dados, nomeArquivo='clientes_bko'){
+  try{
+    // Montar linhas
+    const rows = dados.map(c=>({
+      'Nome': c.nomeCliente||'',
+      'CPF': c.cpfCliente||'',
+      'Telefone': c.telefone||'',
+      'Prefeitura/Órgão': c.prefeitura||'',
+      'Estágio': (()=>{const s=BKO_STAGES.find(x=>x.id===c.estagio);return s?s.label:c.estagio||'';})(),
+      'Status Documento': c.documentoStatus||'',
+      'Saldo Devedor': c.saldoDevedor||'',
+      'Criado por': c.criado_por_nome||'',
+      'Atribuído a': c.atribuido_a_nome||'',
+      'Origem': c.origem||'',
+      'Data de entrada': c.dataEntrada||'',
+      'Criado em': c.created_at?fmtDH(c.created_at):'',
+    }));
+
+    // Criar workbook via dados CSV simples (sem dependência externa)
+    const headers = Object.keys(rows[0]||{});
+    const csvRows = [
+      headers.join(';'),
+      ...rows.map(r=>headers.map(h=>{
+        const val = String(r[h]||'').replace(/"/g,'""');
+        return `"${val}"`;
+      }).join(';'))
+    ];
+    const csvContent = '\uFEFF' + csvRows.join('\n');
+    const blob = new Blob([csvContent], {type:'text/csv;charset=utf-8;'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${nomeArquivo}_${new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }catch(e){
+    console.error('Erro ao exportar:',e);
+    alert('Erro ao exportar. Tente novamente.');
+  }
+}
+
 function BKOClientes({clientes,profile,onSelect,onNew,origemFiltro,setOrigemFiltro,supervisorTeam,allTeams}){
   const [search,setSearch]=useState('');
   const [estagio,setEstagio]=useState('');
@@ -677,7 +733,7 @@ function BKOClientes({clientes,profile,onSelect,onNew,origemFiltro,setOrigemFilt
     <div style={{padding:'28px 32px'}}>
       <div className="fu" style={{display:'flex',justifyContent:'space-between',alignItems:'flex-end',marginBottom:16,flexWrap:'wrap',gap:10}}>
         <div><div className="section-title">Clientes</div><div className="section-sub">{filtered.length} de {clientesBase.length} registros</div></div>
-        <div style={{display:'flex',gap:8,alignItems:'center'}}>
+        <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
           {profile?.role==='comercial'&&(
             <div style={{display:'flex',gap:5,flexWrap:'wrap'}}>
               {[['todos',null,'Todos'],['corban','corban','Corbans'],['startec','startec','Startec'],
@@ -692,6 +748,14 @@ function BKOClientes({clientes,profile,onSelect,onNew,origemFiltro,setOrigemFilt
               ))}
             </div>
           )}
+          <button
+            onClick={()=>exportarExcel(filtered)}
+            title="Exportar lista atual para CSV (abre no Excel)"
+            style={{display:'flex',alignItems:'center',gap:5,padding:'6px 12px',borderRadius:8,fontSize:12,fontWeight:600,cursor:'pointer',background:'rgba(16,185,129,.1)',color:'#059669',border:'1px solid rgba(16,185,129,.25)',transition:'all .15s'}}
+            onMouseEnter={e=>{e.currentTarget.style.background='rgba(16,185,129,.2)';}}
+            onMouseLeave={e=>{e.currentTarget.style.background='rgba(16,185,129,.1)';}}>
+            ↓ Exportar
+          </button>
           <button className="btn" style={{background:B_MID,color:'#fff',boxShadow:`0 3px 14px ${B_GLOW}`}} onClick={onNew}>+ Novo Cliente</button>
         </div>
       </div>
@@ -727,7 +791,7 @@ function BKOClientes({clientes,profile,onSelect,onNew,origemFiltro,setOrigemFilt
           <table style={{width:'100%',borderCollapse:'collapse',fontSize:13}}>
             <thead>
               <tr style={{background:'rgba(0,0,0,.03)',borderBottom:'1px solid var(--border)'}}>
-                {['Nome / CPF','Prefeitura','Estágio','Documento','Saldo Devedor','Criado por','Atribuído a','Entrada',''].map(h=>(
+                {['Nome / CPF','Prefeitura','Estágio','Documento','Saldo Devedor','Criado por','Atribuído a','Entrada','Criado em',''].map(h=>(
                   <th key={h} style={{padding:'10px 14px',textAlign:'left',fontSize:9,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.08em',whiteSpace:'nowrap'}}>{h}</th>
                 ))}
               </tr>
@@ -743,10 +807,11 @@ function BKOClientes({clientes,profile,onSelect,onNew,origemFiltro,setOrigemFilt
                   <td style={{padding:'11px 14px',fontSize:12,color:'var(--text-secondary)'}}>{c.criado_por_nome||'—'}</td>
                   <td style={{padding:'11px 14px'}}>{c.atribuido_a_nome?<span style={{fontSize:10,fontWeight:700,padding:'2px 8px',borderRadius:99,background:B_LIGHT,color:B_MID}}>{c.atribuido_a_nome}</span>:<span style={{fontSize:11,color:'var(--text-faint)'}}>—</span>}</td>
                   <td style={{padding:'11px 14px',fontSize:11,color:'var(--text-secondary)'}}>{fmtD(c.dataEntrada)}</td>
+                  <td style={{padding:'11px 14px',fontSize:11,color:'var(--text-secondary)'}}>{c.created_at?fmtDH(c.created_at):'—'}</td>
                   <td style={{padding:'11px 14px',color:'var(--text-muted)',fontSize:15}}>›</td>
                 </tr>
               ))}
-              {paged.length===0&&<tr><td colSpan={9} style={{padding:'36px 0',textAlign:'center',color:'var(--text-muted)',fontSize:13}}>Nenhum cliente encontrado</td></tr>}
+              {paged.length===0&&<tr><td colSpan={10} style={{padding:'36px 0',textAlign:'center',color:'var(--text-muted)',fontSize:13}}>Nenhum cliente encontrado</td></tr>}
             </tbody>
           </table>
         </div>
@@ -1279,17 +1344,17 @@ export function BKOApp({profile,session,signOut,onAlterarSenha,userModules,onSwi
     supabase.from('bko_clientes').select('*').order('created_at',{ascending:false}).limit(500)
       .then(({data,error})=>{
         if(error){console.error('BKO load error:',error);setReady(true);return;}
-        const loaded=(data||[]).map(r=>({...r.data,id:r.id,estagio:r.estagio,criado_por_id:r.criado_por_id,criado_por_nome:r.criado_por_nome,criado_por_role:r.criado_por_role,atribuido_a_id:r.atribuido_a_id||null,atribuido_a_nome:r.atribuido_a_nome||null,responsavel_bko_id:r.responsavel_bko_id||null,responsavel_bko_nome:r.responsavel_bko_nome||null,origem:r.origem||null}));
+        const loaded=(data||[]).map(r=>({...r.data,id:r.id,estagio:r.estagio,criado_por_id:r.criado_por_id,criado_por_nome:r.criado_por_nome,criado_por_role:r.criado_por_role,atribuido_a_id:r.atribuido_a_id||null,atribuido_a_nome:r.atribuido_a_nome||null,responsavel_bko_id:r.responsavel_bko_id||null,responsavel_bko_nome:r.responsavel_bko_nome||null,origem:r.origem||null,created_at:r.created_at||null}));
         dispatch({type:'SET_C',clientes:loaded});clientesRef.current=loaded;setReady(true);
       });
     const ch=supabase.channel('bko_clientes_rt')
       .on('postgres_changes',{event:'INSERT',schema:'public',table:'bko_clientes'},payload=>{
         const r=payload.new;
-        dispatch({type:'RT_ADD',c:{...r.data,id:r.id,estagio:r.estagio,criado_por_id:r.criado_por_id,criado_por_nome:r.criado_por_nome,criado_por_role:r.criado_por_role,atribuido_a_id:r.atribuido_a_id||null,atribuido_a_nome:r.atribuido_a_nome||null,responsavel_bko_id:r.responsavel_bko_id||null,responsavel_bko_nome:r.responsavel_bko_nome||null,origem:r.origem||null}});
+        dispatch({type:'RT_ADD',c:{...r.data,id:r.id,estagio:r.estagio,criado_por_id:r.criado_por_id,criado_por_nome:r.criado_por_nome,criado_por_role:r.criado_por_role,atribuido_a_id:r.atribuido_a_id||null,atribuido_a_nome:r.atribuido_a_nome||null,responsavel_bko_id:r.responsavel_bko_id||null,responsavel_bko_nome:r.responsavel_bko_nome||null,origem:r.origem||null,created_at:r.created_at||null}});
       })
       .on('postgres_changes',{event:'UPDATE',schema:'public',table:'bko_clientes'},payload=>{
         const r=payload.new;
-        dispatch({type:'UPD',c:{...r.data,id:r.id,estagio:r.estagio,criado_por_id:r.criado_por_id,criado_por_nome:r.criado_por_nome,criado_por_role:r.criado_por_role,atribuido_a_id:r.atribuido_a_id||null,atribuido_a_nome:r.atribuido_a_nome||null,responsavel_bko_id:r.responsavel_bko_id||null,responsavel_bko_nome:r.responsavel_bko_nome||null,origem:r.origem||null}});
+        dispatch({type:'UPD',c:{...r.data,id:r.id,estagio:r.estagio,criado_por_id:r.criado_por_id,criado_por_nome:r.criado_por_nome,criado_por_role:r.criado_por_role,atribuido_a_id:r.atribuido_a_id||null,atribuido_a_nome:r.atribuido_a_nome||null,responsavel_bko_id:r.responsavel_bko_id||null,responsavel_bko_nome:r.responsavel_bko_nome||null,origem:r.origem||null,created_at:r.created_at||null}});
       })
       .subscribe();
     return()=>supabase.removeChannel(ch);

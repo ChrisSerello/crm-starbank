@@ -93,12 +93,39 @@ export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
   const isStartec           = r === 'startec';
   const isSupervisorStartec = r === 'supervisor_startec';
 
+  // Estados para edição de dados básicos
+  const [editando, setEditando]     = useState(false);
+  const [nomeEdit, setNomeEdit]     = useState(cliente.nomeCliente || '');
+  const [cpfEdit, setCpfEdit]       = useState(cliente.cpfCliente || '');
+  const [telEdit, setTelEdit]       = useState(cliente.telefone || '');
+  const [salvandoEdit, setSalvandoEdit] = useState(false);
+  const [editMsg, setEditMsg]       = useState(null);
+
   // Observações: todos os perfis podem adicionar entradas
   const podeInteragir   = isBko || isComercial || isCorban || isStartec || isSupervisorStartec;
   // Saldo Devedor: apenas BKO pode editar
   const podeEditarSaldo = isBko;
   // Atribuição Startec: supervisor_startec pode atribuir/reatribuir operadores startec
   const podeAtribuirStartec = isSupervisorStartec || isComercial;
+
+  // ── Permissão de edição de dados básicos ──
+  // Comercial: pode editar todos
+  // BKO: não pode editar ninguém
+  // Supervisor (Maicon/Nair): pode editar clientes que ele cadastrou + todos os startec
+  // Startec/Corban: pode editar clientes que cadastrou ou que estão atribuídos a ele
+  const podeEditar = (() => {
+    if (isComercial && !profile?.is_supervisor) return true; // comercial normal edita tudo
+    if (isBko) return false; // BKO não edita
+    if (profile?.is_supervisor) {
+      // supervisor edita os que ele cadastrou + todos os startec
+      return cliente.criado_por_id === profile?.id || cliente.origem === 'startec';
+    }
+    if (isStartec || isCorban) {
+      // edita os que cadastrou ou que estão atribuídos a ele
+      return cliente.criado_por_id === profile?.id || cliente.atribuido_a_id === profile?.id;
+    }
+    return false;
+  })();
 
   const salvarAtribuicaoStartecDireto = async () => {
     const opSel = operadoresStartec.find(o => o.id === atribuidoId);
@@ -187,6 +214,58 @@ export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
   };
 
   // Adiciona entrada ao log — imutável após envio
+  // Salvar edição de dados básicos com log de alterações
+  const salvarEdicao = async () => {
+    if (!nomeEdit.trim()) { setEditMsg({ t: 'error', text: 'Nome é obrigatório.' }); return; }
+    setSalvandoEdit(true);
+    setEditMsg(null);
+
+    // Montar log das alterações
+    const alteracoes = [];
+    if (nomeEdit.trim() !== cliente.nomeCliente) alteracoes.push(`Nome: "${cliente.nomeCliente}" → "${nomeEdit.trim()}"`);
+    if (cpfEdit.trim() !== (cliente.cpfCliente||'')) alteracoes.push(`CPF: "${cliente.cpfCliente}" → "${cpfEdit.trim()}"`);
+    if (telEdit.trim() !== (cliente.telefone||'')) alteracoes.push(`Telefone: "${cliente.telefone||'—'}" → "${telEdit.trim()}"`);
+    if (prefeituraEdit.trim() !== (cliente.prefeitura||'')) alteracoes.push(`Prefeitura: "${cliente.prefeitura||'—'}" → "${prefeituraEdit.trim()}"`);
+
+    if (alteracoes.length === 0) { setEditando(false); setSalvandoEdit(false); return; }
+
+    // Adicionar ao histórico de atividades
+    const novaActivity = {
+      id: gid(),
+      type: 'edit',
+      date: TODAY,
+      user: profile?.nome || 'Usuário',
+      text: `Editou dados: ${alteracoes.join(' · ')}`,
+    };
+    const activities = [...(cliente.activities || []), novaActivity];
+
+    dispatch({
+      type: 'UPD',
+      c: {
+        ...cliente,
+        nomeCliente: nomeEdit.trim(),
+        cpfCliente: cpfEdit.trim(),
+        telefone: telEdit.trim(),
+        prefeitura: prefeituraEdit.trim(),
+        activities,
+      }
+    });
+
+    setSalvandoEdit(false);
+    setEditando(false);
+    setEditMsg({ t: 'success', text: 'Dados atualizados!' });
+    setTimeout(() => setEditMsg(null), 3000);
+  };
+
+  const cancelarEdicao = () => {
+    setNomeEdit(cliente.nomeCliente || '');
+    setCpfEdit(cliente.cpfCliente || '');
+    setTelEdit(cliente.telefone || '');
+    setPrefeituraEdit(cliente.prefeitura || '');
+    setEditando(false);
+    setEditMsg(null);
+  };
+
   const adicionarObs = () => {
     if (!novaObs.trim()) return;
     const entrada = {
@@ -309,6 +388,7 @@ export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-display)', marginBottom: 4 }}>{cliente.nomeCliente}</div>
             <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{cliente.cpfCliente} · {cliente.telefone || '—'}</div>
+            {editMsg&&<div style={{fontSize:11,marginTop:6,padding:'5px 10px',borderRadius:7,background:editMsg.t==='success'?'var(--success-dim)':'var(--danger-dim)',color:editMsg.t==='success'?'var(--success)':'var(--danger)'}}>{editMsg.text}</div>}
             <div style={{ marginTop: 7, display: 'flex', gap: 5, flexWrap: 'wrap' }}>
               {stg && <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: stg.bg, color: stg.color, fontWeight: 700 }}>{stg.label}</span>}
               {cliente.prefeitura && <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: 'rgba(0,0,0,.05)', color: 'var(--text-secondary)', fontWeight: 600 }}>🏛 {cliente.prefeitura}</span>}
@@ -318,7 +398,13 @@ export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
               {cliente.saldoDevedor && <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: 'rgba(16,185,129,.1)', color: '#10B981', fontWeight: 700 }}>💰 {cliente.saldoDevedor}</span>}
             </div>
           </div>
-          <button onClick={onClose} style={{ background: 'rgba(0,0,0,.06)', border: '1px solid var(--border)', borderRadius: 7, cursor: 'pointer', width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, color: 'var(--text-muted)' }}>×</button>
+          <div style={{display:'flex',gap:6,alignItems:'center'}}>
+            <button
+              onClick={()=>podeEditar?setEditando(v=>!v):null}
+              title={podeEditar?'Editar dados do cliente':'Sem permissão para editar'}
+              style={{background:editando?'rgba(59,91,219,.1)':'rgba(0,0,0,.06)',border:`1px solid ${editando?'rgba(59,91,219,.3)':'var(--border)'}`,borderRadius:7,cursor:podeEditar?'pointer':'not-allowed',width:28,height:28,display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,color:editando?'#3B5BDB':podeEditar?'var(--text-muted)':'var(--border)',opacity:podeEditar?1:0.5,transition:'all .15s'}}>✎</button>
+            <button onClick={onClose} style={{ background: 'rgba(0,0,0,.06)', border: '1px solid var(--border)', borderRadius: 7, cursor: 'pointer', width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, color: 'var(--text-muted)' }}>×</button>
+          </div>
         </div>
       </div>
 
@@ -340,28 +426,67 @@ export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
         {/* ══════════════════ ABA: INFORMAÇÕES ══════════════════ */}
         {tab === 'info' && (
           <div>
-            <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden', marginBottom: 14 }}>
-              {[
-                ['CPF',             cliente.cpfCliente || '—'],
-                ['Telefone',        cliente.telefone || '—'],
-                ['Data entrada',    fmtD(cliente.dataEntrada)],
-                ['Criado por',      cliente.criado_por_nome || '—'],
-                ['Atribuído a',     cliente.atribuido_a_nome || 'Não atribuído'],
-                ['Responsável BKO', cliente.responsavel_bko_nome || 'Sem responsável'],
-                ['Operador Startec', cliente.atribuido_startec_nome || 'Não atribuído'],
-                ['Último contato',  fmtD(cliente.ultimoContato)],
-              ].map(([k, v]) => (
-                <div key={k} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', borderBottom: '1px solid var(--border)' }}>
-                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{k}</span>
-                  <span style={{ fontSize: 11, color: 'var(--text-primary)', fontWeight: 500 }}>{v}</span>
-                </div>
-              ))}
-            </div>
+            {/* Modo visualização */}
+            {!editando && (
+              <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden', marginBottom: 14 }}>
+                {[
+                  ['CPF',             cliente.cpfCliente || '—'],
+                  ['Telefone',        cliente.telefone || '—'],
+                  ['Prefeitura',      cliente.prefeitura || '—'],
+                  ['Data entrada',    fmtD(cliente.dataEntrada)],
+                  ['Criado em',       cliente.created_at ? fmtDH(cliente.created_at) : '—'],
+                  ['Criado por',      cliente.criado_por_nome || '—'],
+                  ['Atribuído a',     cliente.atribuido_a_nome || 'Não atribuído'],
+                  ['Responsável BKO', cliente.responsavel_bko_nome || 'Sem responsável'],
+                  ['Operador Startec', cliente.atribuido_startec_nome || 'Não atribuído'],
+                  ['Último contato',  fmtD(cliente.ultimoContato)],
+                ].map(([k, v]) => (
+                  <div key={k} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', borderBottom: '1px solid var(--border)' }}>
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{k}</span>
+                    <span style={{ fontSize: 11, color: 'var(--text-primary)', fontWeight: 500 }}>{v}</span>
+                  </div>
+                ))}
+              </div>
+            )}
 
-            <div style={{ marginBottom: 14 }}>
-              <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 5 }}>Prefeitura / Órgão</label>
-              <input className="inp" value={prefeituraEdit} onChange={e => setPrefeituraEdit(e.target.value)} placeholder="Nome da prefeitura…" />
-            </div>
+            {/* Modo edição */}
+            {editando && (
+              <div style={{background:'var(--bg-card)',border:'1px solid rgba(59,91,219,.3)',borderRadius:10,padding:14,marginBottom:14,boxShadow:'0 0 0 3px rgba(59,91,219,.08)'}}>
+                <div style={{fontSize:10,fontWeight:700,color:'#3B5BDB',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:12}}>✎ Editando dados do cliente</div>
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:10}}>
+                  <div style={{gridColumn:'1/-1'}}>
+                    <label style={{display:'block',fontSize:10,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:4}}>Nome completo *</label>
+                    <input className="inp" value={nomeEdit} onChange={e=>setNomeEdit(e.target.value)} placeholder="Nome completo"/>
+                  </div>
+                  <div>
+                    <label style={{display:'block',fontSize:10,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:4}}>CPF</label>
+                    <input className="inp" value={cpfEdit} onChange={e=>setCpfEdit(e.target.value)} placeholder="000.000.000-00"/>
+                  </div>
+                  <div>
+                    <label style={{display:'block',fontSize:10,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:4}}>Telefone</label>
+                    <input className="inp" value={telEdit} onChange={e=>setTelEdit(e.target.value)} placeholder="(00) 00000-0000"/>
+                  </div>
+                  <div style={{gridColumn:'1/-1'}}>
+                    <label style={{display:'block',fontSize:10,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:4}}>Prefeitura / Órgão</label>
+                    <input className="inp" value={prefeituraEdit} onChange={e=>setPrefeituraEdit(e.target.value)} placeholder="Nome da prefeitura…"/>
+                  </div>
+                </div>
+                <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
+                  <button className="btn btn-ghost" onClick={cancelarEdicao} style={{fontSize:12}}>Cancelar</button>
+                  <button className="btn" onClick={salvarEdicao} disabled={salvandoEdit}
+                    style={{background:'#3B5BDB',color:'#fff',fontSize:12,boxShadow:'0 3px 12px rgba(59,91,219,.28)'}}>
+                    {salvandoEdit?'Salvando…':'Salvar alterações'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Prefeitura no modo visualização — campo editável separado só quando não está em modo edição */}
+            {!editando && (
+              <div style={{ marginBottom: 14, display:'none' }}>
+                <input className="inp" value={prefeituraEdit} onChange={e => setPrefeituraEdit(e.target.value)} placeholder="Nome da prefeitura…" />
+              </div>
+            )}
 
             {isComercial && (
               <div style={{ marginBottom: 16, padding: 14, background: B_LIGHT, borderRadius: 10, border: `1px solid ${B_MID}25` }}>
