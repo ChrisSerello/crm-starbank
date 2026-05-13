@@ -7,38 +7,85 @@ const B_MID   = '#3B5BDB';
 const B_LIGHT = 'rgba(13,27,86,0.1)';
 const B_GLOW  = 'rgba(59,91,219,0.28)';
 
+// ─── Formatadores ─────────────────────────────────────────────────────────────
+const fmtCNPJ = v =>
+  v?.replace(/\D/g,'').length === 14
+    ? v.replace(/\D/g,'').replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5')
+    : (v || '');
+
+const fmtTel = v =>
+  v?.replace(/\D/g,'').length === 11
+    ? v.replace(/\D/g,'').replace(/^(\d{2})(\d{5})(\d{4})$/, '($1) $2-$3')
+    : (v || '');
+
+// ─── Estágios ─────────────────────────────────────────────────────────────────
 const GC_STAGES = [
-  { id:'inativo',           label:'Inativo',            color:'#6B7280', bg:'rgba(107,114,128,.1)' },
-  { id:'ativo_sem_producao',label:'Ativo Sem Produção',  color:'#F59E0B', bg:'rgba(245,158,11,.1)'  },
-  { id:'novo',              label:'Novo',                color:'#3B5BDB', bg:'rgba(59,91,219,.1)'   },
-  { id:'20mil',             label:'20 Mil',              color:'#0EA5E9', bg:'rgba(14,165,233,.1)'  },
-  { id:'100mil',            label:'100 Mil',             color:'#10B981', bg:'rgba(16,185,129,.1)'  },
-  { id:'300mil',            label:'300 Mil',             color:'#7C3AED', bg:'rgba(124,58,237,.1)'  },
-  { id:'500mil',            label:'500 Mil',             color:'#F97316', bg:'rgba(249,115,22,.1)'  },
-  { id:'1milhao',           label:'1 Milhão',            color:'#EF4444', bg:'rgba(239,68,68,.1)'   },
+  { id:'rascunho',          label:'Rascunho',           color:'#8B5CF6', bg:'rgba(139,92,246,.08)' },
+  { id:'inativo',           label:'Inativo',            color:'#6B7280', bg:'rgba(107,114,128,.1)'  },
+  { id:'ativo_sem_producao',label:'Ativo Sem Produção',  color:'#F59E0B', bg:'rgba(245,158,11,.1)'   },
+  { id:'novo',              label:'Novos',                color:'#3B5BDB', bg:'rgba(59,91,219,.1)'    },
+  { id:'20mil',             label:'20 Mil',              color:'#0EA5E9', bg:'rgba(14,165,233,.1)'   },
+  { id:'100mil',            label:'100 Mil',             color:'#10B981', bg:'rgba(16,185,129,.1)'   },
+  { id:'300mil',            label:'300 Mil',             color:'#7C3AED', bg:'rgba(124,58,237,.1)'   },
+  { id:'500mil',            label:'500 Mil',             color:'#F97316', bg:'rgba(249,115,22,.1)'   },
+  { id:'1milhao',           label:'1 Milhão',            color:'#EF4444', bg:'rgba(239,68,68,.1)'    },
 ];
+
+// ─── Portal Row (linha de dado somente-leitura) ────────────────────────────────
+function PortalRow({ label, value }) {
+  if (!value) return null;
+  return (
+    <div style={{
+      display:'grid', gridTemplateColumns:'110px 1fr', gap:8,
+      padding:'5px 0', borderBottom:'1px solid rgba(139,92,246,.1)',
+    }}>
+      <span style={{fontSize:11,color:'rgba(139,92,246,.7)',fontWeight:600}}>{label}</span>
+      <span style={{fontSize:11,fontWeight:500,color:'var(--text-primary)',wordBreak:'break-all'}}>{value}</span>
+    </div>
+  );
+}
+
+// ─── Portal Badge ─────────────────────────────────────────────────────────────
+function PortalBadge({ style={} }) {
+  return (
+    <span style={{
+      display:'inline-flex', alignItems:'center', gap:4,
+      fontSize:9, fontWeight:700, padding:'2px 7px', borderRadius:4,
+      background:'rgba(139,92,246,.12)', color:'#7C3AED',
+      border:'1px solid rgba(139,92,246,.22)', letterSpacing:'.04em',
+      ...style,
+    }}>
+      ⚡ Portal
+    </span>
+  );
+}
 
 // ─── CARD ────────────────────────────────────────────────────────────────────
 function GCCard({ c, onSelect, setDragId, onMove, profile }){
   const [menuOpen, setMenuOpen] = useState(false);
-  const [menuPos, setMenuPos] = useState({top:0,left:0});
+  const [menuPos, setMenuPos]   = useState({top:0,left:0});
   const btnRef = useRef(null);
 
   useEffect(()=>{
     if(!menuOpen) return;
-    const close=(e)=>{if(btnRef.current&&!btnRef.current.closest('[data-gc-menu]')?.contains(e.target))setMenuOpen(false);};
+    const close=(e)=>{
+      if(btnRef.current&&!btnRef.current.closest('[data-gc-menu]')?.contains(e.target))
+        setMenuOpen(false);
+    };
     document.addEventListener('mousedown',close);
     return()=>document.removeEventListener('mousedown',close);
   },[menuOpen]);
 
   const openMenu=(e)=>{
-    e.preventDefault();e.stopPropagation();
+    e.preventDefault(); e.stopPropagation();
     const rect=btnRef.current.getBoundingClientRect();
-    setMenuPos({top:rect.bottom+4,left:rect.right-220});
+    setMenuPos({top:rect.bottom+4, left:rect.right-220});
     setMenuOpen(v=>!v);
   };
 
   const stage = GC_STAGES.find(s=>s.id===c.estagio);
+  const tel   = fmtTel(c.pj_telefone || c.pf_telefone);
+  const cnpj  = fmtCNPJ(c.pj_cnpj);
 
   return(
     <>
@@ -46,24 +93,68 @@ function GCCard({ c, onSelect, setDragId, onMove, profile }){
         draggable
         onDragStart={()=>setDragId(c.id)}
         onClick={(e)=>{if(!e.defaultPrevented)onSelect(c);}}
-        style={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:10,padding:'10px 12px',marginBottom:7,cursor:'pointer',position:'relative',transition:'all .15s'}}
-        onMouseEnter={e=>{e.currentTarget.style.borderColor=stage?.color+'60';e.currentTarget.style.boxShadow=`0 2px 8px ${stage?.color}15`;}}
-        onMouseLeave={e=>{e.currentTarget.style.borderColor='var(--border)';e.currentTarget.style.boxShadow='';}}
+        style={{
+          background:'var(--bg-card)', border:'1px solid var(--border)',
+          borderRadius:10, padding:'10px 12px', marginBottom:7,
+          cursor:'pointer', position:'relative', transition:'all .15s',
+        }}
+        onMouseEnter={e=>{
+          e.currentTarget.style.borderColor=stage?.color+'60';
+          e.currentTarget.style.boxShadow=`0 2px 8px ${stage?.color}15`;
+        }}
+        onMouseLeave={e=>{
+          e.currentTarget.style.borderColor='var(--border)';
+          e.currentTarget.style.boxShadow='';
+        }}
       >
-        <div style={{fontSize:12,fontWeight:600,color:'var(--text-primary)',marginBottom:3,paddingRight:20,lineHeight:1.3}}>{c.nome}</div>
-        {c.localizacao&&<div style={{fontSize:10,color:'var(--text-muted)',marginBottom:3}}>📍 {c.localizacao}</div>}
-        {c.saldo_produzido&&<div style={{fontSize:10,fontWeight:700,color:'#10B981',marginBottom:3}}>💰 {c.saldo_produzido}</div>}
-        {c.responsavel_nome&&(
-          <div style={{marginTop:6,paddingTop:6,borderTop:'1px solid var(--border)',fontSize:9,color:'var(--text-muted)'}}>{c.responsavel_nome}</div>
+        {/* Badge Portal */}
+        {c.origem_portal && <PortalBadge style={{marginBottom:5,display:'inline-flex'}}/>}
+
+        <div style={{fontSize:12,fontWeight:600,color:'var(--text-primary)',marginBottom:3,paddingRight:22,lineHeight:1.3}}>
+          {c.nome}
+        </div>
+
+        {c.localizacao && (
+          <div style={{fontSize:10,color:'var(--text-muted)',marginBottom:2}}>📍 {c.localizacao}</div>
         )}
+        {cnpj && (
+          <div style={{fontSize:10,color:'var(--text-muted)',marginBottom:2,fontFamily:'monospace',letterSpacing:'.02em'}}>
+            🏢 {cnpj}
+          </div>
+        )}
+        {tel && (
+          <div style={{fontSize:10,color:'var(--text-muted)',marginBottom:2}}>📞 {tel}</div>
+        )}
+        {c.saldo_produzido && (
+          <div style={{fontSize:10,fontWeight:700,color:'#10B981',marginBottom:3}}>💰 {c.saldo_produzido}</div>
+        )}
+        {c.responsavel_nome && (
+          <div style={{marginTop:6,paddingTop:6,borderTop:'1px solid var(--border)',fontSize:9,color:'var(--text-muted)'}}>
+            {c.responsavel_nome}
+          </div>
+        )}
+
         <button ref={btnRef} onClick={openMenu}
-          style={{position:'absolute',top:6,right:6,background:'rgba(0,0,0,.06)',border:'none',borderRadius:5,cursor:'pointer',width:20,height:20,display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,color:'var(--text-muted)',lineHeight:1,padding:0}}>⋯</button>
+          style={{
+            position:'absolute', top:6, right:6,
+            background:'rgba(0,0,0,.06)', border:'none', borderRadius:5,
+            cursor:'pointer', width:20, height:20,
+            display:'flex', alignItems:'center', justifyContent:'center',
+            fontSize:11, color:'var(--text-muted)', lineHeight:1, padding:0,
+          }}>⋯</button>
       </div>
 
       {menuOpen&&ReactDOM.createPortal(
         <div data-gc-menu="1" onMouseDown={e=>e.stopPropagation()}
-          style={{position:'fixed',top:menuPos.top,left:Math.max(8,menuPos.left),zIndex:9999,background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:10,boxShadow:'0 8px 24px rgba(0,0,0,.18)',minWidth:200,overflow:'hidden'}}>
-          <div style={{padding:'7px 12px',fontSize:9,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.08em',borderBottom:'1px solid var(--border)'}}>Mover para…</div>
+          style={{
+            position:'fixed', top:menuPos.top, left:Math.max(8,menuPos.left),
+            zIndex:9999, background:'var(--bg-card)',
+            border:'1px solid var(--border)', borderRadius:10,
+            boxShadow:'0 8px 24px rgba(0,0,0,.18)', minWidth:200, overflow:'hidden',
+          }}>
+          <div style={{padding:'7px 12px',fontSize:9,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.08em',borderBottom:'1px solid var(--border)'}}>
+            Mover para…
+          </div>
           {GC_STAGES.filter(s=>s.id!==c.estagio).map(s=>(
             <button key={s.id}
               onMouseDown={e=>{e.stopPropagation();onMove(c.id,s.id);setMenuOpen(false);}}
@@ -87,7 +178,13 @@ function GCCol({ s, corbans, dragId, setDragId, onMove, onSelect, profile, colla
 
   return(
     <div
-      style={{minWidth:collapsed?44:180,width:collapsed?44:210,flexShrink:0,background:over?`${s.color}06`:'rgba(0,0,0,.02)',border:`1px solid ${over?s.color+'40':'var(--border)'}`,borderRadius:12,padding:'10px 8px',transition:'all .22s cubic-bezier(.4,0,.2,1)',display:'flex',flexDirection:'column'}}
+      style={{
+        minWidth:collapsed?44:180, width:collapsed?44:210, flexShrink:0,
+        background:over?`${s.color}06`:'rgba(0,0,0,.02)',
+        border:`1px solid ${over?s.color+'40':'var(--border)'}`,
+        borderRadius:12, padding:'10px 8px',
+        transition:'all .22s cubic-bezier(.4,0,.2,1)', display:'flex', flexDirection:'column',
+      }}
       onDragOver={e=>{e.preventDefault();setOver(true);}}
       onDragLeave={()=>setOver(false)}
       onDrop={()=>{setOver(false);if(dragId)onMove(dragId,s.id);}}
@@ -123,9 +220,10 @@ function GCCol({ s, corbans, dragId, setDragId, onMove, onSelect, profile, colla
 
 // ─── MODAL DETALHE ────────────────────────────────────────────────────────────
 function GCDetalhe({ corban, onClose, onSave, onDelete, responsaveis }){
-  const [form, setForm] = useState({...corban});
-  const [saving, setSaving] = useState(false);
+  const [form,       setForm]       = useState({...corban});
+  const [saving,     setSaving]     = useState(false);
   const [confirmDel, setConfirmDel] = useState(false);
+  const [showPortal, setShowPortal] = useState(false);
   const set = (k,v) => setForm(f=>({...f,[k]:v}));
 
   const save = async() => {
@@ -134,14 +232,14 @@ function GCDetalhe({ corban, onClose, onSave, onDelete, responsaveis }){
     const updated = {...form, responsavel_nome: resp?.nome||form.responsavel_nome};
     const {error} = await supabase.from('gestao_corbans')
       .update({
-        nome: updated.nome,
-        localizacao: updated.localizacao,
+        nome:            updated.nome,
+        localizacao:     updated.localizacao,
         saldo_produzido: updated.saldo_produzido,
-        estagio: updated.estagio,
-        responsavel_id: updated.responsavel_id||null,
-        responsavel_nome: updated.responsavel_nome||null,
-        observacoes: updated.observacoes,
-        updated_at: new Date().toISOString(),
+        estagio:         updated.estagio,
+        responsavel_id:  updated.responsavel_id||null,
+        responsavel_nome:updated.responsavel_nome||null,
+        observacoes:     updated.observacoes,
+        updated_at:      new Date().toISOString(),
       })
       .eq('id', corban.id);
     setSaving(false);
@@ -153,22 +251,125 @@ function GCDetalhe({ corban, onClose, onSave, onDelete, responsaveis }){
     onDelete(corban.id);
   };
 
+  const stage = GC_STAGES.find(s=>s.id===form.estagio);
+  const hasPerfilComercial = form.tipo_operacao || form.producao_mensal || form.produtos_atuacao?.length;
+  const hasBanco           = form.banco_nome;
+  const hasRepresentante   = form.pf_nome;
+
   return(
-    <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.45)',zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center'}}
+    <div
+      style={{position:'fixed',inset:0,background:'rgba(0,0,0,.45)',zIndex:1000,display:'flex',alignItems:'center',justifyContent:'center'}}
       onClick={e=>{if(e.target===e.currentTarget)onClose();}}>
-      <div style={{background:'var(--bg-card)',borderRadius:16,padding:28,width:480,maxHeight:'90vh',overflowY:'auto',boxShadow:'0 20px 60px rgba(0,0,0,.3)'}}>
+      <div style={{background:'var(--bg-card)',borderRadius:16,padding:28,width:520,maxHeight:'90vh',overflowY:'auto',boxShadow:'0 20px 60px rgba(0,0,0,.3)'}}>
+
+        {/* ── Header ── */}
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:20}}>
           <div>
+            {form.origem_portal && <PortalBadge style={{marginBottom:8,display:'inline-flex'}}/>}
             <div style={{fontFamily:'var(--font-display)',fontSize:18,fontWeight:600,color:'var(--text-primary)'}}>{form.nome}</div>
             <div style={{marginTop:6}}>
-              <span style={{fontSize:10,padding:'2px 8px',borderRadius:99,fontWeight:700,background:`${GC_STAGES.find(s=>s.id===form.estagio)?.color}18`,color:GC_STAGES.find(s=>s.id===form.estagio)?.color}}>
-                {GC_STAGES.find(s=>s.id===form.estagio)?.label}
+              <span style={{fontSize:10,padding:'2px 8px',borderRadius:99,fontWeight:700,background:`${stage?.color}18`,color:stage?.color}}>
+                {stage?.label}
               </span>
             </div>
           </div>
-          <button onClick={onClose} style={{background:'rgba(0,0,0,.06)',border:'1px solid var(--border)',borderRadius:8,cursor:'pointer',width:28,height:28,display:'flex',alignItems:'center',justifyContent:'center',fontSize:15,color:'var(--text-muted)'}}>×</button>
+          <button onClick={onClose}
+            style={{background:'rgba(0,0,0,.06)',border:'1px solid var(--border)',borderRadius:8,cursor:'pointer',width:28,height:28,display:'flex',alignItems:'center',justifyContent:'center',fontSize:15,color:'var(--text-muted)'}}>×</button>
         </div>
 
+        {/* ── Seção dados do portal (colapsável) ── */}
+        {form.origem_portal && (
+          <div style={{
+            border:'1px solid rgba(139,92,246,.22)',
+            borderRadius:12, marginBottom:18, overflow:'hidden',
+            background:'rgba(139,92,246,.03)',
+          }}>
+            <button
+              onClick={()=>setShowPortal(v=>!v)}
+              style={{
+                width:'100%', display:'flex', justifyContent:'space-between',
+                alignItems:'center', padding:'10px 14px',
+                background:'none', border:'none', cursor:'pointer',
+                fontFamily:'var(--font)',
+              }}>
+              <span style={{fontSize:11,fontWeight:700,color:'#7C3AED',display:'flex',alignItems:'center',gap:6}}>
+                ⚡ Dados preenchidos no portal
+                <span style={{
+                  fontSize:9,fontWeight:600,padding:'1px 6px',borderRadius:4,
+                  background:'rgba(139,92,246,.12)',color:'#7C3AED',
+                }}>
+                  {form.portal_status === 'rascunho' ? 'incompleto' : 'completo'}
+                </span>
+              </span>
+              <span style={{
+                fontSize:14, color:'#7C3AED',
+                transform:showPortal?'rotate(180deg)':'none',
+                transition:'transform .2s', display:'inline-block',
+              }}>▾</span>
+            </button>
+
+            {showPortal && (
+              <div style={{padding:'0 14px 14px'}}>
+
+                {/* Empresa */}
+                <div style={{fontSize:10,fontWeight:700,color:'rgba(139,92,246,.7)',textTransform:'uppercase',letterSpacing:'.07em',padding:'8px 0 6px'}}>
+                  Empresa
+                </div>
+                <PortalRow label="CNPJ"          value={fmtCNPJ(form.pj_cnpj)} />
+                <PortalRow label="Razão Social"   value={form.pj_razao_social} />
+                <PortalRow label="Nome Fantasia"  value={form.pj_nome_fantasia} />
+                <PortalRow label="Endereço"       value={form.pj_endereco ? `${form.pj_endereco}${form.pj_uf ? ' — ' + form.pj_uf : ''}` : null} />
+                <PortalRow label="CEP"            value={form.pj_cep} />
+                <PortalRow label="Telefone PJ"    value={fmtTel(form.pj_telefone)} />
+
+                {/* Perfil Comercial */}
+                {hasPerfilComercial && (
+                  <>
+                    <div style={{fontSize:10,fontWeight:700,color:'rgba(139,92,246,.7)',textTransform:'uppercase',letterSpacing:'.07em',padding:'12px 0 6px'}}>
+                      Perfil Comercial
+                    </div>
+                    <PortalRow label="Tipo de Operação" value={form.tipo_operacao} />
+                    <PortalRow label="Produção Mensal"  value={form.producao_mensal} />
+                    <PortalRow label="Produtos"         value={form.produtos_atuacao?.join(', ')} />
+                    <PortalRow label="Bancos parceiros" value={form.bancos_parceiros?.join(', ')} />
+                    <PortalRow label="Estados"          value={form.estados_atuacao?.join(', ')} />
+                  </>
+                )}
+
+                {/* Representante Legal */}
+                {hasRepresentante && (
+                  <>
+                    <div style={{fontSize:10,fontWeight:700,color:'rgba(139,92,246,.7)',textTransform:'uppercase',letterSpacing:'.07em',padding:'12px 0 6px'}}>
+                      Representante Legal
+                    </div>
+                    <PortalRow label="Nome"       value={form.pf_nome} />
+                    <PortalRow label="CPF"        value={form.pf_cpf} />
+                    <PortalRow label="E-mail"     value={form.pf_email} />
+                    <PortalRow label="Celular"    value={fmtTel(form.pf_telefone)} />
+                    <PortalRow label="Cidade/UF"  value={form.pf_cidade ? `${form.pf_cidade} — ${form.pf_uf}` : null} />
+                    <PortalRow label="Nascimento" value={form.pf_nascimento} />
+                    <PortalRow label="Estado Civil" value={form.pf_estado_civil} />
+                  </>
+                )}
+
+                {/* Dados Bancários */}
+                {hasBanco && (
+                  <>
+                    <div style={{fontSize:10,fontWeight:700,color:'rgba(139,92,246,.7)',textTransform:'uppercase',letterSpacing:'.07em',padding:'12px 0 6px'}}>
+                      Dados Bancários
+                    </div>
+                    <PortalRow label="Banco"   value={form.banco_nome} />
+                    <PortalRow label="Agência" value={form.banco_agencia} />
+                    <PortalRow label="Conta"   value={form.banco_conta ? `${form.banco_conta}${form.banco_digito ? '-' + form.banco_digito : ''}` : null} />
+                    <PortalRow label="PIX"     value={form.banco_pix} />
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ── Campos editáveis ── */}
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:12}}>
           <div style={{gridColumn:'1/-1'}}>
             <label style={{display:'block',fontSize:10,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:5}}>Nome *</label>
@@ -191,7 +392,7 @@ function GCDetalhe({ corban, onClose, onSave, onDelete, responsaveis }){
           <div>
             <label style={{display:'block',fontSize:10,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:5}}>Responsável</label>
             <select className="sel" value={form.responsavel_id||''} onChange={e=>set('responsavel_id',e.target.value)}>
-              <option value="">— Sem responsável —</option>
+              <option value="">Sem responsável</option>
               {responsaveis.map(r=><option key={r.id} value={r.id}>{r.nome}</option>)}
             </select>
           </div>
@@ -201,6 +402,7 @@ function GCDetalhe({ corban, onClose, onSave, onDelete, responsaveis }){
           </div>
         </div>
 
+        {/* ── Ações ── */}
         <div style={{display:'flex',gap:8,justifyContent:'space-between',marginTop:8}}>
           {!confirmDel
             ? <button onClick={()=>setConfirmDel(true)} style={{padding:'6px 12px',borderRadius:7,background:'var(--danger-dim)',color:'var(--danger)',border:'none',cursor:'pointer',fontSize:12,fontWeight:600}}>Excluir</button>
@@ -222,9 +424,13 @@ function GCDetalhe({ corban, onClose, onSave, onDelete, responsaveis }){
 
 // ─── MODAL NOVO ───────────────────────────────────────────────────────────────
 function GCNovo({ onClose, onSave, profile, responsaveis }){
-  const [form, setForm] = useState({ nome:'', localizacao:'', estagio:'novo', responsavel_id: profile?.id||'', responsavel_nome: profile?.nome||'' });
+  const [form, setForm] = useState({
+    nome:'', localizacao:'', estagio:'novo',
+    responsavel_id: profile?.id||'',
+    responsavel_nome: profile?.nome||'',
+  });
   const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState(null);
+  const [msg,    setMsg]    = useState(null);
   const set = (k,v) => setForm(f=>({...f,[k]:v}));
 
   const save = async() => {
@@ -233,15 +439,16 @@ function GCNovo({ onClose, onSave, profile, responsaveis }){
     const resp = responsaveis.find(r=>r.id===form.responsavel_id);
     const novo = {
       id: gid(),
-      nome: form.nome.trim(),
-      localizacao: form.localizacao.trim(),
-      estagio: form.estagio,
-      responsavel_id: form.responsavel_id||null,
-      responsavel_nome: resp?.nome||profile?.nome||null,
+      nome:            form.nome.trim(),
+      localizacao:     form.localizacao.trim(),
+      estagio:         form.estagio,
+      responsavel_id:  form.responsavel_id||null,
+      responsavel_nome:resp?.nome||profile?.nome||null,
       saldo_produzido: null,
-      observacoes: null,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+      observacoes:     null,
+      origem_portal:   false,
+      created_at:      new Date().toISOString(),
+      updated_at:      new Date().toISOString(),
     };
     const {error} = await supabase.from('gestao_corbans').insert(novo);
     setSaving(false);
@@ -287,7 +494,9 @@ function GCNovo({ onClose, onSave, profile, responsaveis }){
 
         <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
           <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
-          <button className="btn" style={{background:B_MID,color:'#fff',boxShadow:`0 3px 12px ${B_GLOW}`}} onClick={save} disabled={saving}>{saving?'Salvando…':'Cadastrar'}</button>
+          <button className="btn" style={{background:B_MID,color:'#fff',boxShadow:`0 3px 12px ${B_GLOW}`}} onClick={save} disabled={saving}>
+            {saving?'Salvando…':'Cadastrar'}
+          </button>
         </div>
       </div>
     </div>
@@ -296,19 +505,19 @@ function GCNovo({ onClose, onSave, profile, responsaveis }){
 
 // ─── COMPONENTE PRINCIPAL ─────────────────────────────────────────────────────
 export function BKOGestaoCorbans({ profile }){
-  const [corbans, setCorbans] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [dragId, setDragId] = useState(null);
-  const [search, setSearch] = useState('');
-  const [collapsedCols, setCollapsedCols] = useState(new Set());
-  const [selected, setSelected] = useState(null);
-  const [novoOpen, setNovoOpen] = useState(false);
+  const [corbans,      setCorbans]      = useState([]);
+  const [loading,      setLoading]      = useState(true);
+  const [dragId,       setDragId]       = useState(null);
+  const [search,       setSearch]       = useState('');
+  const [collapsedCols,setCollapsedCols]= useState(new Set());
+  const [selected,     setSelected]     = useState(null);
+  const [novoOpen,     setNovoOpen]     = useState(false);
   const [responsaveis, setResponsaveis] = useState([]);
   const colsRef = useRef(null);
 
   const toggleCol = (id) => setCollapsedCols(prev=>{const n=new Set(prev);n.has(id)?n.delete(id):n.add(id);return n;});
 
-  // Carregar responsáveis (quem tem acesso ao funil)
+  // Carregar responsáveis
   useEffect(()=>{
     supabase.from('profiles')
       .select('id,nome')
@@ -318,7 +527,7 @@ export function BKOGestaoCorbans({ profile }){
       .then(({data})=>setResponsaveis(data||[]));
   },[]);
 
-  // Carregar corbans
+  // Carregar corbans + realtime
   useEffect(()=>{
     supabase.from('gestao_corbans')
       .select('*')
@@ -342,7 +551,15 @@ export function BKOGestaoCorbans({ profile }){
   const filtered = useMemo(()=>{
     if(!search.trim()) return corbans;
     const s = search.toLowerCase();
-    return corbans.filter(c=>c.nome?.toLowerCase().includes(s)||c.localizacao?.toLowerCase().includes(s)||c.responsavel_nome?.toLowerCase().includes(s));
+    return corbans.filter(c=>
+      c.nome?.toLowerCase().includes(s) ||
+      c.localizacao?.toLowerCase().includes(s) ||
+      c.responsavel_nome?.toLowerCase().includes(s) ||
+      c.pj_cnpj?.includes(s.replace(/\D/g,'')) ||
+      c.pf_nome?.toLowerCase().includes(s) ||
+      c.pf_email?.toLowerCase().includes(s) ||
+      c.pj_telefone?.includes(s.replace(/\D/g,''))
+    );
   },[corbans,search]);
 
   const onMove = useCallback(async(id, novoEstagio)=>{
@@ -366,7 +583,8 @@ export function BKOGestaoCorbans({ profile }){
     setNovoOpen(false);
   },[]);
 
-  const totalAtivos = corbans.filter(c=>c.estagio!=='inativo').length;
+  const totalAtivos  = corbans.filter(c=>c.estagio!=='inativo'&&c.estagio!=='rascunho').length;
+  const totalPortal  = corbans.filter(c=>c.origem_portal).length;
 
   return(
     <div style={{display:'flex',flexDirection:'column',height:'100%',overflow:'hidden'}}>
@@ -374,12 +592,19 @@ export function BKOGestaoCorbans({ profile }){
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'16px 20px 0',flexShrink:0,marginBottom:16,flexWrap:'wrap',gap:12}}>
         <div>
           <div className="section-title">Gestão de Corbans</div>
-          <div className="section-sub">{totalAtivos} corbans ativos · arraste para mover</div>
+          <div className="section-sub">
+            {totalAtivos} corbans ativos · arraste para mover
+            {totalPortal > 0 && (
+              <span style={{marginLeft:8,fontSize:10,fontWeight:700,padding:'1px 7px',borderRadius:4,background:'rgba(139,92,246,.12)',color:'#7C3AED',border:'1px solid rgba(139,92,246,.18)'}}>
+                ⚡ {totalPortal} do portal
+              </span>
+            )}
+          </div>
         </div>
         <div style={{display:'flex',gap:8,alignItems:'center'}}>
           <div style={{position:'relative',width:220}}>
             <span style={{position:'absolute',left:10,top:'50%',transform:'translateY(-50%)',color:'var(--text-faint)',fontSize:12}}>⌕</span>
-            <input className="inp" style={{paddingLeft:30,height:34,fontSize:12}} placeholder="Buscar corban…" value={search} onChange={e=>setSearch(e.target.value)}/>
+            <input className="inp" style={{paddingLeft:30,height:34,fontSize:12}} placeholder="Buscar corban, CNPJ, e-mail…" value={search} onChange={e=>setSearch(e.target.value)}/>
           </div>
           <button className="btn" style={{background:B_MID,color:'#fff',boxShadow:`0 3px 12px rgba(59,91,219,.28)`}} onClick={()=>setNovoOpen(true)}>
             + Novo Corban
