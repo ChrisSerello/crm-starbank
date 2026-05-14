@@ -1374,7 +1374,10 @@ export function BKOApp({profile,session,signOut,onAlterarSenha,userModules,onSwi
       syncQueueRef.current.clear();
       await Promise.all(toSync.map(async c=>{
         const {id,estagio,criado_por_id,criado_por_nome,criado_por_role,atribuido_a_id,atribuido_a_nome,responsavel_bko_id,responsavel_bko_nome,...data}=c;
-        const {error}=await supabase.from('bko_clientes').upsert({id,data:{...data,id},estagio:estagio||'clientes_novos',criado_por_id:criado_por_id||session.user.id,criado_por_nome:criado_por_nome||profile?.nome,criado_por_role:criado_por_role||profile?.role,atribuido_a_id:atribuido_a_id||null,atribuido_a_nome:atribuido_a_nome||null,responsavel_bko_id:responsavel_bko_id||null,responsavel_bko_nome:responsavel_bko_nome||null},{onConflict:'id'});
+        // IMPORTANTE: responsavel_bko_id/nome NÃO são incluídos no upsert genérico.
+        // Esses campos são gerenciados EXCLUSIVAMENTE pelo botão Assumir/Liberar no BKODetail,
+        // que faz update direto no banco. Isso evita que o sync de outro BKO sobrescreva a responsabilidade.
+        const {error}=await supabase.from('bko_clientes').upsert({id,data:{...data,id},estagio:estagio||'clientes_novos',criado_por_id:criado_por_id||session.user.id,criado_por_nome:criado_por_nome||profile?.nome,criado_por_role:criado_por_role||profile?.role,atribuido_a_id:atribuido_a_id||null,atribuido_a_nome:atribuido_a_nome||null},{onConflict:'id'});
         if(error) console.error('BKO sync error:',id,error.message);
       }));
     },600);

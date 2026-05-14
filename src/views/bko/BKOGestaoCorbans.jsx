@@ -18,12 +18,12 @@ const fmtTel = v =>
     ? v.replace(/\D/g,'').replace(/^(\d{2})(\d{5})(\d{4})$/, '($1) $2-$3')
     : (v || '');
 
-// ─── Estágios ─────────────────────────────────────────────────────────────────
+// Estágios
 const GC_STAGES = [
   { id:'rascunho',          label:'Rascunho',           color:'#8B5CF6', bg:'rgba(139,92,246,.08)' },
   { id:'inativo',           label:'Inativo',            color:'#6B7280', bg:'rgba(107,114,128,.1)'  },
   { id:'ativo_sem_producao',label:'Ativo Sem Produção',  color:'#F59E0B', bg:'rgba(245,158,11,.1)'   },
-  { id:'novo',              label:'Novos',                color:'#3B5BDB', bg:'rgba(59,91,219,.1)'    },
+  { id:'novo',              label:'Novo',                color:'#3B5BDB', bg:'rgba(59,91,219,.1)'    },
   { id:'20mil',             label:'20 Mil',              color:'#0EA5E9', bg:'rgba(14,165,233,.1)'   },
   { id:'100mil',            label:'100 Mil',             color:'#10B981', bg:'rgba(16,185,129,.1)'   },
   { id:'300mil',            label:'300 Mil',             color:'#7C3AED', bg:'rgba(124,58,237,.1)'   },
@@ -31,7 +31,7 @@ const GC_STAGES = [
   { id:'1milhao',           label:'1 Milhão',            color:'#EF4444', bg:'rgba(239,68,68,.1)'    },
 ];
 
-// ─── Portal Row (linha de dado somente-leitura) ────────────────────────────────
+// Portal Row (linha de dado somente-leitura) 
 function PortalRow({ label, value }) {
   if (!value) return null;
   return (
@@ -45,7 +45,7 @@ function PortalRow({ label, value }) {
   );
 }
 
-// ─── Portal Badge ─────────────────────────────────────────────────────────────
+// Portal Badge 
 function PortalBadge({ style={} }) {
   return (
     <span style={{
@@ -60,7 +60,7 @@ function PortalBadge({ style={} }) {
   );
 }
 
-// ─── CARD ────────────────────────────────────────────────────────────────────
+// ─── CARD (opção B — lateral colorida) ───────────────────────────────────────
 function GCCard({ c, onSelect, setDragId, onMove, profile }){
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuPos, setMenuPos]   = useState({top:0,left:0});
@@ -87,70 +87,115 @@ function GCCard({ c, onSelect, setDragId, onMove, profile }){
   const tel   = fmtTel(c.pj_telefone || c.pf_telefone);
   const cnpj  = fmtCNPJ(c.pj_cnpj);
 
+  // iniciais do responsável para o avatar
+  const initials = c.responsavel_nome
+    ? c.responsavel_nome.split(' ').slice(0,2).map(n=>n[0]).join('').toUpperCase()
+    : null;
+
   return(
     <>
+      {/* ── Card ── */}
       <div
         draggable
         onDragStart={()=>setDragId(c.id)}
         onClick={(e)=>{if(!e.defaultPrevented)onSelect(c);}}
         style={{
-          background:'var(--bg-card)', border:'1px solid var(--border)',
-          borderRadius:10, padding:'10px 12px', marginBottom:7,
-          cursor:'pointer', position:'relative', transition:'all .15s',
+          background:'var(--bg-card)',
+          border:'1px solid var(--border)',
+          borderLeft:`3px solid ${stage?.color||'#8B5CF6'}`,
+          borderRadius:8,
+          padding:'10px 12px',
+          marginBottom:7,
+          cursor:'pointer',
+          position:'relative',
+          transition:'border-color .15s, box-shadow .15s',
         }}
         onMouseEnter={e=>{
-          e.currentTarget.style.borderColor=stage?.color+'60';
-          e.currentTarget.style.boxShadow=`0 2px 8px ${stage?.color}15`;
+          e.currentTarget.style.boxShadow=`0 2px 8px ${stage?.color}18`;
+          e.currentTarget.style.borderColor=stage?.color||'#8B5CF6';
         }}
         onMouseLeave={e=>{
+          e.currentTarget.style.boxShadow='none';
           e.currentTarget.style.borderColor='var(--border)';
-          e.currentTarget.style.boxShadow='';
+          e.currentTarget.style.borderLeftColor=stage?.color||'#8B5CF6';
         }}
       >
-        {/* Badge Portal */}
-        {c.origem_portal && <PortalBadge style={{marginBottom:5,display:'inline-flex'}}/>}
+        {/* badge portal */}
+        {c.origem_portal && (
+          <span style={{
+            display:'inline-flex',alignItems:'center',gap:3,
+            fontSize:9,fontWeight:700,padding:'1px 6px',borderRadius:3,
+            background:'rgba(139,92,246,.1)',color:'#7C3AED',
+            marginBottom:6,letterSpacing:'.03em',
+          }}>
+            ⚡ Portal
+          </span>
+        )}
 
-        <div style={{fontSize:12,fontWeight:600,color:'var(--text-primary)',marginBottom:3,paddingRight:22,lineHeight:1.3}}>
+        {/* nome */}
+        <div style={{
+          fontSize:12,fontWeight:600,color:'var(--text-primary)',
+          lineHeight:1.3,marginBottom:7,paddingRight:22,
+        }}>
           {c.nome}
         </div>
 
-        {c.localizacao && (
-          <div style={{fontSize:10,color:'var(--text-muted)',marginBottom:2}}>📍 {c.localizacao}</div>
-        )}
+        {/* linhas de info */}
         {cnpj && (
-          <div style={{fontSize:10,color:'var(--text-muted)',marginBottom:2,fontFamily:'monospace',letterSpacing:'.02em'}}>
-            🏢 {cnpj}
+          <div style={{display:'flex',alignItems:'center',gap:5,fontSize:11,color:'var(--text-muted)',marginBottom:3}}>
+            <span style={{fontSize:12,opacity:.6}}>🏢</span> {cnpj}
           </div>
         )}
         {tel && (
-          <div style={{fontSize:10,color:'var(--text-muted)',marginBottom:2}}>📞 {tel}</div>
+          <div style={{display:'flex',alignItems:'center',gap:5,fontSize:11,color:'var(--text-muted)',marginBottom:3}}>
+            <span style={{fontSize:12,opacity:.6}}>📞</span> {tel}
+          </div>
         )}
         {c.saldo_produzido && (
-          <div style={{fontSize:10,fontWeight:700,color:'#10B981',marginBottom:3}}>💰 {c.saldo_produzido}</div>
-        )}
-        {c.responsavel_nome && (
-          <div style={{marginTop:6,paddingTop:6,borderTop:'1px solid var(--border)',fontSize:9,color:'var(--text-muted)'}}>
-            {c.responsavel_nome}
+          <div style={{display:'flex',alignItems:'center',gap:5,fontSize:11,fontWeight:700,color:'#10B981',marginBottom:3}}>
+            <span style={{fontSize:12}}>💰</span> {c.saldo_produzido}
           </div>
         )}
 
+        {/* rodapé: avatar + responsável */}
+        <div style={{
+          display:'flex',alignItems:'center',gap:6,
+          marginTop:8,paddingTop:7,
+          borderTop:'1px solid var(--border)',
+        }}>
+          <div style={{
+            width:18,height:18,borderRadius:'50%',flexShrink:0,
+            background: initials ? 'rgba(59,91,219,.12)' : 'rgba(0,0,0,.06)',
+            display:'flex',alignItems:'center',justifyContent:'center',
+            fontSize:8,fontWeight:700,
+            color: initials ? '#3B5BDB' : 'var(--text-faint)',
+          }}>
+            {initials || '—'}
+          </div>
+          <span style={{fontSize:10,color: initials ? 'var(--text-muted)' : 'var(--text-faint)'}}>
+            {c.responsavel_nome || 'Sem responsável'}
+          </span>
+        </div>
+
+        {/* botão menu */}
         <button ref={btnRef} onClick={openMenu}
           style={{
-            position:'absolute', top:6, right:6,
-            background:'rgba(0,0,0,.06)', border:'none', borderRadius:5,
-            cursor:'pointer', width:20, height:20,
-            display:'flex', alignItems:'center', justifyContent:'center',
-            fontSize:11, color:'var(--text-muted)', lineHeight:1, padding:0,
+            position:'absolute',top:8,right:8,
+            background:'rgba(0,0,0,.06)',border:'none',borderRadius:5,
+            cursor:'pointer',width:20,height:20,
+            display:'flex',alignItems:'center',justifyContent:'center',
+            fontSize:11,color:'var(--text-muted)',lineHeight:1,padding:0,
           }}>⋯</button>
       </div>
 
+      {/* ── Menu contextual ── */}
       {menuOpen&&ReactDOM.createPortal(
         <div data-gc-menu="1" onMouseDown={e=>e.stopPropagation()}
           style={{
-            position:'fixed', top:menuPos.top, left:Math.max(8,menuPos.left),
-            zIndex:9999, background:'var(--bg-card)',
-            border:'1px solid var(--border)', borderRadius:10,
-            boxShadow:'0 8px 24px rgba(0,0,0,.18)', minWidth:200, overflow:'hidden',
+            position:'fixed',top:menuPos.top,left:Math.max(8,menuPos.left),
+            zIndex:9999,background:'var(--bg-card)',
+            border:'1px solid var(--border)',borderRadius:10,
+            boxShadow:'0 8px 24px rgba(0,0,0,.18)',minWidth:200,overflow:'hidden',
           }}>
           <div style={{padding:'7px 12px',fontSize:9,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.08em',borderBottom:'1px solid var(--border)'}}>
             Mover para…
@@ -392,7 +437,7 @@ function GCDetalhe({ corban, onClose, onSave, onDelete, responsaveis }){
           <div>
             <label style={{display:'block',fontSize:10,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:5}}>Responsável</label>
             <select className="sel" value={form.responsavel_id||''} onChange={e=>set('responsavel_id',e.target.value)}>
-              <option value="">Sem responsável</option>
+              <option value="">— Sem responsável —</option>
               {responsaveis.map(r=><option key={r.id} value={r.id}>{r.nome}</option>)}
             </select>
           </div>

@@ -1,14 +1,12 @@
 /**
  * BKODetail — painel lateral de detalhes do cliente BKO
  *
- * MUDANÇAS nesta versão:
- * 1. Saldo Devedor → editável por bko, corban_bko e comercial
- * 2. Observações BKO → virou log imutável (como o chat):
- *    - qualquer um dos 3 perfis pode adicionar uma entrada
- *    - ninguém edita ou apaga mensagens já enviadas (nem o próprio autor)
- *    - cada entrada exibe: avatar + nome + badge do setor + data + texto
- * 3. Compatibilidade legada: se existir o campo antigo `observacoesBko` (string),
- *    ele é exibido como "Registro anterior" sem poder ser editado.
+ * CORREÇÕES nesta versão:
+ * - Estados de atribuição separados: atribCorbanId (corban) e atribStartecId (startec)
+ *   Antes compartilhavam o mesmo estado, causando o nome salvo como null quando
+ *   o usuário interagia com os dois dropdowns em sequência.
+ * - useEffect de operadoresStartec agora inclui isComercial na dependency array.
+ * - Botão de atribuição Startec chama salvarAtribuicaoStartec (função correta).
  */
 
 import { useState, useEffect, useRef } from 'react';
@@ -20,7 +18,6 @@ import { Avatar, StageTag } from '../../components/shared';
 const fmtDH=(ts)=>{
   if(!ts) return '—';
   try{
-    // Se for só data (YYYY-MM-DD), mostra só a data sem horário
     if(/^\d{4}-\d{2}-\d{2}$/.test(ts)){
       const [y,m,d]=ts.split('-');
       return `${d}/${m}/${y.slice(2)}`;
@@ -37,16 +34,15 @@ const B_LIGHT = 'rgba(59,91,219,0.10)';
 const B_GLOW  = 'rgba(59,91,219,0.28)';
 
 const BKO_STAGES = [
-  { id:'clientes_novos',   label:'Corb novos entrantes',              color:'#3B5BDB', bg:'rgba(59,91,219,.1)'  },
-  { id:'saldo_andamento',  label:'BKO - Saldo Devedor',    color:'#7C3AED', bg:'rgba(124,58,237,.1)' },
-  { id:'em_negociacao',    label:'Em negociação - Corban',      color:'#0EA5E9', bg:'rgba(14,165,233,.1)' },
-  { id:'abertura_conta',   label:'Abertura de conta - Interno',  color:'#10B981', bg:'rgba(16,185,129,.1)' },
-  { id:'digitar_proposta', label:'Pronto p digitar - Corban',   color:'#F59E0B', bg:'rgba(245,158,11,.1)' },
-  { id:'integrado',        label:'Finalizado - Interno',                   color:'#22C55E', bg:'rgba(34,197,94,.1)'  },
-  { id:'perdido',          label:'Perdidos',                     color:'#EF4444', bg:'rgba(239,68,68,.1)'  },
+  { id:'clientes_novos',   label:'Corb novos entrantes',             color:'#3B5BDB', bg:'rgba(59,91,219,.1)'  },
+  { id:'saldo_andamento',  label:'BKO - Saldo Devedor',              color:'#7C3AED', bg:'rgba(124,58,237,.1)' },
+  { id:'em_negociacao',    label:'Em negociação - Corban',           color:'#0EA5E9', bg:'rgba(14,165,233,.1)' },
+  { id:'abertura_conta',   label:'Abertura de conta - Interno',      color:'#10B981', bg:'rgba(16,185,129,.1)' },
+  { id:'digitar_proposta', label:'Pronto p digitar - Corban',        color:'#F59E0B', bg:'rgba(245,158,11,.1)' },
+  { id:'integrado',        label:'Finalizado - Interno',             color:'#22C55E', bg:'rgba(34,197,94,.1)'  },
+  { id:'perdido',          label:'Perdidos',                         color:'#EF4444', bg:'rgba(239,68,68,.1)'  },
 ];
 
-// Mapa de cores e labels por setor — igual ao chat
 const ROLE_COLOR = { comercial:'#3B5BDB', corban_bko:'#0EA5E9', bko:'#7C3AED', startec:'#059669', supervisor_startec:'#0D9488' };
 const ROLE_LABEL = { comercial:'Comercial', corban_bko:'Corban', bko:'BKO', startec:'Startec', supervisor_startec:'Supervisor' };
 
@@ -60,20 +56,23 @@ export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
   const [uploading, setUploading] = useState(false);
   const [uploadMsg, setUploadMsg] = useState(null);
 
-  // Atribuição Corban (só Comercial)
-  const [corbans, setCorbans]         = useState([]);
-  const [atribuidoId, setAtribuidoId] = useState(cliente.atribuido_a_id || '');
-  const [atribuindo, setAtribuindo]   = useState(false);
-  const [atribMsg, setAtribMsg]       = useState(null);
+  // ── Atribuição Corban (Comercial) — estado separado ──
+  const [corbans, setCorbans]             = useState([]);
+  const [atribCorbanId, setAtribCorbanId] = useState(cliente.atribuido_a_id || '');
+  const [atribuindo, setAtribuindo]       = useState(false);
+  const [atribMsg, setAtribMsg]           = useState(null);
 
-  // Atribuição Startec (usa mesmo campo atribuido_a_id)
-  const [operadoresStartec, setOperadoresStartec] = useState([]);
+  // ── Atribuição Startec — estado separado ──
+  const [operadoresStartec, setOperadoresStartec]   = useState([]);
+  const [atribStartecId, setAtribStartecId]         = useState(cliente.atribuido_a_id || '');
+  const [atribuindoStartec, setAtribuindoStartec]   = useState(false);
+  const [atribStartecMsg, setAtribStartecMsg]       = useState(null);
 
   // Responsável BKO
-  const [respMsg, setRespMsg]         = useState(null);
+  const [respMsg, setRespMsg]           = useState(null);
   const [salvandoResp, setSalvandoResp] = useState(false);
 
-  // Saldo — botão salvar
+  // Saldo
   const [salvandoSaldo, setSalvandoSaldo] = useState(false);
   const [saldoMsg, setSaldoMsg]           = useState(null);
 
@@ -81,8 +80,8 @@ export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
   const [novaObs, setNovaObs] = useState('');
 
   // Chat
-  const [chatMsgs, setChatMsgs]   = useState([]);
-  const [chatInput, setChatInput] = useState('');
+  const [chatMsgs, setChatMsgs]     = useState([]);
+  const [chatInput, setChatInput]   = useState('');
   const [chatLoading, setChatLoading] = useState(false);
   const chatEndRef = useRef(null);
 
@@ -93,57 +92,29 @@ export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
   const isStartec           = r === 'startec';
   const isSupervisorStartec = r === 'supervisor_startec';
 
-  // Estados para edição de dados básicos
-  const [editando, setEditando]     = useState(false);
-  const [nomeEdit, setNomeEdit]     = useState(cliente.nomeCliente || '');
-  const [cpfEdit, setCpfEdit]       = useState(cliente.cpfCliente || '');
-  const [telEdit, setTelEdit]       = useState(cliente.telefone || '');
+  // Edição de dados básicos
+  const [editando, setEditando]         = useState(false);
+  const [nomeEdit, setNomeEdit]         = useState(cliente.nomeCliente || '');
+  const [cpfEdit, setCpfEdit]           = useState(cliente.cpfCliente || '');
+  const [telEdit, setTelEdit]           = useState(cliente.telefone || '');
   const [salvandoEdit, setSalvandoEdit] = useState(false);
-  const [editMsg, setEditMsg]       = useState(null);
+  const [editMsg, setEditMsg]           = useState(null);
 
-  // Observações: todos os perfis podem adicionar entradas
-  const podeInteragir   = isBko || isComercial || isCorban || isStartec || isSupervisorStartec;
-  // Saldo Devedor: apenas BKO pode editar
-  const podeEditarSaldo = isBko;
-  // Atribuição Startec: supervisor_startec pode atribuir/reatribuir operadores startec
+  const podeInteragir       = isBko || isComercial || isCorban || isStartec || isSupervisorStartec;
+  const podeEditarSaldo     = isBko;
   const podeAtribuirStartec = isSupervisorStartec || isComercial;
 
-  // ── Permissão de edição de dados básicos ──
-  // Comercial: pode editar todos
-  // BKO: não pode editar ninguém
-  // Supervisor (Maicon/Nair): pode editar clientes que ele cadastrou + todos os startec
-  // Startec/Corban: pode editar clientes que cadastrou ou que estão atribuídos a ele
   const podeEditar = (() => {
-    if (isComercial && !profile?.is_supervisor) return true; // comercial normal edita tudo
-    if (isBko) return false; // BKO não edita
-    if (profile?.is_supervisor) {
-      // supervisor edita os que ele cadastrou + todos os startec
-      return cliente.criado_por_id === profile?.id || cliente.origem === 'startec';
-    }
-    if (isStartec || isCorban) {
-      // edita os que cadastrou ou que estão atribuídos a ele
-      return cliente.criado_por_id === profile?.id || cliente.atribuido_a_id === profile?.id;
-    }
+    if (isComercial && !profile?.is_supervisor) return true;
+    if (isBko) return false;
+    if (profile?.is_supervisor) return cliente.criado_por_id === profile?.id || cliente.origem === 'startec';
+    if (isStartec || isCorban) return cliente.criado_por_id === profile?.id || cliente.atribuido_a_id === profile?.id;
     return false;
   })();
-
-  const salvarAtribuicaoStartecDireto = async () => {
-    const opSel = operadoresStartec.find(o => o.id === atribuidoId);
-    setAtribuindo(true);
-    setAtribMsg(null);
-    const { error } = await supabase.from('bko_clientes')
-      .update({ atribuido_a_id: atribuidoId || null, atribuido_a_nome: opSel?.nome || null })
-      .eq('id', cliente.id);
-    setAtribuindo(false);
-    if (error) { setAtribMsg({ t: 'error', text: 'Erro ao atribuir.' }); return; }
-    dispatch({ type: 'UPD', c: { ...cliente, atribuido_a_id: atribuidoId || null, atribuido_a_nome: opSel?.nome || null } });
-    setAtribMsg({ t: 'success', text: `Atribuído a ${opSel?.nome || 'ninguém'}!` });
-  };
 
   const euSouResponsavel = isBko && cliente.responsavel_bko_id === profile?.id;
   const temResponsavel   = !!cliente.responsavel_bko_id;
 
-  // Log de observações (novo campo array) + compatibilidade com string legada
   const obsLog    = cliente.observacoesBkoLog || [];
   const obsLegada = !obsLog.length && cliente.observacoesBko ? cliente.observacoesBko : null;
 
@@ -161,13 +132,13 @@ export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
     });
   }, [isComercial]);
 
-  // ── Carregar operadores startec (só supervisor_startec) ──
+  // ── Carregar operadores startec ──
   useEffect(() => {
     if (!isSupervisorStartec && !isComercial) return;
     supabase.from('profiles').select('id,nome,email')
       .eq('modulo', 'bko').eq('role', 'startec').order('nome')
       .then(({ data }) => setOperadoresStartec(data || []));
-  }, [isSupervisorStartec]);
+  }, [isSupervisorStartec, isComercial]); // ✅ isComercial incluído
 
   // ── Chat realtime ──
   useEffect(() => {
@@ -213,14 +184,11 @@ export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
     setTimeout(() => setSaldoMsg(null), 2500);
   };
 
-  // Adiciona entrada ao log — imutável após envio
-  // Salvar edição de dados básicos com log de alterações
   const salvarEdicao = async () => {
     if (!nomeEdit.trim()) { setEditMsg({ t: 'error', text: 'Nome é obrigatório.' }); return; }
     setSalvandoEdit(true);
     setEditMsg(null);
 
-    // Montar log das alterações
     const alteracoes = [];
     if (nomeEdit.trim() !== cliente.nomeCliente) alteracoes.push(`Nome: "${cliente.nomeCliente}" → "${nomeEdit.trim()}"`);
     if (cpfEdit.trim() !== (cliente.cpfCliente||'')) alteracoes.push(`CPF: "${cliente.cpfCliente}" → "${cpfEdit.trim()}"`);
@@ -229,27 +197,14 @@ export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
 
     if (alteracoes.length === 0) { setEditando(false); setSalvandoEdit(false); return; }
 
-    // Adicionar ao histórico de atividades
     const novaActivity = {
-      id: gid(),
-      type: 'edit',
-      date: TODAY,
+      id: gid(), type: 'edit', date: TODAY,
       user: profile?.nome || 'Usuário',
       text: `Editou dados: ${alteracoes.join(' · ')}`,
     };
     const activities = [...(cliente.activities || []), novaActivity];
 
-    dispatch({
-      type: 'UPD',
-      c: {
-        ...cliente,
-        nomeCliente: nomeEdit.trim(),
-        cpfCliente: cpfEdit.trim(),
-        telefone: telEdit.trim(),
-        prefeitura: prefeituraEdit.trim(),
-        activities,
-      }
-    });
+    dispatch({ type: 'UPD', c: { ...cliente, nomeCliente: nomeEdit.trim(), cpfCliente: cpfEdit.trim(), telefone: telEdit.trim(), prefeitura: prefeituraEdit.trim(), activities } });
 
     setSalvandoEdit(false);
     setEditando(false);
@@ -269,21 +224,16 @@ export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
   const adicionarObs = () => {
     if (!novaObs.trim()) return;
     const entrada = {
-      id:          gid(),
-      texto:       novaObs.trim(),
-      autor_nome:  profile?.nome || 'Usuário',
-      autor_role:  r,
-      data:        TODAY,
-      dataHora:    new Date().toISOString(),
+      id: gid(), texto: novaObs.trim(),
+      autor_nome: profile?.nome || 'Usuário', autor_role: r,
+      data: TODAY, dataHora: new Date().toISOString(),
     };
-    const novoLog = [...obsLog, entrada];
-    dispatch({ type: 'UPD', c: { ...cliente, observacoesBkoLog: novoLog } });
+    dispatch({ type: 'UPD', c: { ...cliente, observacoesBkoLog: [...obsLog, entrada] } });
     setNovaObs('');
   };
 
   const assumirResponsabilidade = async () => {
-    setSalvandoResp(true);
-    setRespMsg(null);
+    setSalvandoResp(true); setRespMsg(null);
     const { error } = await supabase.from('bko_clientes')
       .update({ responsavel_bko_id: profile?.id, responsavel_bko_nome: profile?.nome })
       .eq('id', cliente.id);
@@ -296,31 +246,29 @@ export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
   const liberarResponsabilidade = async () => {
     if (!confirm('Liberar responsabilidade deste cliente?')) return;
     setSalvandoResp(true);
-    await supabase.from('bko_clientes')
-      .update({ responsavel_bko_id: null, responsavel_bko_nome: null })
-      .eq('id', cliente.id);
+    await supabase.from('bko_clientes').update({ responsavel_bko_id: null, responsavel_bko_nome: null }).eq('id', cliente.id);
     setSalvandoResp(false);
     dispatch({ type: 'UPD', c: { ...cliente, responsavel_bko_id: null, responsavel_bko_nome: null } });
     setRespMsg(null);
   };
 
-  const salvarAtribuicao = async () => {
-    const corbanSel = corbans.find(c => c.id === atribuidoId);
-    setAtribuindo(true);
-    setAtribMsg(null);
+  // ✅ Atribuição Corban — busca em corbans[]
+  const salvarAtribuicaoCorban = async () => {
+    const corbanSel = corbans.find(c => c.id === atribCorbanId);
+    setAtribuindo(true); setAtribMsg(null);
     const { error } = await supabase.from('bko_clientes')
-      .update({ atribuido_a_id: atribuidoId || null, atribuido_a_nome: corbanSel?.nome || null })
+      .update({ atribuido_a_id: atribCorbanId || null, atribuido_a_nome: corbanSel?.nome || null })
       .eq('id', cliente.id);
     setAtribuindo(false);
     if (error) { setAtribMsg({ t: 'error', text: 'Erro ao atribuir.' }); return; }
-    dispatch({ type: 'UPD', c: { ...cliente, atribuido_a_id: atribuidoId || null, atribuido_a_nome: corbanSel?.nome || null } });
+    dispatch({ type: 'UPD', c: { ...cliente, atribuido_a_id: atribCorbanId || null, atribuido_a_nome: corbanSel?.nome || null } });
     setAtribMsg({ t: 'success', text: `Atribuído a ${corbanSel?.nome || 'ninguém'}!` });
   };
 
+  // ✅ Atribuição Startec — busca em operadoresStartec[]
   const salvarAtribuicaoStartec = async () => {
     const opSel = operadoresStartec.find(o => o.id === atribStartecId);
-    setAtribuindoStartec(true);
-    setAtribStartecMsg(null);
+    setAtribuindoStartec(true); setAtribStartecMsg(null);
     const { error } = await supabase.from('bko_clientes')
       .update({ atribuido_a_id: atribStartecId || null, atribuido_a_nome: opSel?.nome || null })
       .eq('id', cliente.id);
@@ -341,8 +289,7 @@ export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
     const file = e.target.files[0];
     if (!file) return;
     if (file.size > 10 * 1024 * 1024) { setUploadMsg({ t: 'error', text: 'Máximo 10MB.' }); return; }
-    setUploading(true);
-    setUploadMsg(null);
+    setUploading(true); setUploadMsg(null);
     const safeName = file.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9._-]/g, '_');
     const path = `bko/${cliente.id}/${Date.now()}_${safeName}`;
     const { error } = await supabase.storage.from('documentos').upload(path, file);
@@ -350,17 +297,14 @@ export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
       const msg = error.message?.includes('Bucket') ? 'Bucket "documentos" não encontrado.'
         : error.message?.includes('security') || error.message?.includes('policy') ? 'Sem permissão para upload.'
         : `Erro: ${error.message}`;
-      setUploadMsg({ t: 'error', text: msg });
-      setUploading(false);
-      return;
+      setUploadMsg({ t: 'error', text: msg }); setUploading(false); return;
     }
     const { data: { publicUrl } } = supabase.storage.from('documentos').getPublicUrl(path);
     const novos = [...docs, { nome: file.name, path, url: publicUrl, data: new Date().toISOString(), enviadoPor: profile?.nome }];
     setDocs(novos);
     dispatch({ type: 'UPD', c: { ...cliente, documentos: novos } });
     setUploadMsg({ t: 'success', text: `"${file.name}" enviado!` });
-    setUploading(false);
-    e.target.value = '';
+    setUploading(false); e.target.value = '';
   };
 
   const handleDeleteDoc = async (doc) => {
@@ -426,20 +370,19 @@ export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
         {/* ══════════════════ ABA: INFORMAÇÕES ══════════════════ */}
         {tab === 'info' && (
           <div>
-            {/* Modo visualização */}
             {!editando && (
               <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden', marginBottom: 14 }}>
                 {[
-                  ['CPF',             cliente.cpfCliente || '—'],
-                  ['Telefone',        cliente.telefone || '—'],
-                  ['Prefeitura',      cliente.prefeitura || '—'],
-                  ['Data entrada',    fmtD(cliente.dataEntrada)],
-                  ['Criado em',       cliente.created_at ? fmtDH(cliente.created_at) : '—'],
-                  ['Criado por',      cliente.criado_por_nome || '—'],
-                  ['Atribuído a',     cliente.atribuido_a_nome || 'Não atribuído'],
-                  ['Responsável BKO', cliente.responsavel_bko_nome || 'Sem responsável'],
+                  ['CPF',              cliente.cpfCliente || '—'],
+                  ['Telefone',         cliente.telefone || '—'],
+                  ['Prefeitura',       cliente.prefeitura || '—'],
+                  ['Data entrada',     fmtD(cliente.dataEntrada)],
+                  ['Criado em',        cliente.created_at ? fmtDH(cliente.created_at) : '—'],
+                  ['Criado por',       cliente.criado_por_nome || '—'],
+                  ['Atribuído a',      cliente.atribuido_a_nome || 'Não atribuído'],
+                  ['Responsável BKO',  cliente.responsavel_bko_nome || 'Sem responsável'],
                   ['Operador Startec', cliente.atribuido_startec_nome || 'Não atribuído'],
-                  ['Último contato',  fmtD(cliente.ultimoContato)],
+                  ['Último contato',   fmtD(cliente.ultimoContato)],
                 ].map(([k, v]) => (
                   <div key={k} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', borderBottom: '1px solid var(--border)' }}>
                     <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{k}</span>
@@ -449,7 +392,6 @@ export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
               </div>
             )}
 
-            {/* Modo edição */}
             {editando && (
               <div style={{background:'var(--bg-card)',border:'1px solid rgba(59,91,219,.3)',borderRadius:10,padding:14,marginBottom:14,boxShadow:'0 0 0 3px rgba(59,91,219,.08)'}}>
                 <div style={{fontSize:10,fontWeight:700,color:'#3B5BDB',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:12}}>✎ Editando dados do cliente</div>
@@ -481,26 +423,22 @@ export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
               </div>
             )}
 
-            {/* Prefeitura no modo visualização — campo editável separado só quando não está em modo edição */}
-            {!editando && (
-              <div style={{ marginBottom: 14, display:'none' }}>
-                <input className="inp" value={prefeituraEdit} onChange={e => setPrefeituraEdit(e.target.value)} placeholder="Nome da prefeitura…" />
-              </div>
-            )}
-
+            {/* ── Atribuição Corban (só Comercial) ── */}
             {isComercial && (
               <div style={{ marginBottom: 16, padding: 14, background: B_LIGHT, borderRadius: 10, border: `1px solid ${B_MID}25` }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: B_MID, marginBottom: 8 }}>👤 Atribuir cliente a Corban</div>
-                <select className="sel" style={{ marginBottom: 8 }} value={atribuidoId} onChange={e => setAtribuidoId(e.target.value)}>
+                <select className="sel" style={{ marginBottom: 8 }} value={atribCorbanId} onChange={e => setAtribCorbanId(e.target.value)}>
                   <option value="">— Sem atribuição —</option>
                   {corbans.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
                 </select>
                 {atribMsg && <div style={{ fontSize: 11, padding: '6px 10px', borderRadius: 7, marginBottom: 8, background: atribMsg.t === 'success' ? 'var(--success-dim)' : 'var(--danger-dim)', color: atribMsg.t === 'success' ? 'var(--success)' : 'var(--danger)' }}>{atribMsg.text}</div>}
-                <button style={{ width: '100%', padding: '8px 0', borderRadius: 8, background: B_MID, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', border: 'none', opacity: atribuindo ? 0.7 : 1 }} onClick={salvarAtribuicao} disabled={atribuindo}>{atribuindo ? 'Salvando…' : '✓ Confirmar atribuição'}</button>
+                <button style={{ width: '100%', padding: '8px 0', borderRadius: 8, background: B_MID, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', border: 'none', opacity: atribuindo ? 0.7 : 1 }} onClick={salvarAtribuicaoCorban} disabled={atribuindo}>
+                  {atribuindo ? 'Salvando…' : '✓ Confirmar atribuição'}
+                </button>
               </div>
             )}
 
-            {/* Atribuição Startec — usa mesmo campo atribuido_a_id */}
+            {/* ── Atribuição Startec ── */}
             {podeAtribuirStartec && (
               <div style={{ marginBottom: 16, padding: 14, background: 'rgba(5,150,105,.08)', borderRadius: 10, border: '1px solid rgba(5,150,105,.2)' }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: '#059669', marginBottom: 8 }}>⚡ Atribuir à Operação Startec</div>
@@ -508,12 +446,14 @@ export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
                   <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Nenhum operador Startec cadastrado ainda.</div>
                 ) : (
                   <>
-                    <select className="sel" style={{ marginBottom: 8 }} value={atribuidoId} onChange={e => setAtribuidoId(e.target.value)}>
+                    <select className="sel" style={{ marginBottom: 8 }} value={atribStartecId} onChange={e => setAtribStartecId(e.target.value)}>
                       <option value="">— Sem atribuição —</option>
                       {operadoresStartec.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
                     </select>
-                    {atribMsg && <div style={{ fontSize: 11, padding: '6px 10px', borderRadius: 7, marginBottom: 8, background: atribMsg.t === 'success' ? 'var(--success-dim)' : 'var(--danger-dim)', color: atribMsg.t === 'success' ? 'var(--success)' : 'var(--danger)' }}>{atribMsg.text}</div>}
-                    <button style={{ width: '100%', padding: '8px 0', borderRadius: 8, background: '#059669', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', border: 'none', opacity: atribuindo ? 0.7 : 1 }} onClick={salvarAtribuicao} disabled={atribuindo}>{atribuindo ? 'Salvando…' : '✓ Confirmar atribuição'}</button>
+                    {atribStartecMsg && <div style={{ fontSize: 11, padding: '6px 10px', borderRadius: 7, marginBottom: 8, background: atribStartecMsg.t === 'success' ? 'var(--success-dim)' : 'var(--danger-dim)', color: atribStartecMsg.t === 'success' ? 'var(--success)' : 'var(--danger)' }}>{atribStartecMsg.text}</div>}
+                    <button style={{ width: '100%', padding: '8px 0', borderRadius: 8, background: '#059669', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', border: 'none', opacity: atribuindoStartec ? 0.7 : 1 }} onClick={salvarAtribuicaoStartec} disabled={atribuindoStartec}>
+                      {atribuindoStartec ? 'Salvando…' : '✓ Confirmar atribuição'}
+                    </button>
                   </>
                 )}
               </div>
@@ -537,8 +477,6 @@ export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
         {/* ══════════════════ ABA: BKO ══════════════════ */}
         {tab === 'bko' && (
           <div>
-
-            {/* Responsável BKO — apenas BKO pode assumir/liberar */}
             <div style={{ marginBottom: 16, padding: 14, background: 'rgba(124,58,237,.06)', borderRadius: 10, border: '1px solid rgba(124,58,237,.2)' }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: '#7C3AED', marginBottom: 8 }}>🔒 Responsável BKO</div>
               {temResponsavel ? (
@@ -547,10 +485,16 @@ export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
                     {cliente.responsavel_bko_nome}
                     {euSouResponsavel && <span style={{ fontSize: 9, marginLeft: 6, padding: '1px 6px', borderRadius: 99, background: 'rgba(124,58,237,.1)', color: '#7C3AED', fontWeight: 700 }}>Você</span>}
                   </div>
-                  {euSouResponsavel && (
+                  {euSouResponsavel ? (
                     <button onClick={liberarResponsabilidade} disabled={salvandoResp} style={{ padding: '6px 12px', borderRadius: 7, background: 'var(--danger-dim)', color: 'var(--danger)', border: 'none', fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
                       Liberar responsabilidade
                     </button>
+                  ) : (
+                    isBko && (
+                      <div style={{ marginTop: 6, padding: '8px 12px', borderRadius: 8, background: 'rgba(249,115,22,.08)', border: '1px solid rgba(249,115,22,.2)', fontSize: 11, color: '#F97316' }}>
+                        🔒 Este cliente já está sendo atendido por <strong>{cliente.responsavel_bko_nome}</strong>. Não é possível assumir enquanto outro BKO estiver responsável.
+                      </div>
+                    )
                   )}
                 </div>
               ) : (
@@ -558,7 +502,7 @@ export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
                   <div>
                     <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>Nenhum responsável ainda.</div>
                     <button onClick={assumirResponsabilidade} disabled={salvandoResp} style={{ width: '100%', padding: '8px 0', borderRadius: 8, background: '#7C3AED', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', border: 'none', opacity: salvandoResp ? 0.7 : 1 }}>
-                      {salvandoResp ? 'Salvando…' : 'Assumir responsabilidade'}
+                      {salvandoResp ? 'Verificando…' : 'Assumir responsabilidade'}
                     </button>
                   </div>
                 ) : (
@@ -568,31 +512,22 @@ export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
               {respMsg && <div style={{ fontSize: 11, marginTop: 8, padding: '6px 10px', borderRadius: 7, background: respMsg.t === 'success' ? 'var(--success-dim)' : 'var(--danger-dim)', color: respMsg.t === 'success' ? 'var(--success)' : 'var(--danger)' }}>{respMsg.text}</div>}
             </div>
 
-            {/* Banner de acesso */}
             <div style={{ padding: '9px 12px', background: B_LIGHT, borderRadius: 9, border: `1px solid ${B_MID}25`, marginBottom: 16, fontSize: 11, color: B_MID, fontWeight: 600 }}>
               💼 Campos visíveis e editáveis por Comercial, Corban e BKO
             </div>
 
-            {/* ── SALDO DEVEDOR ── */}
             <div style={{ marginBottom: 20 }}>
               <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 6 }}>
                 Saldo Devedor
               </label>
               <div style={{ display: 'flex', gap: 8 }}>
-                <input
-                  className="inp"
-                  value={saldo}
-                  onChange={e => setSaldo(e.target.value)}
-                  placeholder="R$ 0,00"
+                <input className="inp" value={saldo} onChange={e => setSaldo(e.target.value)} placeholder="R$ 0,00"
                   readOnly={!podeEditarSaldo}
                   style={{ flex: 1, background: !podeEditarSaldo ? 'var(--bg-surface)' : '', cursor: !podeEditarSaldo ? 'not-allowed' : '' }}
                 />
                 {podeEditarSaldo && (
-                  <button
-                    onClick={salvarSaldo}
-                    disabled={salvandoSaldo}
-                    style={{ padding: '0 16px', borderRadius: 8, background: B_MID, color: '#fff', border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer', flexShrink: 0, opacity: salvandoSaldo ? 0.7 : 1 }}
-                  >
+                  <button onClick={salvarSaldo} disabled={salvandoSaldo}
+                    style={{ padding: '0 16px', borderRadius: 8, background: B_MID, color: '#fff', border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer', flexShrink: 0, opacity: salvandoSaldo ? 0.7 : 1 }}>
                     {salvandoSaldo ? '…' : 'Salvar'}
                   </button>
                 )}
@@ -600,45 +535,30 @@ export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
               {saldoMsg && <div style={{ fontSize: 11, marginTop: 6, color: 'var(--success)' }}>✓ {saldoMsg.text}</div>}
             </div>
 
-            {/* ── OBSERVAÇÕES BKO — log imutável ── */}
             <div>
-              {/* Título + contador */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                <label style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.07em' }}>
-                  Observações
-                </label>
+                <label style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.07em' }}>Observações</label>
                 {(obsLog.length > 0 || obsLegada) && (
-                  <span style={{ fontSize: 10, color: 'var(--text-faint)' }}>
-                    {obsLog.length + (obsLegada ? 1 : 0)} registro{obsLog.length !== 1 ? 's' : ''}
-                  </span>
+                  <span style={{ fontSize: 10, color: 'var(--text-faint)' }}>{obsLog.length + (obsLegada ? 1 : 0)} registro{obsLog.length !== 1 ? 's' : ''}</span>
                 )}
               </div>
 
-              {/* Log de entradas — somente leitura */}
               <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, marginBottom: 12, maxHeight: 320, overflowY: 'auto' }}>
-
-                {/* Vazio */}
                 {obsLog.length === 0 && !obsLegada && (
                   <div style={{ padding: '32px 0', textAlign: 'center' }}>
                     <div style={{ fontSize: 22, marginBottom: 6 }}>📋</div>
                     <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Nenhuma observação registrada ainda.</div>
                   </div>
                 )}
-
-                {/* Registro legado (string antiga) */}
                 {obsLegada && (
                   <div style={{ borderBottom: obsLog.length ? '1px solid var(--border)' : 'none', overflow: 'hidden' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 14px', background: 'rgba(90,70,50,.04)', borderBottom: '1px solid var(--border)' }}>
                       <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>Registros anteriores</span>
                       <span style={{ fontSize: 9, padding: '1px 7px', borderRadius: 99, background: 'rgba(90,70,50,.08)', color: 'var(--text-faint)', fontWeight: 600, marginLeft: 'auto' }}>legado</span>
                     </div>
-                    <div style={{ padding: '10px 14px', fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
-                      {obsLegada}
-                    </div>
+                    <div style={{ padding: '10px 14px', fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{obsLegada}</div>
                   </div>
                 )}
-
-                {/* Entradas do novo log */}
                 {obsLog.map((entrada, i) => {
                   const cor   = ROLE_COLOR[entrada.autor_role] || '#666';
                   const label = ROLE_LABEL[entrada.autor_role] || entrada.autor_role || '—';
@@ -647,55 +567,40 @@ export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
                     : fmtD(entrada.data);
                   return (
                     <div key={entrada.id || i} style={{ borderBottom: i < obsLog.length - 1 ? '1px solid var(--border)' : 'none', overflow: 'hidden' }}>
-                      {/* Header colorido por setor */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 14px', background: `${cor}0d`, borderBottom: `1px solid ${cor}20` }}>
                         <Avatar name={entrada.autor_nome || '?'} size={20} color={cor} />
                         <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>{entrada.autor_nome}</span>
                         <span style={{ fontSize: 9, padding: '2px 8px', borderRadius: 99, fontWeight: 700, background: `${cor}20`, color: cor }}>{label}</span>
                         <span style={{ fontSize: 10, color: 'var(--text-faint)', marginLeft: 'auto', fontVariantNumeric: 'tabular-nums' }}>{dataFormatada}</span>
                       </div>
-                      {/* Texto */}
-                      <div style={{ padding: '10px 14px', fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
-                        {entrada.texto}
-                      </div>
+                      <div style={{ padding: '10px 14px', fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{entrada.texto}</div>
                     </div>
                   );
                 })}
               </div>
 
-              {/* Área de nova observação */}
               {podeInteragir && (
                 <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
-                  {/* Header com perfil de quem escreve */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', background: `${ROLE_COLOR[r] || B_MID}0d`, borderBottom: `1px solid ${ROLE_COLOR[r] || B_MID}20` }}>
                     <Avatar name={profile?.nome || '?'} size={20} color={ROLE_COLOR[r] || B_MID} />
                     <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>{profile?.nome}</span>
                     <span style={{ fontSize: 9, padding: '2px 8px', borderRadius: 99, fontWeight: 700, background: `${ROLE_COLOR[r] || B_MID}20`, color: ROLE_COLOR[r] || B_MID }}>{ROLE_LABEL[r] || r}</span>
                     <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--text-faint)' }}>Nova observação</span>
                   </div>
-                  {/* Textarea sem borda própria */}
-                  <textarea
-                    value={novaObs}
-                    onChange={e => setNovaObs(e.target.value)}
-                    placeholder="Digite a observação aqui…"
+                  <textarea value={novaObs} onChange={e => setNovaObs(e.target.value)} placeholder="Digite a observação aqui…"
                     onKeyDown={e => { if (e.key === 'Enter' && e.ctrlKey) adicionarObs(); }}
                     style={{ width: '100%', display: 'block', padding: '10px 14px', border: 'none', outline: 'none', resize: 'vertical', minHeight: 80, fontFamily: 'var(--font)', fontSize: 12, lineHeight: 1.6, color: 'var(--text-primary)', background: 'var(--bg-card)', boxSizing: 'border-box' }}
                   />
-                  {/* Footer com botão verde */}
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 14px', borderTop: '1px solid var(--border)', background: 'rgba(0,0,0,.02)' }}>
                     <span style={{ fontSize: 10, color: 'var(--text-faint)' }}>Ctrl+Enter · não editável após gravar</span>
-                    <button
-                      onClick={adicionarObs}
-                      disabled={!novaObs.trim()}
-                      style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 16px', borderRadius: 7, border: 'none', fontSize: 12, fontWeight: 600, cursor: novaObs.trim() ? 'pointer' : 'not-allowed', background: novaObs.trim() ? '#1E8F5E' : 'rgba(0,0,0,.06)', color: novaObs.trim() ? '#fff' : 'var(--text-muted)', transition: 'all .15s', boxShadow: novaObs.trim() ? '0 2px 8px rgba(30,143,94,.35)' : 'none' }}
-                    >
+                    <button onClick={adicionarObs} disabled={!novaObs.trim()}
+                      style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 16px', borderRadius: 7, border: 'none', fontSize: 12, fontWeight: 600, cursor: novaObs.trim() ? 'pointer' : 'not-allowed', background: novaObs.trim() ? '#1E8F5E' : 'rgba(0,0,0,.06)', color: novaObs.trim() ? '#fff' : 'var(--text-muted)', transition: 'all .15s', boxShadow: novaObs.trim() ? '0 2px 8px rgba(30,143,94,.35)' : 'none' }}>
                       Adicionar Observação
                     </button>
                   </div>
                 </div>
               )}
             </div>
-
           </div>
         )}
 
@@ -730,7 +635,7 @@ export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
                 <div style={{ textAlign: 'center', padding: '32px 0', fontSize: 12, color: 'var(--text-muted)' }}>Nenhuma mensagem ainda.</div>
               )}
               {chatMsgs.map((m, i) => {
-                const isMe     = m.user_id === profile?.id;
+                const isMe      = m.user_id === profile?.id;
                 const roleColor = ROLE_COLOR[m.user_role] || B_MID;
                 const roleLabel = ROLE_LABEL[m.user_role] || m.user_role || '';
                 return (
