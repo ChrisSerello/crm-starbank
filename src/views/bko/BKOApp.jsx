@@ -52,6 +52,38 @@ const BKO_STAGES = [
   { id:'perdido',              label:'Perdidos',                              color:'#EF4444', bg:'rgba(239,68,68,.1)'  },
 ];
 
+// ── Colunas BKO travadas: só responsável + supervisores podem mover ──
+const COLUNAS_TRAVA_BKO = ['saldo_andamento', 'pendencia_BKO'];
+const SUPERVISORES_BKO_EMAILS = [
+  'edson@starbank.tec.br',
+  'vera.marques@starbank.tec.br',
+  'maria.cerqueira@starbank.tec.br',
+];
+
+// Verifica se o cliente pode ser movido pelo usuário atual
+// Retorna { travado: bool, motivo: string }
+function checarTravaBKO(cliente, profile, session) {
+  // Só trava se estiver nas colunas protegidas E tiver responsável BKO
+  if (!COLUNAS_TRAVA_BKO.includes(cliente.estagio)) return { travado: false };
+  if (!cliente.responsavel_bko_id) return { travado: false };
+
+  const isBko = profile?.role === 'bko';
+  const euSouResponsavel = cliente.responsavel_bko_id === profile?.id;
+  const isSupervisorBko = SUPERVISORES_BKO_EMAILS.includes(session?.user?.email);
+
+  // Se não é BKO, não trava (comercial/corban/startec mantêm permissões)
+  if (!isBko) return { travado: false };
+
+  // BKO responsável pode mover
+  if (euSouResponsavel) return { travado: false };
+
+  // Supervisor BKO pode mover
+  if (isSupervisorBko) return { travado: false };
+
+  // Outro BKO: TRAVADO
+  return { travado: true, motivo: cliente.responsavel_bko_nome || 'outro BKO' };
+}
+
 const blankCliente = () => ({
   nomeCliente:'', cpfCliente:'', telefone:'', prefeitura:'',
   estagio:'clientes_novos', documentoStatus:'Não solicitado',
@@ -333,7 +365,7 @@ function BKODashboard({clientes,setView,setFiltroEstagio,profile,origemFiltro,se
 }
 
 // ─── KCARD ───────────────────────────────────────────────────────────────────
-function KCard({c,onSelect,dispatch,profile,setDragId,funis=[]}){
+function KCard({c,onSelect,dispatch,profile,session,setDragId,funis=[]}){
   const [menuOpen,setMenuOpen]=useState(false);
   const [menuPos,setMenuPos]=useState({top:0,left:0});
   const btnRef=useRef(null);
@@ -362,7 +394,7 @@ function KCard({c,onSelect,dispatch,profile,setDragId,funis=[]}){
 
   return(
     <>
-      <div className="kcard" style={{position:'relative',opacity:c.funil_id?0.55:1}} draggable onDragStart={()=>setDragId(c.id)} onClick={(e)=>{if(!e.defaultPrevented)onSelect(c.id);}}>
+      <div className="kcard" style={{position:'relative',opacity:c.funil_id?0.55:1}} draggable={!checarTravaBKO(c,profile,session).travado} onDragStart={()=>{if(!checarTravaBKO(c,profile,session).travado)setDragId(c.id);}} onClick={(e)=>{if(!e.defaultPrevented)onSelect(c.id);}}>
         <div style={{fontSize:12,fontWeight:600,color:'var(--text-primary)',marginBottom:4,paddingRight:20}}>{c.nomeCliente}</div>
         <div style={{fontSize:10,color:'var(--text-muted)',marginBottom:c.prefeitura?3:5}}>{c.cpfCliente||'—'}</div>
         {c.prefeitura&&<div style={{fontSize:9,color:'var(--text-muted)',marginBottom:4}}>🏛 {c.prefeitura}</div>}
@@ -381,7 +413,11 @@ function KCard({c,onSelect,dispatch,profile,setDragId,funis=[]}){
         <div data-kcard-menu="1" onMouseDown={e=>e.stopPropagation()}
           style={{position:'fixed',top:menuPos.top,left:Math.max(8,menuPos.left),zIndex:9999,background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:10,boxShadow:'0 8px 24px rgba(0,0,0,.18)',minWidth:220,overflow:'hidden'}}>
           <div style={{padding:'7px 12px',fontSize:9,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.08em',borderBottom:'1px solid var(--border)'}}>Mover para estágio…</div>
-          {BKO_STAGES.filter(st=>st.id!==c.estagio).map(st=>(
+          {(()=>{const trava=checarTravaBKO(c,profile,session);return trava.travado?(
+            <div style={{padding:'10px 14px',fontSize:11,color:'#F97316',background:'rgba(249,115,22,.06)'}}>
+              🔒 Movimentação travada — responsável: <strong>{trava.motivo}</strong>
+            </div>
+          ):BKO_STAGES.filter(st=>st.id!==c.estagio).map(st=>(
             <button key={st.id}
               onMouseDown={e=>{e.stopPropagation();dispatch({type:'MOVE',cid:c.id,st:st.id,user:profile?.nome||'Usuário'});setMenuOpen(false);}}
               style={{display:'flex',alignItems:'center',gap:8,width:'100%',padding:'7px 12px',background:'none',border:'none',cursor:'pointer',textAlign:'left',fontSize:12,color:'var(--text-primary)',fontFamily:'var(--font)',transition:'background .1s'}}
@@ -389,7 +425,7 @@ function KCard({c,onSelect,dispatch,profile,setDragId,funis=[]}){
               onMouseLeave={e=>e.currentTarget.style.background='none'}>
               <div style={{width:7,height:7,borderRadius:'50%',background:st.color,flexShrink:0}}/>{st.label}
             </button>
-          ))}
+          ));})()}
           {funis.length>0&&(
             <>
               <div style={{padding:'7px 12px',fontSize:9,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.08em',borderTop:'1px solid var(--border)',borderBottom:'1px solid var(--border)'}}>Arquivar no funil…</div>
@@ -418,14 +454,14 @@ function KCard({c,onSelect,dispatch,profile,setDragId,funis=[]}){
 }
 
 // ─── KANBAN COL ──────────────────────────────────────────────────────────────
-function BKOKanbanCol({s,clientes,dragId,setDragId,dispatch,onSelect,profile,highlight,funis,collapsed,onToggleCollapse}){
+function BKOKanbanCol({s,clientes,dragId,setDragId,dispatch,onSelect,profile,session,highlight,funis,collapsed,onToggleCollapse}){
   const [over,setOver]=useState(false);
   const sl=clientes.filter(c=>c.estagio===s.id&&!c.funil_id);
   return(
     <div style={{minWidth:collapsed?44:170,width:collapsed?44:215,flexShrink:0,background:highlight?`${s.color}08`:'rgba(0,0,0,.03)',border:`1px solid ${highlight?s.color+'40':'var(--border)'}`,borderRadius:12,padding:'10px 8px',transition:'all .22s cubic-bezier(.4,0,.2,1)',boxShadow:highlight?`0 0 0 2px ${s.color}30`:'',display:'flex',flexDirection:'column'}}
       onDragOver={e=>{e.preventDefault();setOver(true);}}
       onDragLeave={()=>setOver(false)}
-      onDrop={()=>{setOver(false);if(dragId)dispatch({type:'MOVE',cid:dragId,st:s.id,user:profile?.nome||'Usuário'});setDragId(null);}}>
+      onDrop={()=>{setOver(false);if(dragId){const dragCliente=clientes.find(c=>c.id===dragId);const trava=dragCliente?checarTravaBKO(dragCliente,profile,session):{travado:false};if(trava.travado){alert(`🔒 Este cliente está travado na coluna BKO.\nResponsável: ${trava.motivo}\nSomente o responsável ou supervisores BKO podem mover.`);setDragId(null);return;}dispatch({type:'MOVE',cid:dragId,st:s.id,user:profile?.nome||'Usuário'});}setDragId(null);}}>
       {collapsed?(
         <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:8,cursor:'pointer',height:'100%',justifyContent:'flex-start',paddingTop:4}} onClick={onToggleCollapse} title={`Expandir: ${s.label}`}>
           <div style={{width:7,height:7,borderRadius:'50%',background:s.color,boxShadow:`0 0 5px ${s.color}60`,marginTop:2}}/>
@@ -445,7 +481,7 @@ function BKOKanbanCol({s,clientes,dragId,setDragId,dispatch,onSelect,profile,hig
           </div>
           <div style={{flex:1,overflowY:'auto',minHeight:40,paddingRight:2,scrollbarWidth:'thin',scrollbarColor:'rgba(0,0,0,.1) transparent'}}>
             {sl.map(c=>(
-              <KCard key={c.id} c={c} onSelect={onSelect} dispatch={dispatch} profile={profile} setDragId={setDragId} funis={funis}/>
+              <KCard key={c.id} c={c} onSelect={onSelect} dispatch={dispatch} profile={profile} session={session} setDragId={setDragId} funis={funis}/>
             ))}
             {sl.length===0&&<div style={{textAlign:'center',padding:'16px 0',fontSize:10,color:'var(--text-faint)'}}>Solte aqui</div>}
           </div>
@@ -512,7 +548,7 @@ function BKOFunilMeses({funil,clientes,onSelect,dispatch,profile}){
 }
 
 // ─── PIPELINE ────────────────────────────────────────────────────────────────
-function BKOPipeline({clientes,profile,dispatch,onSelect,filtroEstagio,setFiltroEstagio,funis,origemFiltro,setOrigemFiltro,supervisorTeam,allTeams}){
+function BKOPipeline({clientes,profile,session,dispatch,onSelect,filtroEstagio,setFiltroEstagio,funis,origemFiltro,setOrigemFiltro,supervisorTeam,allTeams}){
   const [dragId,setDragId]=useState(null);
   const [search,setSearch]=useState('');
   const [collapsedCols,setCollapsedCols]=useState(new Set());
@@ -634,7 +670,7 @@ function BKOPipeline({clientes,profile,dispatch,onSelect,filtroEstagio,setFiltro
         <div ref={colsRef} style={{display:'flex',gap:7,overflowX:'auto',overflowY:'hidden',padding:'0 20px 16px',flex:1,minHeight:0,alignItems:'stretch',scrollbarWidth:'thin',scrollbarColor:`${BKO_STAGES[0]?.color}40 transparent`}}>
           {BKO_STAGES.map(s=>(
             <BKOKanbanCol key={s.id} s={s} clientes={filtered} dragId={dragId} setDragId={setDragId}
-              dispatch={dispatch} onSelect={onSelect} profile={profile}
+              dispatch={dispatch} onSelect={onSelect} profile={profile} session={session}
               highlight={filtroEstagio===s.id} funis={funisComContagem}
               collapsed={collapsedCols.has(s.id)} onToggleCollapse={()=>toggleCol(s.id)}/>
           ))}
@@ -1443,7 +1479,7 @@ export function BKOApp({profile,session,signOut,onAlterarSenha,userModules,onSwi
         />
         <main style={{flex:1,minWidth:0,height:'100%',display:'flex',flexDirection:'column',overflow:view==='pipeline'?'hidden':'auto',paddingRight:selected?490:0,transition:'padding-right .3s cubic-bezier(.4,0,.2,1)'}}>
           {view==='dashboard' && <BKODashboard clientes={clientes} setView={v=>{setView(v);}} setFiltroEstagio={setFiltroEstagio} profile={profile} origemFiltro={origemFiltro} setOrigemFiltro={setOrigemFiltro} supervisorTeam={supervisorTeam} allTeams={allTeams}/>}
-          {view==='pipeline'  && <BKOPipeline  clientes={clientes} profile={profile} dispatch={auditedDispatch} onSelect={id=>dispatch({type:'SEL',id})} filtroEstagio={filtroEstagio} setFiltroEstagio={setFiltroEstagio} funis={funis} origemFiltro={origemFiltro} setOrigemFiltro={setOrigemFiltro} supervisorTeam={supervisorTeam} allTeams={allTeams}/>}
+          {view==='pipeline'  && <BKOPipeline  clientes={clientes} profile={profile} session={session} dispatch={auditedDispatch} onSelect={id=>dispatch({type:'SEL',id})} filtroEstagio={filtroEstagio} setFiltroEstagio={setFiltroEstagio} funis={funis} origemFiltro={origemFiltro} setOrigemFiltro={setOrigemFiltro} supervisorTeam={supervisorTeam} allTeams={allTeams}/>}
           {view==='clientes'  && <BKOClientes  clientes={clientes} profile={profile} onSelect={id=>dispatch({type:'SEL',id})} onNew={()=>dispatch({type:'TNEW'})} origemFiltro={origemFiltro} setOrigemFiltro={setOrigemFiltro} supervisorTeam={supervisorTeam} allTeams={allTeams}/>}
           {view==='cadastrar' && <BKOCadastrar profile={profile} session={session} funis={funis} setFunis={setFunis}/>}
           {view==='auditoria' && <BKOAuditoria/>}

@@ -100,8 +100,22 @@ export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
   const [salvandoEdit, setSalvandoEdit] = useState(false);
   const [editMsg, setEditMsg]           = useState(null);
 
-  const podeInteragir       = isBko || isComercial || isCorban || isStartec || isSupervisorStartec;
-  const podeEditarSaldo     = isBko;
+  const euSouResponsavel = isBko && cliente.responsavel_bko_id === profile?.id;
+  const temResponsavel   = !!cliente.responsavel_bko_id;
+
+  // ── Supervisores BKO: podem mexer mesmo quando outro BKO é responsável ──
+  const SUPERVISORES_BKO = [
+    'edson@starbank.tec.br',
+    'vera.marques@starbank.tec.br',
+    'maria.cerqueira@starbank.tec.br',
+  ];
+  const isSupervisorBko = SUPERVISORES_BKO.includes(session?.user?.email);
+
+  // ── TRAVA BKO: quando tem responsável e NÃO sou eu nem supervisor, TUDO bloqueado ──
+  const bkoTravado = isBko && temResponsavel && !euSouResponsavel && !isSupervisorBko;
+
+  const podeInteragir       = (isBko || isComercial || isCorban || isStartec || isSupervisorStartec) && !bkoTravado;
+  const podeEditarSaldo     = isBko && !bkoTravado;
   const podeAtribuirStartec = isSupervisorStartec || isComercial;
 
   const podeEditar = (() => {
@@ -112,8 +126,7 @@ export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
     return false;
   })();
 
-  const euSouResponsavel = isBko && cliente.responsavel_bko_id === profile?.id;
-  const temResponsavel   = !!cliente.responsavel_bko_id;
+
 
   const obsLog    = cliente.observacoesBkoLog || [];
   const obsLegada = !obsLog.length && cliente.observacoesBko ? cliente.observacoesBko : null;
@@ -234,6 +247,17 @@ export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
 
   const assumirResponsabilidade = async () => {
     setSalvandoResp(true); setRespMsg(null);
+    // PROTEÇÃO: verificar no banco se já tem responsável antes de gravar
+    const { data: atual } = await supabase.from('bko_clientes')
+      .select('responsavel_bko_id, responsavel_bko_nome')
+      .eq('id', cliente.id)
+      .single();
+    if (atual?.responsavel_bko_id && atual.responsavel_bko_id !== profile?.id) {
+      setSalvandoResp(false);
+      dispatch({ type: 'UPD', c: { ...cliente, responsavel_bko_id: atual.responsavel_bko_id, responsavel_bko_nome: atual.responsavel_bko_nome } });
+      setRespMsg({ t: 'error', text: `Este cliente já está com ${atual.responsavel_bko_nome || 'outro BKO'}. Não é possível assumir.` });
+      return;
+    }
     const { error } = await supabase.from('bko_clientes')
       .update({ responsavel_bko_id: profile?.id, responsavel_bko_nome: profile?.nome })
       .eq('id', cliente.id);
@@ -352,6 +376,17 @@ export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
         </div>
       </div>
 
+      {/* Banner de trava BKO */}
+      {bkoTravado && (
+        <div style={{ padding: '10px 20px', background: 'rgba(249,115,22,.08)', borderBottom: '1px solid rgba(249,115,22,.2)', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          <span style={{ fontSize: 14 }}>🔒</span>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#F97316' }}>Cliente travado</div>
+            <div style={{ fontSize: 11, color: '#F97316' }}>Sendo atendido por <strong>{cliente.responsavel_bko_nome}</strong>. Você pode visualizar mas não editar.</div>
+          </div>
+        </div>
+      )}
+
       {/* Tabs */}
       <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', background: 'var(--bg-card)', flexShrink: 0, overflowX: 'auto' }}>
         {[
@@ -462,14 +497,20 @@ export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
             <div style={{ borderTop: '1px solid var(--border)', paddingTop: 14 }}>
               <div className="eyebrow" style={{ marginBottom: 10 }}>Atualizar status</div>
               <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 5 }}>Estágio</label>
-              <select className="sel" value={es} onChange={e => setEs(e.target.value)} style={{ marginBottom: 10 }}>
+              <select className="sel" value={es} onChange={e => setEs(e.target.value)} disabled={bkoTravado} style={{ marginBottom: 10, opacity: bkoTravado ? 0.5 : 1, cursor: bkoTravado ? 'not-allowed' : '' }}>
                 {BKO_STAGES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
               </select>
               <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 5 }}>Documento</label>
               <select className="sel" value={ed} onChange={e => setEd(e.target.value)} style={{ marginBottom: 14 }}>
                 {DOC_STATUS.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
-              <button className="btn" style={{ width: '100%', justifyContent: 'center', background: B_MID, color: '#fff', boxShadow: `0 3px 12px ${B_GLOW}` }} onClick={salvarInfo}>Salvar alterações</button>
+              {bkoTravado ? (
+                <div style={{ padding: '10px 14px', borderRadius: 8, background: 'rgba(249,115,22,.08)', border: '1px solid rgba(249,115,22,.2)', fontSize: 11, color: '#F97316', textAlign: 'center' }}>
+                  🔒 Cliente travado — sendo atendido por <strong>{cliente.responsavel_bko_nome}</strong>
+                </div>
+              ) : (
+                <button className="btn" style={{ width: '100%', justifyContent: 'center', background: B_MID, color: '#fff', boxShadow: `0 3px 12px ${B_GLOW}` }} onClick={salvarInfo}>Salvar alterações</button>
+              )}
             </div>
           </div>
         )}
@@ -659,8 +700,16 @@ export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
               <div ref={chatEndRef} />
             </div>
             <div style={{ display: 'flex', gap: 8, paddingTop: 10, borderTop: '1px solid var(--border)', flexShrink: 0 }}>
-              <input className="inp" style={{ flex: 1, height: 38, fontSize: 12 }} placeholder="Digite uma mensagem…" value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && !e.shiftKey && enviarChat()} />
-              <button onClick={enviarChat} disabled={chatLoading || !chatInput.trim()} style={{ padding: '0 16px', height: 38, borderRadius: 8, background: B_MID, color: '#fff', border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer', opacity: chatLoading || !chatInput.trim() ? 0.6 : 1, flexShrink: 0 }}>Enviar</button>
+              {bkoTravado ? (
+                <div style={{ flex: 1, padding: '10px 14px', borderRadius: 8, background: 'rgba(249,115,22,.08)', border: '1px solid rgba(249,115,22,.2)', fontSize: 11, color: '#F97316', textAlign: 'center' }}>
+                  🔒 Chat bloqueado — cliente sendo atendido por <strong>{cliente.responsavel_bko_nome}</strong>
+                </div>
+              ) : (
+                <>
+                  <input className="inp" style={{ flex: 1, height: 38, fontSize: 12 }} placeholder="Digite uma mensagem…" value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && !e.shiftKey && enviarChat()} />
+                  <button onClick={enviarChat} disabled={chatLoading || !chatInput.trim()} style={{ padding: '0 16px', height: 38, borderRadius: 8, background: B_MID, color: '#fff', border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer', opacity: chatLoading || !chatInput.trim() ? 0.6 : 1, flexShrink: 0 }}>Enviar</button>
+                </>
+              )}
             </div>
           </div>
         )}
@@ -688,16 +737,22 @@ export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
             </div>
 
             <div className="eyebrow" style={{ marginBottom: 8 }}>Enviar documento</div>
-            <label
-              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7, padding: 18, borderRadius: 10, cursor: 'pointer', border: `2px dashed ${uploading ? B_MID : 'var(--border-mid)'}`, background: uploading ? B_LIGHT : 'rgba(0,0,0,.02)', marginBottom: 12, transition: 'all .15s' }}
-              onMouseEnter={e => { e.currentTarget.style.background = B_LIGHT; e.currentTarget.style.borderColor = B_MID; }}
-              onMouseLeave={e => { if (!uploading) { e.currentTarget.style.background = 'rgba(0,0,0,.02)'; e.currentTarget.style.borderColor = 'var(--border-mid)'; } }}
-            >
-              <input type="file" style={{ display: 'none' }} onChange={handleUpload} disabled={uploading} accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp" />
-              <div style={{ fontSize: 22 }}>{uploading ? '⏳' : '📤'}</div>
-              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>{uploading ? 'Enviando…' : 'Clique para enviar'}</div>
-              <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>PDF, Word, Imagens · Máx. 10MB</div>
-            </label>
+            {bkoTravado ? (
+              <div style={{ padding: '14px', borderRadius: 10, background: 'rgba(249,115,22,.08)', border: '1px solid rgba(249,115,22,.2)', fontSize: 11, color: '#F97316', textAlign: 'center', marginBottom: 12 }}>
+                🔒 Upload bloqueado — cliente sendo atendido por <strong>{cliente.responsavel_bko_nome}</strong>
+              </div>
+            ) : (
+              <label
+                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7, padding: 18, borderRadius: 10, cursor: 'pointer', border: `2px dashed ${uploading ? B_MID : 'var(--border-mid)'}`, background: uploading ? B_LIGHT : 'rgba(0,0,0,.02)', marginBottom: 12, transition: 'all .15s' }}
+                onMouseEnter={e => { e.currentTarget.style.background = B_LIGHT; e.currentTarget.style.borderColor = B_MID; }}
+                onMouseLeave={e => { if (!uploading) { e.currentTarget.style.background = 'rgba(0,0,0,.02)'; e.currentTarget.style.borderColor = 'var(--border-mid)'; } }}
+              >
+                <input type="file" style={{ display: 'none' }} onChange={handleUpload} disabled={uploading} accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp" />
+                <div style={{ fontSize: 22 }}>{uploading ? '⏳' : '📤'}</div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>{uploading ? 'Enviando…' : 'Clique para enviar'}</div>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>PDF, Word, Imagens · Máx. 10MB</div>
+              </label>
+            )}
 
             {uploadMsg && (
               <div style={{ padding: '8px 12px', borderRadius: 7, marginBottom: 10, fontSize: 11, fontWeight: 500, background: uploadMsg.t === 'success' ? 'var(--success-dim)' : 'var(--danger-dim)', color: uploadMsg.t === 'success' ? 'var(--success)' : 'var(--danger)' }}>
@@ -713,7 +768,7 @@ export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
                   <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{fmtDH(doc.data||doc.created_at||doc.uploadedAt)} · {doc.enviadoPor}</div>
                 </div>
                 <button className="btn btn-ghost" style={{ padding: '4px 8px', fontSize: 10 }} onClick={() => openDoc(doc.path)}>↓ Abrir</button>
-                <button onClick={() => handleDeleteDoc(doc)} style={{ padding: '4px 8px', borderRadius: 6, fontSize: 10, fontWeight: 600, cursor: 'pointer', background: 'var(--danger-dim)', color: 'var(--danger)', border: 'none' }}>✕</button>
+                {!bkoTravado && <button onClick={() => handleDeleteDoc(doc)} style={{ padding: '4px 8px', borderRadius: 6, fontSize: 10, fontWeight: 600, cursor: 'pointer', background: 'var(--danger-dim)', color: 'var(--danger)', border: 'none' }}>✕</button>}
               </div>
             ))}
             {docs.length === 0 && (
