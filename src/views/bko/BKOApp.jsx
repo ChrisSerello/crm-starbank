@@ -79,7 +79,7 @@ function R(s,{type:t,...a}){
   }
 }
 
-// ─── MODULE SWITCHER ─────────────────────────────────────────────────────────
+
 function ModuleSwitcherBKO({ userModules, profile, onSwitch, collapsed }){
   const [open, setOpen] = useState(false);
   const [dropPos, setDropPos] = useState({top:0,left:0,width:0});
@@ -135,7 +135,7 @@ function ModuleSwitcherBKO({ userModules, profile, onSwitch, collapsed }){
   );
 }
 
-// ─── SIDEBAR ─────────────────────────────────────────────────────────────────
+// Sidebar
 function BKOSidebar({view,setView,profile,onLogout,onAlterarSenha,onSearch,collapsed,setCollapsed,userModules,onSwitchModule}){
   const r=profile?.role;
   const items=[
