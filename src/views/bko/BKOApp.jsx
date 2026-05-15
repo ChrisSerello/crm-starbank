@@ -42,6 +42,7 @@ const ROLE_COLORS = { comercial:'#3B5BDB', corban_bko:'#0EA5E9', bko:'#7C3AED', 
 const BKO_STAGES = [
   { id:'clientes_novos',       label:'Clientes Novos - Corban',              color:'#3B5BDB', bg:'rgba(59,91,219,.1)'  },
   { id:'saldo_andamento',      label:'BKO - Saldo Devedor',                  color:'#7C3AED', bg:'rgba(124,58,237,.1)' },
+  { id:'pendencia_BKO',        label:'Pendência Análise BKO',                color:'#8e14b6', bg:'rgba(249,115,22,.1)' },
   { id:'pendencia_financeiro', label:'Pendência Análise Financeira',          color:'#F97316', bg:'rgba(249,115,22,.1)' },
   { id:'em_negociacao',        label:'Em negociação (Saldo Informado) - Corban', color:'#0EA5E9', bg:'rgba(14,165,233,.1)' },
   { id:'abertura_conta',       label:'Abertura de conta - Interno',           color:'#10B981', bg:'rgba(16,185,129,.1)' },
