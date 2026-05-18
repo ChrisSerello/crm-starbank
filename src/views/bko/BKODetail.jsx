@@ -387,6 +387,8 @@ export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
         </div>
       )}
 
+
+
       {/* Tabs */}
       <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', background: 'var(--bg-card)', flexShrink: 0, overflowX: 'auto' }}>
         {[
