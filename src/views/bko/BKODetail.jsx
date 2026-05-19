@@ -254,12 +254,21 @@ export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
   // ✅ CORREÇÃO PRINCIPAL — causa dos "clientes mudando de esteira sozinhos"
   // esUserChanged = false → usuário não tocou no dropdown → usa cliente.estagio (atual, pós-realtime)
   // esUserChanged = true  → usuário escolheu um novo estágio → usa es e dispara MOVE
+  //
+  // ✅ CORREÇÃO SECUNDÁRIA — atividade do MOVE sendo apagada pelo UPD subsequente
+  // O reducer UPD faz {...c, ...a.c}. Se a.c incluir activities (snapshot stale do cliente),
+  // sobrescreve o array que o MOVE acabou de atualizar. Solução: omitir activities do UPD
+  // quando MOVE já foi disparado — o reducer preserva automaticamente o que o MOVE escreveu.
   const salvarInfo = () => {
     const estagioFinal = esUserChanged ? es : cliente.estagio;
     if (esUserChanged && es !== cliente.estagio) {
       dispatch({ type:'MOVE', cid:cliente.id, st:es, user:profile?.nome||'Usuário' });
+      // ✅ Desestrutura activities fora do payload — não sobrescreve o que MOVE acabou de adicionar
+      const { activities: _ignored, ...clienteSemActivities } = cliente;
+      dispatch({ type:'UPD', c:{ ...clienteSemActivities, estagio:estagioFinal, documentoStatus:ed, saldoDevedor:saldo, documentos:docs, prefeitura:prefeituraEdit } });
+    } else {
+      dispatch({ type:'UPD', c:{ ...cliente, estagio:estagioFinal, documentoStatus:ed, saldoDevedor:saldo, documentos:docs, prefeitura:prefeituraEdit } });
     }
-    dispatch({ type:'UPD', c:{ ...cliente, estagio:estagioFinal, documentoStatus:ed, saldoDevedor:saldo, documentos:docs, prefeitura:prefeituraEdit } });
     onClose();
   };
 
