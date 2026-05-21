@@ -7,8 +7,8 @@ import { BKODetail } from './BKODetail';
 import { BKOSearch } from './BKOSearch';
 import { BKOGestaoCorbans } from './BKOGestaoCorbans';
 import ReactDOM from 'react-dom';
+import { BKOPipelines } from './BKOPipelines';
 
-// Formata data+hora no fuso de Brasília
 const fmtDH=(ts)=>{
   if(!ts) return '—';
   try{
@@ -35,7 +35,6 @@ const B_LIGHT = 'rgba(13,27,86,0.1)';
 const B_GLOW  = 'rgba(59,91,219,0.28)';
 const B_TEXT  = '#A5B4FC';
 
-// Roles: comercial vê tudo | bko vê tudo | corban_bko vê só os seus | startec vê só os seus
 const ROLE_LABELS = { comercial:'Comercial', corban_bko:'Corban', bko:'BKO', startec:'Startec' };
 const ROLE_COLORS = { comercial:'#3B5BDB', corban_bko:'#0EA5E9', bko:'#7C3AED', startec:'#059669' };
 
@@ -52,7 +51,6 @@ const BKO_STAGES = [
   { id:'perdido',              label:'Perdidos',                              color:'#EF4444', bg:'rgba(239,68,68,.1)'  },
 ];
 
-// ── Colunas BKO travadas: só responsável + supervisores podem mover ──
 const COLUNAS_TRAVA_BKO = ['saldo_andamento', 'pendencia_BKO'];
 const SUPERVISORES_BKO_EMAILS = [
   'edson@starbank.tec.br',
@@ -60,27 +58,15 @@ const SUPERVISORES_BKO_EMAILS = [
   'maria.cerqueira@starbank.tec.br',
 ];
 
-// Verifica se o cliente pode ser movido pelo usuário atual
-// Retorna { travado: bool, motivo: string }
 function checarTravaBKO(cliente, profile, session) {
-  // Só trava se estiver nas colunas protegidas E tiver responsável BKO
   if (!COLUNAS_TRAVA_BKO.includes(cliente.estagio)) return { travado: false };
   if (!cliente.responsavel_bko_id) return { travado: false };
-
   const isBko = profile?.role === 'bko';
   const euSouResponsavel = cliente.responsavel_bko_id === profile?.id;
   const isSupervisorBko = SUPERVISORES_BKO_EMAILS.includes(session?.user?.email);
-
-  // Se não é BKO, não trava (comercial/corban/startec mantêm permissões)
   if (!isBko) return { travado: false };
-
-  // BKO responsável pode mover
   if (euSouResponsavel) return { travado: false };
-
-  // Supervisor BKO pode mover
   if (isSupervisorBko) return { travado: false };
-
-  // Outro BKO: TRAVADO
   return { travado: true, motivo: cliente.responsavel_bko_nome || 'outro BKO' };
 }
 
@@ -110,7 +96,6 @@ function R(s,{type:t,...a}){
     default:          return s;
   }
 }
-
 
 function ModuleSwitcherBKO({ userModules, profile, onSwitch, collapsed }){
   const [open, setOpen] = useState(false);
@@ -167,12 +152,12 @@ function ModuleSwitcherBKO({ userModules, profile, onSwitch, collapsed }){
   );
 }
 
-// Sidebar
+// ── SIDEBAR — sem item 'pipelines' separado ──────────────────────────────────
 function BKOSidebar({view,setView,profile,onLogout,onAlterarSenha,onSearch,collapsed,setCollapsed,userModules,onSwitchModule}){
   const r=profile?.role;
   const items=[
     {id:'dashboard',icon:'◈',label:'Dashboard'},
-    {id:'pipeline', icon:'⊞',label:'Pipeline'},
+    {id:'pipeline', icon:'⊞',label:'Pipeline'},   // ← pipelines CRM ficam dentro do dropdown aqui
     {id:'clientes', icon:'≡',label:'Clientes'},
     ...(r==='comercial'||r==='corban_bko'||r==='startec'?[{id:'cadastrar',icon:'＋',label:'Cadastrar'}]:[]),
     ...(r==='comercial'?[{id:'auditoria',icon:'🔍',label:'Auditoria'}]:[]),
@@ -268,14 +253,10 @@ function StatCard({label,value,color,icon,onClick}){
   );
 }
 
-// DASHBOARD 
-// startec vê só os próprios; bko/comercial veem tudo
-// HELPER: filtra clientes para supervisor 
 function filtrarClientesSupervisor(clientes, origemFiltro, allTeams){
   if(!origemFiltro) return clientes;
   if(origemFiltro==='corban') return clientes.filter(c=>c.origem==='corban');
   if(origemFiltro==='startec') return clientes.filter(c=>c.origem==='startec');
-  // Filtro por equipe específica: origemFiltro = supervisor_id
   const team=allTeams.find(t=>t.supervisor_id===origemFiltro);
   if(team) return clientes.filter(c=>c.origem==='startec'&&team.operadores.includes(c.atribuido_a_id));
   return clientes;
@@ -293,7 +274,7 @@ function BKODashboard({clientes,setView,setFiltroEstagio,profile,origemFiltro,se
     }
     return clientes;
   },[clientes,profile,origemFiltro,supervisorTeam,allTeams]);
-  const counts=useMemo(()=>{const m={};BKO_STAGES.forEach(s=>{m[s.id]=clientesFiltrados.filter(c=>c.estagio===s.id).length;});return m;},[clientesFiltrados]);
+  const counts=useMemo(()=>{const m={};BKO_STAGES.forEach(s=>{m[s.id]=clientesFiltrados.filter(c=>c.estagio===s.id&&!c.funil_id).length;});return m;},[clientesFiltrados]);
   const handleCard=(stageId)=>{setFiltroEstagio(stageId);setView('pipeline');};
   const recent=useMemo(()=>clientesFiltrados.flatMap(c=>(c.activities||[]).map(a=>({...a,clienteName:c.nomeCliente}))).sort((a,b)=>(b.date||'').localeCompare(a.date||'')).slice(0,8),[clientesFiltrados]);
   return(
@@ -559,6 +540,16 @@ function BKOPipeline({clientes,profile,session,dispatch,onSelect,filtroEstagio,s
   const funilRef=useRef(null);
   const colsRef=useRef(null);
 
+  // ── NOVO: Pipelines CRM (bko_pipelines) ──────────────────────────────────
+  const [crmPipelines,setCrmPipelines]=useState([]);
+  const [pipelineAtivo,setPipelineAtivo]=useState(null); // pipeline CRM selecionado
+
+  useEffect(()=>{
+    supabase.from('bko_pipelines').select('*').eq('ativo',true).order('ordem')
+      .then(({data})=>setCrmPipelines(data||[]));
+  },[]);
+  // ─────────────────────────────────────────────────────────────────────────
+
   useEffect(()=>{
     if(filtroEstagio&&colsRef.current){const idx=BKO_STAGES.findIndex(s=>s.id===filtroEstagio);if(idx>-1)colsRef.current.scrollLeft=idx*215;}
   },[filtroEstagio]);
@@ -570,7 +561,6 @@ function BKOPipeline({clientes,profile,session,dispatch,onSelect,filtroEstagio,s
     return()=>document.removeEventListener('mousedown',h);
   },[funilOpen]);
 
-  // startec e corban_bko veem só os próprios; supervisor vê todas as equipes; comercial normal vê tudo
   const isSupervisorP=profile?.is_supervisor===true;
   const clientesVisiveis=useMemo(()=>{
     if(profile?.role==='startec'||profile?.role==='corban_bko')
@@ -588,20 +578,35 @@ function BKOPipeline({clientes,profile,session,dispatch,onSelect,filtroEstagio,s
     :pipelineClientes;
   const funisComContagem=useMemo(()=>funis.map(f=>({...f,count:clientes.filter(c=>c.funil_id===f.id).length})),[funis,clientes]);
 
+  // Tem algo no dropdown? (pipelines CRM + funis de arquivo)
+  const temDropdown = crmPipelines.length>0 || funisComContagem.length>0;
+
+  // Texto do breadcrumb
+  const tituloAtual = pipelineAtivo
+    ? pipelineAtivo.nome
+    : funilSel
+      ? funilSel.nome
+      : null;
+
   return(
     <div style={{display:'flex',flexDirection:'column',flex:1,minHeight:0,overflow:'hidden'}}>
       <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:20,gap:16,flexWrap:'wrap',padding:'16px 20px 0',flexShrink:0}}>
         <div>
-          {funilSel
-            ?<><div style={{fontSize:11,color:'var(--text-muted)',marginBottom:2,cursor:'pointer'}} onClick={()=>setFunilSel(null)}>← Pipeline</div>
-               <div className="section-title" style={{color:funilSel.cor}}>{funilSel.nome}</div>
-               <div className="section-sub">{clientes.filter(c=>c.funil_id===funilSel.id).length} clientes arquivados · agrupados por mês</div></>
+          {tituloAtual
+            ?<>
+               <div style={{fontSize:11,color:'var(--text-muted)',marginBottom:2,cursor:'pointer'}} onClick={()=>{setPipelineAtivo(null);setFunilSel(null);setFunilSearch('');}}>← Pipeline</div>
+               <div className="section-title" style={{color:pipelineAtivo?.cor||funilSel?.cor}}>{tituloAtual}</div>
+               {pipelineAtivo
+                 ?<div className="section-sub">{pipelineAtivo.descricao||''}</div>
+                 :<div className="section-sub">{clientes.filter(c=>c.funil_id===funilSel.id).length} clientes arquivados · agrupados por mês</div>
+               }
+             </>
             :<><div className="section-title">Pipeline</div>
-               <div className="section-sub">{pipelineClientes.length} clientes ativos · arraste para mover</div></>
+               <div className="section-sub">{pipelineClientes.length} clientes ativos · arraste para mover</div>
+             </>
           }
         </div>
         <div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
-          {/* Badge de filtro de equipe */}
           {profile?.role==='comercial'&&(
             <div style={{display:'flex',gap:5,flexWrap:'wrap'}}>
               {[['todos',null,'Todos'],['corban','corban','Corbans'],['startec','startec','Startec'],
@@ -616,57 +621,119 @@ function BKOPipeline({clientes,profile,session,dispatch,onSelect,filtroEstagio,s
               ))}
             </div>
           )}
-          {!funilSel&&filtroEstagio&&(
+          {!tituloAtual&&filtroEstagio&&(
             <div style={{display:'flex',alignItems:'center',gap:6,padding:'5px 12px',borderRadius:99,background:B_LIGHT,border:`1px solid ${B_MID}30`,fontSize:11,color:B_MID,fontWeight:600}}>
               {BKO_STAGES.find(s=>s.id===filtroEstagio)?.label}
               <button onClick={()=>setFiltroEstagio(null)} style={{background:'none',border:'none',cursor:'pointer',color:B_MID,fontSize:13,lineHeight:1,padding:0}}>×</button>
             </div>
           )}
-          {!funilSel&&(
+          {!tituloAtual&&(
             <div style={{position:'relative',width:220}}>
               <span style={{position:'absolute',left:10,top:'50%',transform:'translateY(-50%)',color:'var(--text-faint)',fontSize:12}}>⌕</span>
               <input className="inp" style={{paddingLeft:30,height:34,fontSize:12}} placeholder="Buscar cliente…" value={search} onChange={e=>setSearch(e.target.value)}/>
             </div>
           )}
-          {funilSel&&(
+          {funilSel&&!pipelineAtivo&&(
             <div style={{position:'relative',width:220}}>
               <span style={{position:'absolute',left:10,top:'50%',transform:'translateY(-50%)',color:'var(--text-faint)',fontSize:12}}>⌕</span>
               <input className="inp" style={{paddingLeft:30,height:34,fontSize:12}} placeholder="Buscar no funil…" value={funilSearch} onChange={e=>setFunilSearch(e.target.value)}/>
             </div>
           )}
-          {funisComContagem.length>0&&(
+
+          {/* ── DROPDOWN UNIFICADO: Pipelines CRM + Funis de Arquivo ── */}
+          {temDropdown&&(
             <div ref={funilRef} style={{position:'relative'}}>
               <button onClick={()=>setFunilOpen(v=>!v)}
-                style={{display:'flex',alignItems:'center',gap:6,padding:'7px 14px',borderRadius:8,border:`1px solid ${funilSel?funilSel.cor+'60':'var(--border)'}`,background:funilSel?`${funilSel.cor}10`:'var(--bg-card)',color:funilSel?funilSel.cor:'var(--text-secondary)',fontSize:12,fontWeight:600,cursor:'pointer',fontFamily:'var(--font)',whiteSpace:'nowrap'}}>
-                <span style={{fontSize:13}}></span> Funis de Venda
-                {funilSel&&<span style={{marginLeft:4,padding:'1px 7px',borderRadius:99,background:`${funilSel.cor}20`,fontSize:11}}>{funilSel.nome}</span>}
+                style={{display:'flex',alignItems:'center',gap:6,padding:'7px 14px',borderRadius:8,
+                  border:`1px solid ${pipelineAtivo?pipelineAtivo.cor+'60':funilSel?funilSel.cor+'60':'var(--border)'}`,
+                  background:pipelineAtivo?`${pipelineAtivo.cor}10`:funilSel?`${funilSel.cor}10`:'var(--bg-card)',
+                  color:pipelineAtivo?pipelineAtivo.cor:funilSel?funilSel.cor:'var(--text-secondary)',
+                  fontSize:12,fontWeight:600,cursor:'pointer',fontFamily:'var(--font)',whiteSpace:'nowrap'}}>
+                <span style={{fontSize:13}}>⬡</span> Funis de Venda
+                {pipelineAtivo&&<span style={{marginLeft:4,padding:'1px 7px',borderRadius:99,background:`${pipelineAtivo.cor}20`,fontSize:11}}>{pipelineAtivo.icone} {pipelineAtivo.nome}</span>}
+                {!pipelineAtivo&&funilSel&&<span style={{marginLeft:4,padding:'1px 7px',borderRadius:99,background:`${funilSel.cor}20`,fontSize:11}}>📦 {funilSel.nome}</span>}
               </button>
+
               {funilOpen&&(
-                <div style={{position:'absolute',right:0,top:'calc(100% + 6px)',background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:12,boxShadow:'0 8px 28px rgba(0,0,0,.14)',zIndex:300,overflow:'hidden',minWidth:220}}>
-                  <div style={{padding:'8px 12px',fontSize:9,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.08em',borderBottom:'1px solid var(--border)'}}>Funis de arquivo</div>
-                  {funilSel&&(
-                    <button onClick={()=>{setFunilSel(null);setFunilSearch('');setFunilOpen(false);}}
-                      style={{display:'flex',alignItems:'center',gap:8,width:'100%',padding:'10px 14px',background:'none',border:'none',cursor:'pointer',fontFamily:'var(--font)',fontSize:12,color:'var(--text-secondary)'}}
+                <div style={{position:'absolute',right:0,top:'calc(100% + 6px)',background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:12,boxShadow:'0 8px 28px rgba(0,0,0,.14)',zIndex:300,overflow:'hidden',minWidth:240}}>
+
+                  {/* Botão voltar (quando algo está selecionado) */}
+                  {(pipelineAtivo||funilSel)&&(
+                    <button onClick={()=>{setPipelineAtivo(null);setFunilSel(null);setFunilSearch('');setFunilOpen(false);}}
+                      style={{display:'flex',alignItems:'center',gap:8,width:'100%',padding:'10px 14px',background:'none',border:'none',borderBottom:'1px solid var(--border)',cursor:'pointer',fontFamily:'var(--font)',fontSize:12,color:'var(--text-secondary)'}}
                       onMouseEnter={e=>e.currentTarget.style.background='rgba(0,0,0,.04)'}
                       onMouseLeave={e=>e.currentTarget.style.background='none'}>← Pipeline (todos)</button>
                   )}
-                  {funisComContagem.filter(f=>f.ativo).map(f=>(
-                    <button key={f.id} onClick={()=>{setFunilSel(f);setFunilSearch('');setFiltroEstagio(null);setFunilOpen(false);}}
-                      style={{display:'flex',alignItems:'center',gap:10,width:'100%',padding:'10px 14px',background:funilSel?.id===f.id?`${f.cor}08`:'none',border:'none',cursor:'pointer',fontFamily:'var(--font)',fontSize:12,fontWeight:funilSel?.id===f.id?700:400,color:funilSel?.id===f.id?f.cor:'var(--text-primary)'}}
-                      onMouseEnter={e=>{if(funilSel?.id!==f.id)e.currentTarget.style.background='rgba(0,0,0,.04)';}}
-                      onMouseLeave={e=>{if(funilSel?.id!==f.id)e.currentTarget.style.background='none';}}>
-                      <div style={{width:8,height:8,borderRadius:'50%',background:f.cor,boxShadow:`0 0 5px ${f.cor}60`,flexShrink:0}}/>
-                      <span style={{flex:1,textAlign:'left'}}>{f.nome}</span>
-                      <span style={{fontSize:11,fontWeight:700,padding:'1px 7px',borderRadius:99,background:`${f.cor}15`,color:f.cor}}>{f.count}</span>
-                    </button>
-                  ))}
+
+                  {/* ── Seção: Pipelines CRM ── */}
+                  {crmPipelines.length>0&&(
+                    <>
+                      <div style={{padding:'7px 14px 4px',fontSize:9,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.08em',
+                        borderBottom:'1px solid var(--border)',background:'rgba(0,0,0,.02)'}}>
+                        Pipelines CRM
+                      </div>
+                      {crmPipelines.map(p=>(
+                        <button key={p.id} onClick={()=>{setPipelineAtivo(p);setFunilSel(null);setFiltroEstagio(null);setFunilOpen(false);}}
+                          style={{display:'flex',alignItems:'center',gap:10,width:'100%',padding:'10px 14px',
+                            background:pipelineAtivo?.id===p.id?`${p.cor}08`:'none',
+                            border:'none',cursor:'pointer',fontFamily:'var(--font)',fontSize:12,
+                            fontWeight:pipelineAtivo?.id===p.id?700:400,
+                            color:pipelineAtivo?.id===p.id?p.cor:'var(--text-primary)'}}
+                          onMouseEnter={e=>{if(pipelineAtivo?.id!==p.id)e.currentTarget.style.background='rgba(0,0,0,.04)';}}
+                          onMouseLeave={e=>{if(pipelineAtivo?.id!==p.id)e.currentTarget.style.background='none';}}>
+                          <div style={{width:8,height:8,borderRadius:'50%',background:p.cor,boxShadow:`0 0 5px ${p.cor}60`,flexShrink:0}}/>
+                          <span style={{flex:1,textAlign:'left'}}>{p.icone} {p.nome}</span>
+                          {pipelineAtivo?.id===p.id&&<span style={{fontSize:9,color:p.cor}}>✓ ativo</span>}
+                        </button>
+                      ))}
+                    </>
+                  )}
+
+                  {/* ── Seção: Funis de Arquivo ── */}
+                  {funisComContagem.filter(f=>f.ativo).length>0&&(
+                    <>
+                      <div style={{padding:'7px 14px 4px',fontSize:9,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.08em',
+                        borderTop:crmPipelines.length>0?'1px solid var(--border)':'none',
+                        borderBottom:'1px solid var(--border)',background:'rgba(0,0,0,.02)'}}>
+                        Arquivos
+                      </div>
+                      {funisComContagem.filter(f=>f.ativo).map(f=>(
+                        <button key={f.id} onClick={()=>{setFunilSel(f);setPipelineAtivo(null);setFunilSearch('');setFiltroEstagio(null);setFunilOpen(false);}}
+                          style={{display:'flex',alignItems:'center',gap:10,width:'100%',padding:'10px 14px',
+                            background:funilSel?.id===f.id?`${f.cor}08`:'none',
+                            border:'none',cursor:'pointer',fontFamily:'var(--font)',fontSize:12,
+                            fontWeight:funilSel?.id===f.id?700:400,
+                            color:funilSel?.id===f.id?f.cor:'var(--text-primary)'}}
+                          onMouseEnter={e=>{if(funilSel?.id!==f.id)e.currentTarget.style.background='rgba(0,0,0,.04)';}}
+                          onMouseLeave={e=>{if(funilSel?.id!==f.id)e.currentTarget.style.background='none';}}>
+                          <div style={{width:8,height:8,borderRadius:'50%',background:f.cor,boxShadow:`0 0 5px ${f.cor}60`,flexShrink:0}}/>
+                          <span style={{flex:1,textAlign:'left'}}>📦 {f.nome}</span>
+                          <span style={{fontSize:11,fontWeight:700,padding:'1px 7px',borderRadius:99,background:`${f.cor}15`,color:f.cor}}>{f.count}</span>
+                        </button>
+                      ))}
+                    </>
+                  )}
                 </div>
               )}
             </div>
           )}
         </div>
       </div>
-      {!funilSel&&(
+
+      {/* ── Render condicional das 3 visões ── */}
+
+      {/* 1. Pipeline CRM ativo → key força remount quando troca de pipeline */}
+      {pipelineAtivo&&(
+        <BKOPipelines key={pipelineAtivo.id} profile={profile} session={session} pipelineInicial={pipelineAtivo}/>
+      )}
+
+      {/* 2. Funil de arquivo selecionado → visão por mês (comportamento original) */}
+      {!pipelineAtivo&&funilSel&&(
+        <BKOFunilMeses key={funilSel.id} funil={funilSel} clientes={clientes} onSelect={onSelect} dispatch={dispatch} profile={profile}/>
+      )}
+
+      {/* 3. Kanban principal (padrão) */}
+      {!pipelineAtivo&&!funilSel&&(
         <div ref={colsRef} style={{display:'flex',gap:7,overflowX:'auto',overflowY:'hidden',padding:'0 20px 16px',flex:1,minHeight:0,alignItems:'stretch',scrollbarWidth:'thin',scrollbarColor:`${BKO_STAGES[0]?.color}40 transparent`}}>
           {BKO_STAGES.map(s=>(
             <BKOKanbanCol key={s.id} s={s} clientes={filtered} dragId={dragId} setDragId={setDragId}
@@ -676,9 +743,6 @@ function BKOPipeline({clientes,profile,session,dispatch,onSelect,filtroEstagio,s
           ))}
         </div>
       )}
-      {funilSel&&(
-        <BKOFunilMeses key={funilSel.id} funil={funilSel} clientes={clientes} onSelect={onSelect} dispatch={dispatch} profile={profile}/>
-      )}
     </div>
   );
 }
@@ -686,7 +750,6 @@ function BKOPipeline({clientes,profile,session,dispatch,onSelect,filtroEstagio,s
 // ─── CLIENTES ────────────────────────────────────────────────────────────────
 function exportarExcel(dados, nomeArquivo='clientes_bko'){
   try{
-    // Montar linhas
     const rows = dados.map(c=>({
       'Nome': c.nomeCliente||'',
       'CPF': c.cpfCliente||'',
@@ -701,8 +764,6 @@ function exportarExcel(dados, nomeArquivo='clientes_bko'){
       'Data de entrada': c.dataEntrada||'',
       'Criado em': c.created_at?fmtDH(c.created_at):'',
     }));
-
-    // Criar workbook via dados CSV simples (sem dependência externa)
     const headers = Object.keys(rows[0]||{});
     const csvRows = [
       headers.join(';'),
@@ -740,7 +801,6 @@ function BKOClientes({clientes,profile,onSelect,onNew,origemFiltro,setOrigemFilt
   const criadoresList=useMemo(()=>[...new Set(clientes.map(c=>c.criado_por_nome).filter(Boolean))].sort(),[clientes]);
   const atribuidosList=useMemo(()=>[...new Set(clientes.map(c=>c.atribuido_a_nome).filter(Boolean))].sort(),[clientes]);
 
-  // startec e corban_bko veem só os próprios; supervisor vê todas as equipes
   const isSupervisorC=profile?.is_supervisor===true;
   const clientesBase=useMemo(()=>{
     if(profile?.role==='startec'||profile?.role==='corban_bko')
@@ -785,9 +845,7 @@ function BKOClientes({clientes,profile,onSelect,onNew,origemFiltro,setOrigemFilt
               ))}
             </div>
           )}
-          <button
-            onClick={()=>exportarExcel(filtered)}
-            title="Exportar lista atual para CSV (abre no Excel)"
+          <button onClick={()=>exportarExcel(filtered)} title="Exportar lista atual para CSV"
             style={{display:'flex',alignItems:'center',gap:5,padding:'6px 12px',borderRadius:8,fontSize:12,fontWeight:600,cursor:'pointer',background:'rgba(16,185,129,.1)',color:'#059669',border:'1px solid rgba(16,185,129,.25)',transition:'all .15s'}}
             onMouseEnter={e=>{e.currentTarget.style.background='rgba(16,185,129,.2)';}}
             onMouseLeave={e=>{e.currentTarget.style.background='rgba(16,185,129,.1)';}}>
@@ -927,15 +985,10 @@ function NovoClienteModal({profile,dispatch,clientes,onClose}){
   );
 }
 
-// ─── SUPERVISOR SELECT ───────────────────────────────────────────────────────
 function SupervisorSelect({value,onChange}){
   const [supervisores,setSupervisores]=useState([]);
   useEffect(()=>{
-    supabase.from('profiles')
-      .select('id,nome')
-      .eq('modulo','bko')
-      .eq('is_supervisor',true)
-      .order('nome')
+    supabase.from('profiles').select('id,nome').eq('modulo','bko').eq('is_supervisor',true).order('nome')
       .then(({data})=>setSupervisores(data||[]));
   },[]);
   return(
@@ -946,7 +999,6 @@ function SupervisorSelect({value,onChange}){
   );
 }
 
-// ─── CADASTRAR ───────────────────────────────────────────────────────────────
 function BKOCadastrar({profile,session,funis=[],setFunis}){
   const [funilForm,setFunilForm]=useState({nome:'',cor:'#3B5BDB'});
   const [funilSaving,setFunilSaving]=useState(false);
@@ -986,9 +1038,7 @@ function BKOCadastrar({profile,session,funis=[],setFunis}){
   useEffect(()=>{load();},[load]);
 
   const openEdit=(u)=>{
-    setEditUser(u);
-    setEditMsg(null);
-    // Buscar supervisor_id atual do perfil para pré-preencher o campo
+    setEditUser(u);setEditMsg(null);
     supabase.from('profiles').select('supervisor_id').ilike('email',u.email).maybeSingle()
       .then(({data})=>setEditForm({nome:u.nome||'',novaSenha:'',confirmarSenha:'',supervisor_id:data?.supervisor_id||''}));
   };
@@ -1014,11 +1064,8 @@ function BKOCadastrar({profile,session,funis=[],setFunis}){
         if(!res.ok||result.error){passwordError=result.error||`Erro ao redefinir senha (status ${res.status}).`;}
       }catch(e){passwordError='Erro de conexão ao redefinir senha.';}
     }
-    // Salvar supervisor_id se for startec
     if(editUser.role==='startec'){
-      await supabase.from('profiles')
-        .update({supervisor_id:editForm.supervisor_id||null})
-        .ilike('email',editUser.email);
+      await supabase.from('profiles').update({supervisor_id:editForm.supervisor_id||null}).ilike('email',editUser.email);
     }
     setEditSaving(false);
     if(e1||e2||passwordError){setEditMsg({t:'error',text:passwordError||'Erro ao salvar. Tente novamente.'});return;}
@@ -1036,17 +1083,14 @@ function BKOCadastrar({profile,session,funis=[],setFunis}){
       const result=await res.json();setSaving(false);
       if(!res.ok||result.error){setMsg({t:'error',text:result.error||'Erro ao criar usuário.'});}
       else{
-          // Se for startec e tiver supervisor selecionado, vincular
-          if(form.role==='startec'&&form.supervisor_id){
-            await supabase.from('profiles')
-              .update({supervisor_id:form.supervisor_id})
-              .ilike('email',form.email.trim().toLowerCase());
-          }
-          setMsg({t:'success',text:`✓ ${form.nome} criado! Já pode fazer login.`});
-          setShowModal(false);
-          setForm({nome:'',email:'',senha:'',role:'corban_bko',supervisor_id:''});
-          load();
+        if(form.role==='startec'&&form.supervisor_id){
+          await supabase.from('profiles').update({supervisor_id:form.supervisor_id}).ilike('email',form.email.trim().toLowerCase());
         }
+        setMsg({t:'success',text:`✓ ${form.nome} criado! Já pode fazer login.`});
+        setShowModal(false);
+        setForm({nome:'',email:'',senha:'',role:'corban_bko',supervisor_id:''});
+        load();
+      }
     }catch(e){setSaving(false);setMsg({t:'error',text:'Erro de conexão.'});}
   };
 
@@ -1058,12 +1102,11 @@ function BKOCadastrar({profile,session,funis=[],setFunis}){
     load();
   };
 
-  // Grupos: Comercial | Corban | BKO | Startec
   const grupos=[
-    {role:'comercial',   label:'Comercial'},
-    {role:'corban_bko',  label:'Corban'},
-    {role:'bko',         label:'BKO'},
-    {role:'startec',     label:'Startec'},
+    {role:'comercial',label:'Comercial'},
+    {role:'corban_bko',label:'Corban'},
+    {role:'bko',label:'BKO'},
+    {role:'startec',label:'Startec'},
   ];
 
   return(
@@ -1100,8 +1143,6 @@ function BKOCadastrar({profile,session,funis=[],setFunis}){
           );})}
         </div>
       )}
-
-      {/* Modal editar */}
       {editUser&&(
         <div className="mbk" onClick={e=>{if(e.target===e.currentTarget)setEditUser(null);}}>
           <div className="mbox" style={{maxWidth:400}}>
@@ -1149,8 +1190,6 @@ function BKOCadastrar({profile,session,funis=[],setFunis}){
           </div>
         </div>
       )}
-
-      {/* Modal novo usuário */}
       {showModal&&(
         <div className="mbk" onClick={e=>{if(e.target===e.currentTarget){setShowModal(false);setMsg(null);}}}>
           <div className="mbox" style={{maxWidth:420}}>
@@ -1168,7 +1207,6 @@ function BKOCadastrar({profile,session,funis=[],setFunis}){
                 ))}
               </div>
             </div>
-            {/* Dropdown de supervisor — só aparece quando role é startec */}
             {form.role==='startec'&&(
               <div style={{marginBottom:10}}>
                 <label style={{display:'block',fontSize:10,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:5}}>Supervisor</label>
@@ -1185,8 +1223,6 @@ function BKOCadastrar({profile,session,funis=[],setFunis}){
           </div>
         </div>
       )}
-
-      {/* Confirmar remoção */}
       {confirmDelete&&(
         <div className="mbk" onClick={e=>{if(e.target===e.currentTarget)setConfirmDelete(null);}}>
           <div className="mbox" style={{maxWidth:360,textAlign:'center'}}>
@@ -1200,8 +1236,6 @@ function BKOCadastrar({profile,session,funis=[],setFunis}){
           </div>
         </div>
       )}
-
-      {/* Gestão de Funis (só Comercial) */}
       {isComercial&&(
         <div style={{marginTop:32,paddingTop:28,borderTop:'1px solid var(--border)'}}>
           <div style={{marginBottom:18}}>
@@ -1244,7 +1278,6 @@ function BKOCadastrar({profile,session,funis=[],setFunis}){
   );
 }
 
-// ─── AUDITORIA ───────────────────────────────────────────────────────────────
 function BKOAuditoria(){
   const [logs,setLogs]=useState([]);
   const [loading,setLoading]=useState(true);
@@ -1330,9 +1363,7 @@ export function BKOApp({profile,session,signOut,onAlterarSenha,userModules,onSwi
   const auditQueueRef=useRef([]);
   const [showAS,setShowAS]=useState(false);
   const [filtroEstagio,setFiltroEstagio]=useState(null);
-  // Filtro de equipe (só Comercial): null=todos | 'corban'=Corbans | 'startec'=Startec
   const [origemFiltro,setOrigemFiltro]=useState(null);
-  // Equipe do supervisor: IDs dos operadores sob supervisão
   const [supervisorTeam,setSupervisorTeam]=useState([]);
   const setView=useCallback(v=>{
     dispatch({type:'VIEW',v});
@@ -1347,22 +1378,18 @@ export function BKOApp({profile,session,signOut,onAlterarSenha,userModules,onSwi
     return()=>window.removeEventListener('keydown',h);
   },[]);
 
-  // Carregar todas as equipes startec agrupadas por supervisor
-  const [allTeams,setAllTeams]=useState([]); // [{supervisor_id, supervisor_nome, operadores:[id,...]}]
+  const [allTeams,setAllTeams]=useState([]);
   useEffect(()=>{
     if(!profile?.is_supervisor) return;
-    // Buscar todos operadores startec com seus supervisores
     Promise.all([
       supabase.from('profiles').select('id,nome,supervisor_id').eq('modulo','bko').eq('role','startec'),
       supabase.from('profiles').select('id,nome').eq('modulo','bko').eq('is_supervisor',true),
     ]).then(([{data:ops},{data:sups}])=>{
       const teams=(sups||[]).map(s=>({
-        supervisor_id:s.id,
-        supervisor_nome:s.nome,
+        supervisor_id:s.id,supervisor_nome:s.nome,
         operadores:(ops||[]).filter(o=>o.supervisor_id===s.id).map(o=>o.id),
       }));
       setAllTeams(teams);
-      // Manter supervisorTeam com a equipe própria para compatibilidade
       const myTeam=teams.find(t=>t.supervisor_id===profile.id);
       setSupervisorTeam(myTeam?.operadores||[]);
     });
@@ -1411,9 +1438,6 @@ export function BKOApp({profile,session,signOut,onAlterarSenha,userModules,onSwi
       syncQueueRef.current.clear();
       await Promise.all(toSync.map(async c=>{
         const {id,estagio,criado_por_id,criado_por_nome,criado_por_role,atribuido_a_id,atribuido_a_nome,responsavel_bko_id,responsavel_bko_nome,...data}=c;
-        // IMPORTANTE: responsavel_bko_id/nome NÃO são incluídos no upsert genérico.
-        // Esses campos são gerenciados EXCLUSIVAMENTE pelo botão Assumir/Liberar no BKODetail,
-        // que faz update direto no banco. Isso evita que o sync de outro BKO sobrescreva a responsabilidade.
         const {error}=await supabase.from('bko_clientes').upsert({id,data:{...data,id},estagio:estagio||'clientes_novos',criado_por_id:criado_por_id||session.user.id,criado_por_nome:criado_por_nome||profile?.nome,criado_por_role:criado_por_role||profile?.role,atribuido_a_id:atribuido_a_id||null,atribuido_a_nome:atribuido_a_nome||null},{onConflict:'id'});
         if(error) console.error('BKO sync error:',id,error.message);
       }));
@@ -1421,7 +1445,6 @@ export function BKOApp({profile,session,signOut,onAlterarSenha,userModules,onSwi
   },[clientes,ready,session]);
 
   const auditedDispatch=useCallback(async(action)=>{
-    // Auto-atribuição local para startec — aparece sem precisar recarregar
     if(action.type==='ADD'&&(profile?.role==='startec'||profile?.role==='corban_bko')){
       action={...action,c:{...action.c,atribuido_a_id:session?.user?.id,atribuido_a_nome:profile?.nome}};
     }
