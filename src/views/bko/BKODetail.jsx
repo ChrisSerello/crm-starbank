@@ -58,7 +58,7 @@ const ROLE_LABEL = { comercial:'Comercial', corban_bko:'Corban', bko:'BKO', star
 export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
   const [tab, setTab]         = useState('info');
   const [es, setEs]           = useState(cliente.estagio);
-  // ✅ CORREÇÃO: flag que indica se o USUÁRIO intencionalmente mudou o dropdown de estágio.
+  // CORREÇÃO: flag que indica se o USUÁRIO intencionalmente mudou o dropdown de estágio.
   // Se false, salvarInfo usa cliente.estagio (valor atual, pode ter mudado por realtime)
   // em vez de es (valor capturado no momento que o painel abriu).
   const [esUserChanged, setEsUserChanged] = useState(false);
@@ -251,11 +251,11 @@ export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
     setAtribStartecMsg({ t:'success', text:`Atribuído a ${opSel?.nome||'ninguém'}!` });
   };
 
-  // ✅ CORREÇÃO PRINCIPAL — causa dos "clientes mudando de esteira sozinhos"
+  //  CORREÇÃO PRINCIPAL — causa dos "clientes mudando de esteira sozinhos"
   // esUserChanged = false → usuário não tocou no dropdown → usa cliente.estagio (atual, pós-realtime)
   // esUserChanged = true  → usuário escolheu um novo estágio → usa es e dispara MOVE
   //
-  // ✅ CORREÇÃO SECUNDÁRIA — atividade do MOVE sendo apagada pelo UPD subsequente
+  //  CORREÇÃO SECUNDÁRIA — atividade do MOVE sendo apagada pelo UPD subsequente
   // O reducer UPD faz {...c, ...a.c}. Se a.c incluir activities (snapshot stale do cliente),
   // sobrescreve o array que o MOVE acabou de atualizar. Solução: omitir activities do UPD
   // quando MOVE já foi disparado — o reducer preserva automaticamente o que o MOVE escreveu.
@@ -474,8 +474,9 @@ export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
                   <div style={{fontSize:12,color:'var(--text-primary)',fontWeight:600,marginBottom:6}}>
                     {cliente.responsavel_bko_nome}
                     {euSouResponsavel&&<span style={{fontSize:9,marginLeft:6,padding:'1px 6px',borderRadius:99,background:'rgba(124,58,237,.1)',color:'#7C3AED',fontWeight:700}}>Você</span>}
+                    {isSupervisorBko&&!euSouResponsavel&&<span style={{fontSize:9,marginLeft:6,padding:'1px 6px',borderRadius:99,background:'rgba(249,115,22,.1)',color:'#F97316',fontWeight:700}}>Supervisora</span>}
                   </div>
-                  {euSouResponsavel?(
+                  {(euSouResponsavel||isSupervisorBko)?(
                     <button onClick={liberarResponsabilidade} disabled={salvandoResp} style={{padding:'6px 12px',borderRadius:7,background:'var(--danger-dim)',color:'var(--danger)',border:'none',fontSize:11,fontWeight:600,cursor:'pointer'}}>
                       Liberar responsabilidade
                     </button>
