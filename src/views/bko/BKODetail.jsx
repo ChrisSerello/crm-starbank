@@ -112,6 +112,7 @@ export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
     'edson@starbank.tec.br',
     'vera.marques@starbank.tec.br',
     'maria.cerqueira@starbank.tec.br',
+    'elisangela.pereira@starbank.tec.br',
   ];
   const isSupervisorBko = SUPERVISORES_BKO.includes(session?.user?.email);
   const bkoTravado = isBko && temResponsavel && !euSouResponsavel && !isSupervisorBko;
@@ -464,7 +465,7 @@ export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
           </div>
         )}
 
-        {/* ══ ABA: BKO ══ */}
+        {/*ABA BKO*/}
         {tab==='bko'&&(
           <div>
             <div style={{marginBottom:16,padding:14,background:'rgba(124,58,237,.06)',borderRadius:10,border:'1px solid rgba(124,58,237,.2)'}}>
