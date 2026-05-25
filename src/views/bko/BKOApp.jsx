@@ -153,13 +153,20 @@ function ModuleSwitcherBKO({ userModules, profile, onSwitch, collapsed }){
 }
 
 // ── SIDEBAR — sem item 'pipelines' separado ──────────────────────────────────
-function BKOSidebar({view,setView,profile,onLogout,onAlterarSenha,onSearch,collapsed,setCollapsed,userModules,onSwitchModule}){
+function BKOSidebar({view,setView,profile,onLogout,onAlterarSenha,onSearch,collapsed,setCollapsed,userModules,onSwitchModule,session}){
   const r=profile?.role;
+  const SUPERVISORES_CADASTRAR=[
+    'edson@starbank.tec.br',
+    'vera.marques@starbank.tec.br',
+    'maria.cerqueira@starbank.tec.br',
+    'elisangela.pereira@starbank.tec.br',
+  ];
+  const isSupervisorComAcesso=SUPERVISORES_CADASTRAR.includes(session?.user?.email);
   const items=[
     {id:'dashboard',icon:'◈',label:'Dashboard'},
     {id:'pipeline', icon:'⊞',label:'Pipeline'},
     {id:'clientes', icon:'≡',label:'Clientes'},
-    ...(r==='comercial'||r==='corban_bko'||r==='startec'?[{id:'cadastrar',icon:'＋',label:'Cadastrar'}]:[]),
+    ...(r==='comercial'||r==='corban_bko'||r==='startec'||isSupervisorComAcesso?[{id:'cadastrar',icon:'＋',label:'Cadastrar'}]:[]),
     ...(r==='comercial'?[{id:'auditoria',icon:'🔍',label:'Auditoria'}]:[]),
     ...(profile?.acesso_gestao_corban?[{id:'gestao_corban',icon:'⬡',label:'Gestão Corban'}]:[]),
   ];
@@ -1167,6 +1174,7 @@ function BKOCadastrar({profile,session,funis=[],setFunis}){
     'edson@starbank.tec.br',
     'vera.marques@starbank.tec.br',
     'maria.cerqueira@starbank.tec.br',
+    'elisangela.pereira@starbank.tec.br',
   ];
   const podePublicarAvisos=isComercial||SUPERVISORES_AVISOS.includes(session?.user?.email);
 
@@ -1685,6 +1693,7 @@ export function BKOApp({profile,session,signOut,onAlterarSenha,userModules,onSwi
           setCollapsed={toggleSidebar}
           userModules={userModules}
           onSwitchModule={onSwitchModule}
+          session={session}
         />
         <main style={{flex:1,minWidth:0,height:'100%',display:'flex',flexDirection:'column',overflow:view==='pipeline'?'hidden':'auto',paddingRight:selected?490:0,transition:'padding-right .3s cubic-bezier(.4,0,.2,1)'}}>
           {view==='dashboard' && <BKODashboard clientes={clientes} setView={v=>{setView(v);}} setFiltroEstagio={setFiltroEstagio} profile={profile} origemFiltro={origemFiltro} setOrigemFiltro={setOrigemFiltro} supervisorTeam={supervisorTeam} allTeams={allTeams}/>}
