@@ -87,7 +87,7 @@ function R(s,{type:t,...a}){
     case'SEL':        return{...s,sel:a.id};
     case'CLOSE':      return{...s,sel:null};
     case'TNEW':       return{...s,newOpen:!s.newOpen};
-    case'MOVE':       return{...s,clientes:s.clientes.map(c=>c.id!==a.cid?c:{...c,estagio:a.st,ultimoContato:TODAY,activities:[...(c.activities||[]),{id:gid(),type:'stage_change',date:TODAY,user:a.user,text:`Movido para "${BKO_STAGES.find(s=>s.id===a.st)?.label}"`}]})};
+    case'MOVE':       return{...s,clientes:s.clientes.map(c=>c.id!==a.cid?c:{...c,estagio:a.st,ultimoContato:TODAY,activities:[...(c.activities||[]),{id:gid(),type:'stage_change',date:TODAY,user:a.user,text:`Movido para "${BKO_STAGES.find(s=>s.id===a.st)?.label}"${a.motivo?` · Motivo: ${a.motivo}`:''}${a.obs?` · ${a.obs}`:''}`}]})};
     case'MOVE_FUNIL': return{...s,clientes:s.clientes.map(c=>c.id!==a.cid?c:{...c,funil_id:a.funil_id,funil_mes:a.funil_mes,funil_nome:a.funil_nome,ultimoContato:TODAY,activities:[...(c.activities||[]),{id:gid(),type:'stage_change',date:TODAY,user:a.user,text:`Arquivado no funil "${a.funil_nome}" · ${a.funil_mes_label}`}]})};
     case'REMOVE_FUNIL':return{...s,clientes:s.clientes.map(c=>c.id!==a.cid?c:{...c,funil_id:null,funil_mes:null,funil_nome:null,ultimoContato:TODAY,activities:[...(c.activities||[]),{id:gid(),type:'stage_change',date:TODAY,user:a.user,text:'Retornou ao pipeline'}]})};
     case'UPD':        return{...s,clientes:s.clientes.map(c=>c.id!==a.c.id?c:{...c,...a.c})};
@@ -157,84 +157,130 @@ function BKOSidebar({view,setView,profile,onLogout,onAlterarSenha,onSearch,colla
   const r=profile?.role;
   const items=[
     {id:'dashboard',icon:'◈',label:'Dashboard'},
-    {id:'pipeline', icon:'⊞',label:'Pipeline'},   // ← pipelines CRM ficam dentro do dropdown aqui
+    {id:'pipeline', icon:'⊞',label:'Pipeline'},
     {id:'clientes', icon:'≡',label:'Clientes'},
     ...(r==='comercial'||r==='corban_bko'||r==='startec'?[{id:'cadastrar',icon:'＋',label:'Cadastrar'}]:[]),
     ...(r==='comercial'?[{id:'auditoria',icon:'🔍',label:'Auditoria'}]:[]),
     ...(profile?.acesso_gestao_corban?[{id:'gestao_corban',icon:'⬡',label:'Gestão Corban'}]:[]),
   ];
-  const W=collapsed?56:200;
+
+  const ROLE_LABELS_SB={comercial:'Comercial',corban_bko:'Corban',bko:'BKO',startec:'Startec',supervisor_startec:'Supervisor'};
+  const W=collapsed?56:210;
+
+  // Azul Noturno palette
+  const BG='#141218';
+  const ACTIVE_BG='rgba(59,91,219,.15)';
+  const ACTIVE_COLOR='#C7D2FE';
+  const ACTIVE_ICON='#818CF8';
+  const ITEM_COLOR='rgba(255,255,255,.38)';
+  const BORDER='rgba(255,255,255,.07)';
+  const ACCENT='#3B5BDB';
+
   return(
-    <div style={{width:W,minWidth:W,background:B_DARK,borderRight:'1px solid rgba(59,91,219,.2)',display:'flex',flexDirection:'column',flexShrink:0,height:'100vh',position:'sticky',top:0,transition:'width .22s cubic-bezier(.4,0,.2,1)',overflow:'hidden'}}>
-      <div style={{padding:collapsed?'12px 0':'16px 14px 12px',borderBottom:'1px solid rgba(59,91,219,.15)',display:'flex',alignItems:'center',justifyContent:collapsed?'center':'space-between',gap:8,flexShrink:0,minHeight:64}}>
-        {!collapsed&&(
-          <div style={{flex:1,overflow:'hidden',minWidth:0}}>
-            <div style={{borderRadius:7,overflow:'hidden',width:'100%'}}>
-              <img src="/starflow.gif" alt="StarFlow" style={{display:'block',width:'100%',height:'auto',maxHeight:38,objectFit:'cover',objectPosition:'center'}}/>
+    <div style={{width:W,minWidth:W,background:BG,borderRight:'1px solid rgba(255,255,255,.06)',display:'flex',flexDirection:'column',flexShrink:0,height:'100vh',position:'sticky',top:0,transition:'width .22s cubic-bezier(.4,0,.2,1)',overflow:'hidden'}}>
+
+      {/* ── Logo ── */}
+      <div style={{padding:collapsed?'16px 0':'18px 14px 14px',borderBottom:`1px solid ${BORDER}`,display:'flex',alignItems:'center',justifyContent:collapsed?'center':'space-between',minHeight:68,flexShrink:0,gap:8}}>
+        <div style={{display:'flex',alignItems:'center',gap:9,overflow:'hidden',flex:1}}>
+          <div style={{width:30,height:30,borderRadius:9,background:ACCENT,display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,boxShadow:'0 4px 12px rgba(59,91,219,.4)',fontSize:14,fontWeight:800,color:'#fff',fontStyle:'italic',fontFamily:'var(--font-display)'}}>S</div>
+          {!collapsed&&(
+            <div style={{overflow:'hidden',flex:1}}>
+              <div style={{fontSize:13,fontWeight:700,color:'#EAE6F0',letterSpacing:'-.01em',whiteSpace:'nowrap'}}>StarFlow</div>
+              <div style={{fontSize:9,color:'rgba(255,255,255,.2)',letterSpacing:'.1em',textTransform:'uppercase',fontFamily:'monospace',marginTop:1}}>BKO — Backoffice</div>
             </div>
-            <div style={{marginTop:6,fontSize:8,fontWeight:700,color:B_TEXT,letterSpacing:'.12em',textTransform:'uppercase',whiteSpace:'nowrap'}}>BKO — Backoffice</div>
-          </div>
-        )}
-        <button onClick={()=>setCollapsed(v=>!v)} title={collapsed?'Expandir menu':'Recolher menu'}
-          style={{background:'rgba(255,255,255,.07)',border:'1px solid rgba(255,255,255,.1)',borderRadius:7,cursor:'pointer',width:26,height:26,display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,color:'rgba(255,255,255,.5)',flexShrink:0,transition:'all .15s'}}
-          onMouseEnter={e=>{e.currentTarget.style.background='rgba(255,255,255,.14)';e.currentTarget.style.color='#fff';}}
-          onMouseLeave={e=>{e.currentTarget.style.background='rgba(255,255,255,.07)';e.currentTarget.style.color='rgba(255,255,255,.5)';}}>
+          )}
+        </div>
+        <button onClick={()=>setCollapsed(v=>!v)} title={collapsed?'Expandir':'Recolher'}
+          style={{width:22,height:22,borderRadius:5,background:'rgba(255,255,255,.06)',border:'1px solid rgba(255,255,255,.09)',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',color:'rgba(255,255,255,.25)',fontSize:11,flexShrink:0,transition:'all .15s'}}
+          onMouseEnter={e=>{e.currentTarget.style.background='rgba(255,255,255,.12)';e.currentTarget.style.color='rgba(255,255,255,.8)';}}
+          onMouseLeave={e=>{e.currentTarget.style.background='rgba(255,255,255,.06)';e.currentTarget.style.color='rgba(255,255,255,.25)';}}>
           {collapsed?'›':'‹'}
         </button>
       </div>
-      <div style={{padding:collapsed?'8px 4px 0':'8px 8px 0'}}>
-        <button onClick={onSearch} title={collapsed?'Buscar cliente (Ctrl+K)':''}
-          style={{display:'flex',alignItems:'center',gap:collapsed?0:8,width:'100%',padding:collapsed?'8px 0':'7px 10px',justifyContent:collapsed?'center':'flex-start',borderRadius:8,background:'rgba(255,255,255,.05)',border:'1px solid rgba(255,255,255,.08)',cursor:'pointer',color:'rgba(255,255,255,.45)',fontSize:12,fontFamily:'var(--font)',transition:'all .15s'}}
-          onMouseEnter={e=>{e.currentTarget.style.background='rgba(59,91,219,.18)';e.currentTarget.style.color=B_TEXT;}}
-          onMouseLeave={e=>{e.currentTarget.style.background='rgba(255,255,255,.05)';e.currentTarget.style.color='rgba(255,255,255,.45)';}}>
-          <span style={{fontSize:15,flexShrink:0}}>⌕</span>
-          {!collapsed&&<><span style={{flex:1,textAlign:'left',fontSize:11}}>Buscar…</span><kbd style={{fontSize:8,padding:'1px 4px',borderRadius:4,background:'rgba(255,255,255,.1)',border:'1px solid rgba(255,255,255,.12)',color:'rgba(255,255,255,.4)'}}>K</kbd></>}
+
+      {/* ── Search ── */}
+      <div style={{padding:collapsed?'8px 4px 0':'8px 10px 0'}}>
+        <button onClick={onSearch} title={collapsed?'Buscar (Ctrl+K)':''}
+          style={{display:'flex',alignItems:'center',gap:collapsed?0:8,width:'100%',padding:collapsed?'8px 0':'7px 10px',justifyContent:collapsed?'center':'flex-start',borderRadius:6,background:'rgba(255,255,255,.05)',border:'1px solid rgba(255,255,255,.08)',cursor:'pointer',color:'rgba(255,255,255,.3)',fontSize:12,fontFamily:'var(--font)',transition:'all .15s'}}
+          onMouseEnter={e=>{e.currentTarget.style.background='rgba(59,91,219,.1)';e.currentTarget.style.borderColor='rgba(59,91,219,.3)';e.currentTarget.style.color='rgba(165,180,252,.8)';}}
+          onMouseLeave={e=>{e.currentTarget.style.background='rgba(255,255,255,.05)';e.currentTarget.style.borderColor='rgba(255,255,255,.08)';e.currentTarget.style.color='rgba(255,255,255,.3)';}}>
+          <span style={{fontSize:14,flexShrink:0}}>⌕</span>
+          {!collapsed&&<><span style={{flex:1,textAlign:'left',fontSize:11.5}}>Buscar…</span><kbd style={{fontSize:8,padding:'1px 4px',borderRadius:3,background:'rgba(255,255,255,.08)',border:'1px solid rgba(255,255,255,.1)',color:'rgba(255,255,255,.25)',fontFamily:'monospace'}}>K</kbd></>}
         </button>
       </div>
-      <nav style={{padding:collapsed?'8px 4px':'8px',flex:1,overflow:'hidden'}}>
-        <ModuleSwitcherBKO userModules={userModules} profile={profile} onSwitch={onSwitchModule} collapsed={collapsed}/>
-        {userModules&&userModules.length>1&&(
-          <div style={{height:1,background:'rgba(59,91,219,.2)',margin:collapsed?'4px 6px 4px':'4px 8px 6px'}}/>
-        )}
-        {!collapsed&&<div style={{fontSize:8,fontWeight:700,color:'rgba(255,255,255,.25)',textTransform:'uppercase',letterSpacing:'.09em',padding:'8px 8px 4px'}}>Menu</div>}
-        {items.map(it=>(
-          <button key={it.id} onClick={()=>setView(it.id)} title={collapsed?it.label:''}
-            style={{display:'flex',alignItems:'center',gap:collapsed?0:9,padding:collapsed?'9px 0':'8px 10px',justifyContent:collapsed?'center':'flex-start',borderRadius:8,fontSize:12,fontWeight:view===it.id?600:400,cursor:'pointer',border:'none',width:'100%',textAlign:'left',transition:'all .15s',position:'relative',background:view===it.id?B_LIGHT:'transparent',color:view===it.id?B_TEXT:'rgba(255,255,255,.5)',fontFamily:'var(--font)',marginBottom:2}}
-            onMouseEnter={e=>{if(view!==it.id){e.currentTarget.style.background='rgba(255,255,255,.05)';e.currentTarget.style.color='rgba(255,255,255,.75)';}}}
-            onMouseLeave={e=>{if(view!==it.id){e.currentTarget.style.background='transparent';e.currentTarget.style.color='rgba(255,255,255,.5)';}}}
-          >
-            {view===it.id&&<div style={{position:'absolute',left:0,top:'20%',bottom:'20%',width:3,background:B_MID,borderRadius:'0 3px 3px 0'}}/>}
-            <span style={{fontSize:15,width:20,textAlign:'center',flexShrink:0}}>{it.icon}</span>
-            {!collapsed&&<span style={{whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{it.label}</span>}
-          </button>
-        ))}
+
+      {/* ── Module switcher (se tiver mais de 1 módulo) ── */}
+      {userModules&&userModules.length>1&&(
+        <div style={{padding:collapsed?'6px 4px 0':'6px 10px 0'}}>
+          <ModuleSwitcherBKO userModules={userModules} profile={profile} onSwitch={onSwitchModule} collapsed={collapsed}/>
+        </div>
+      )}
+
+      {/* ── Nav ── */}
+      <nav style={{flex:1,padding:collapsed?'10px 4px':'10px 8px',overflow:'hidden'}}>
+        {!collapsed&&<div style={{fontSize:9,fontWeight:600,color:'rgba(255,255,255,.18)',textTransform:'uppercase',letterSpacing:'.13em',padding:'4px 8px 8px',fontFamily:'monospace'}}>Menu</div>}
+        {items.map(it=>{
+          const active=view===it.id;
+          return(
+            <button key={it.id} onClick={()=>setView(it.id)} title={collapsed?it.label:''}
+              style={{display:'flex',alignItems:'center',gap:collapsed?0:9,padding:collapsed?'9px 0':'7px 10px',justifyContent:collapsed?'center':'flex-start',borderRadius:6,fontSize:12.5,fontWeight:active?500:400,cursor:'pointer',border:'none',width:'100%',textAlign:'left',transition:'all .15s',marginBottom:2,fontFamily:'var(--font)',letterSpacing:'-.005em',
+                background:active?ACTIVE_BG:'transparent',
+                color:active?ACTIVE_COLOR:ITEM_COLOR,
+              }}
+              onMouseEnter={e=>{if(!active){e.currentTarget.style.background='rgba(255,255,255,.06)';e.currentTarget.style.color='rgba(255,255,255,.65)';}}}
+              onMouseLeave={e=>{if(!active){e.currentTarget.style.background='transparent';e.currentTarget.style.color=ITEM_COLOR;}}}>
+              <span style={{fontSize:14,width:20,textAlign:'center',flexShrink:0,color:active?ACTIVE_ICON:ITEM_COLOR}}>{it.icon}</span>
+              {!collapsed&&<span style={{whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{it.label}</span>}
+            </button>
+          );
+        })}
       </nav>
-      <div style={{padding:collapsed?'10px 4px':'10px 12px',borderTop:'1px solid rgba(59,91,219,.15)',flexShrink:0}}>
+
+      {/* ── Footer ── */}
+      <div style={{padding:collapsed?'10px 4px':'10px 12px',borderTop:`1px solid ${BORDER}`,flexShrink:0}}>
         {collapsed?(
-          <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:6}}>
-            <Avatar name={profile?.nome||'U'} size={26} color={ROLE_COLORS[r]||B_MID}/>
-            <div style={{width:6,height:6,borderRadius:'50%',background:'#22C55E',boxShadow:'0 0 5px #22C55E'}}/>
-            <button onClick={onAlterarSenha} title="Alterar senha" style={{width:30,height:26,borderRadius:6,background:'rgba(255,255,255,.05)',border:'1px solid rgba(255,255,255,.08)',color:'rgba(255,255,255,.5)',fontSize:12,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}>🔑</button>
-            <button onClick={onLogout} title="Sair" style={{width:30,height:26,borderRadius:6,background:'rgba(239,68,68,.1)',border:'1px solid rgba(239,68,68,.2)',color:'#FCA5A5',fontSize:13,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}>⏻</button>
+          <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:8}}>
+            <div style={{width:28,height:28,borderRadius:'50%',background:ACCENT,display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:700,color:'#A5B4FC'}}>
+              {profile?.nome?.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase()||'?'}
+            </div>
+            <button onClick={onLogout} style={{width:30,height:26,borderRadius:6,background:'rgba(239,68,68,.1)',border:'1px solid rgba(239,68,68,.18)',color:'#FCA5A5',fontSize:12,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center'}}>⏻</button>
           </div>
         ):(
           <>
-            <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:8}}>
-              <Avatar name={profile?.nome||'U'} size={26} color={ROLE_COLORS[r]||B_MID}/>
-              <div style={{minWidth:0}}>
-                <div style={{fontSize:10,fontWeight:600,color:'#fff',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{profile?.nome}</div>
-                <div style={{fontSize:8,fontWeight:700,color:B_TEXT,textTransform:'uppercase',letterSpacing:'.07em'}}>{ROLE_LABELS[r]||r}</div>
+            {/* User row */}
+            <div style={{display:'flex',alignItems:'center',gap:9,padding:'8px 10px',borderRadius:8,background:'rgba(255,255,255,.04)',border:'1px solid rgba(255,255,255,.06)',marginBottom:8}}>
+              <div style={{width:26,height:26,borderRadius:'50%',background:ACCENT,display:'flex',alignItems:'center',justifyContent:'center',fontSize:9.5,fontWeight:700,color:'#A5B4FC',flexShrink:0}}>
+                {profile?.nome?.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase()||'?'}
               </div>
-              <div style={{marginLeft:'auto',width:6,height:6,borderRadius:'50%',background:'#22C55E',boxShadow:'0 0 5px #22C55E',flexShrink:0}}/>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:12,fontWeight:500,color:'rgba(255,255,255,.82)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{profile?.nome}</div>
+                {/* Pill de role */}
+                <span style={{display:'inline-block',marginTop:2,fontSize:9,fontWeight:600,padding:'1px 6px',borderRadius:99,background:'rgba(59,91,219,.22)',color:'#818CF8',fontFamily:'monospace',letterSpacing:'.04em',textTransform:'uppercase'}}>
+                  {ROLE_LABELS_SB[r]||r}
+                </span>
+              </div>
+              <div style={{width:6,height:6,borderRadius:'50%',background:'#22C55E',boxShadow:'0 0 5px #22C55E',flexShrink:0}}/>
             </div>
-            <button onClick={onAlterarSenha} style={{width:'100%',padding:'5px 0',borderRadius:6,background:'rgba(255,255,255,.05)',border:'1px solid rgba(255,255,255,.08)',color:'rgba(255,255,255,.5)',fontSize:10,fontWeight:500,cursor:'pointer',fontFamily:'var(--font)',marginBottom:4}}>🔑 Alterar senha</button>
-            <button onClick={onLogout} style={{width:'100%',padding:'5px 0',borderRadius:6,background:'rgba(239,68,68,.1)',border:'1px solid rgba(239,68,68,.2)',color:'#FCA5A5',fontSize:10,fontWeight:600,cursor:'pointer',fontFamily:'var(--font)'}}>Sair da conta</button>
+            {/* Ações */}
+            <div style={{display:'flex',gap:6}}>
+              <button onClick={onAlterarSenha} style={{flex:1,padding:'6px 0',borderRadius:6,background:'rgba(255,255,255,.05)',border:'1px solid rgba(255,255,255,.08)',color:'rgba(255,255,255,.35)',fontSize:11,fontWeight:500,cursor:'pointer',fontFamily:'var(--font)',transition:'all .15s'}}
+                onMouseEnter={e=>{e.currentTarget.style.background='rgba(255,255,255,.1)';e.currentTarget.style.color='rgba(255,255,255,.7)';}}
+                onMouseLeave={e=>{e.currentTarget.style.background='rgba(255,255,255,.05)';e.currentTarget.style.color='rgba(255,255,255,.35)';}}>
+                🔑 Senha
+              </button>
+              <button onClick={onLogout} style={{flex:1,padding:'6px 0',borderRadius:6,background:'rgba(239,68,68,.08)',border:'1px solid rgba(239,68,68,.16)',color:'#FCA5A5',fontSize:11,fontWeight:600,cursor:'pointer',fontFamily:'var(--font)',transition:'all .15s'}}
+                onMouseEnter={e=>{e.currentTarget.style.background='rgba(239,68,68,.16)';}}
+                onMouseLeave={e=>{e.currentTarget.style.background='rgba(239,68,68,.08)';}}>
+                Sair
+              </button>
+            </div>
           </>
         )}
       </div>
     </div>
   );
 }
+
 
 function StatCard({label,value,color,icon,onClick}){
   return(
@@ -345,8 +391,77 @@ function BKODashboard({clientes,setView,setFiltroEstagio,profile,origemFiltro,se
   );
 }
 
+// ─── MODAL: MOTIVO DA PERDA ──────────────────────────────────────────────────
+const MOTIVOS_PERDA = [
+  'Taxa alta',
+  'Sem margem disponível',
+  'Cliente não atendeu',
+  'Cliente desistiu',
+  'Concorrente mais vantajoso',
+  'Documentação incompleta',
+  'Reprovado na análise',
+  'Outro',
+];
+
+function MotivoPerdaModal({ onConfirm, onCancel }) {
+  const [motivo, setMotivo] = useState('');
+  const [obs,    setObs]    = useState('');
+  const [erro,   setErro]   = useState(false);
+
+  const confirmar = () => {
+    if (!motivo) { setErro(true); return; }
+    onConfirm(motivo, obs.trim());
+  };
+
+  return (
+    <div className="mbk" onClick={e=>{ if(e.target===e.currentTarget) onCancel(); }}>
+      <div className="mbox" style={{ maxWidth:420 }}>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:20 }}>
+          <div>
+            <div style={{ fontFamily:'var(--font-display)', fontSize:18, fontWeight:600, color:'var(--text-primary)', marginBottom:4 }}>
+              Mover para Perdidos
+            </div>
+            <div style={{ fontSize:12, color:'var(--text-muted)' }}>
+              Informe o motivo para registrar no histórico
+            </div>
+          </div>
+          <button onClick={onCancel} style={{ background:'rgba(0,0,0,.06)', border:'1px solid var(--border)', borderRadius:8, cursor:'pointer', width:28, height:28, display:'flex', alignItems:'center', justifyContent:'center', fontSize:15, color:'var(--text-muted)' }}>×</button>
+        </div>
+
+        <div style={{ marginBottom:14 }}>
+          <label style={{ display:'block', fontSize:10, fontWeight:700, color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.07em', marginBottom:6 }}>
+            Motivo da perda *
+          </label>
+          <select className="sel" value={motivo} onChange={e=>{ setMotivo(e.target.value); setErro(false); }}
+            style={{ borderColor: erro ? 'var(--danger)' : '' }}>
+            <option value="">— Selecione um motivo —</option>
+            {MOTIVOS_PERDA.map(m => <option key={m} value={m}>{m}</option>)}
+          </select>
+          {erro && <div style={{ fontSize:11, color:'var(--danger)', marginTop:5 }}>⚠ Selecione um motivo antes de continuar.</div>}
+        </div>
+
+        <div style={{ marginBottom:22 }}>
+          <label style={{ display:'block', fontSize:10, fontWeight:700, color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.07em', marginBottom:6 }}>
+            Observação (opcional)
+          </label>
+          <textarea className="inp" value={obs} onChange={e=>setObs(e.target.value)}
+            placeholder="Detalhe o motivo se necessário…"
+            style={{ resize:'vertical', minHeight:72, lineHeight:1.5 }}/>
+        </div>
+
+        <div style={{ display:'flex', gap:10, justifyContent:'flex-end' }}>
+          <button className="btn btn-ghost" onClick={onCancel}>Cancelar</button>
+          <button className="btn" style={{ background:'var(--danger)', color:'#fff' }} onClick={confirmar}>
+            Confirmar perda
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── KCARD ───────────────────────────────────────────────────────────────────
-function KCard({c,onSelect,dispatch,profile,session,setDragId,funis=[]}){
+function KCard({c,onSelect,dispatch,profile,session,setDragId,funis=[],setMotivoModal}){
   const [menuOpen,setMenuOpen]=useState(false);
   const [menuPos,setMenuPos]=useState({top:0,left:0});
   const btnRef=useRef(null);
@@ -400,7 +515,7 @@ function KCard({c,onSelect,dispatch,profile,session,setDragId,funis=[]}){
             </div>
           ):BKO_STAGES.filter(st=>st.id!==c.estagio).map(st=>(
             <button key={st.id}
-              onMouseDown={e=>{e.stopPropagation();dispatch({type:'MOVE',cid:c.id,st:st.id,user:profile?.nome||'Usuário'});setMenuOpen(false);}}
+              onMouseDown={e=>{e.stopPropagation();if(st.id==='perdido'){setMotivoModal({cid:c.id,setMenuOpen});}else{dispatch({type:'MOVE',cid:c.id,st:st.id,user:profile?.nome||'Usuário'});setMenuOpen(false);}}}
               style={{display:'flex',alignItems:'center',gap:8,width:'100%',padding:'7px 12px',background:'none',border:'none',cursor:'pointer',textAlign:'left',fontSize:12,color:'var(--text-primary)',fontFamily:'var(--font)',transition:'background .1s'}}
               onMouseEnter={e=>e.currentTarget.style.background='rgba(0,0,0,.04)'}
               onMouseLeave={e=>e.currentTarget.style.background='none'}>
@@ -435,14 +550,14 @@ function KCard({c,onSelect,dispatch,profile,session,setDragId,funis=[]}){
 }
 
 // ─── KANBAN COL ──────────────────────────────────────────────────────────────
-function BKOKanbanCol({s,clientes,dragId,setDragId,dispatch,onSelect,profile,session,highlight,funis,collapsed,onToggleCollapse}){
+function BKOKanbanCol({s,clientes,dragId,setDragId,dispatch,onSelect,profile,session,highlight,funis,collapsed,onToggleCollapse,setMotivoModal}){
   const [over,setOver]=useState(false);
   const sl=clientes.filter(c=>c.estagio===s.id&&!c.funil_id);
   return(
     <div style={{minWidth:collapsed?44:170,width:collapsed?44:215,flexShrink:0,background:highlight?`${s.color}08`:'rgba(0,0,0,.03)',border:`1px solid ${highlight?s.color+'40':'var(--border)'}`,borderRadius:12,padding:'10px 8px',transition:'all .22s cubic-bezier(.4,0,.2,1)',boxShadow:highlight?`0 0 0 2px ${s.color}30`:'',display:'flex',flexDirection:'column'}}
       onDragOver={e=>{e.preventDefault();setOver(true);}}
       onDragLeave={()=>setOver(false)}
-      onDrop={()=>{setOver(false);if(dragId){const dragCliente=clientes.find(c=>c.id===dragId);const trava=dragCliente?checarTravaBKO(dragCliente,profile,session):{travado:false};if(trava.travado){alert(`🔒 Este cliente está travado na coluna BKO.\nResponsável: ${trava.motivo}\nSomente o responsável ou supervisores BKO podem mover.`);setDragId(null);return;}dispatch({type:'MOVE',cid:dragId,st:s.id,user:profile?.nome||'Usuário'});}setDragId(null);}}>
+      onDrop={()=>{setOver(false);if(dragId){const dragCliente=clientes.find(c=>c.id===dragId);const trava=dragCliente?checarTravaBKO(dragCliente,profile,session):{travado:false};if(trava.travado){alert(`🔒 Este cliente está travado na coluna BKO.\nResponsável: ${trava.motivo}\nSomente o responsável ou supervisores BKO podem mover.`);setDragId(null);return;}if(s.id==='perdido'){setMotivoModal({cid:dragId});}else{dispatch({type:'MOVE',cid:dragId,st:s.id,user:profile?.nome||'Usuário'});}}setDragId(null);}}>
       {collapsed?(
         <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:8,cursor:'pointer',height:'100%',justifyContent:'flex-start',paddingTop:4}} onClick={onToggleCollapse} title={`Expandir: ${s.label}`}>
           <div style={{width:7,height:7,borderRadius:'50%',background:s.color,boxShadow:`0 0 5px ${s.color}60`,marginTop:2}}/>
@@ -462,7 +577,7 @@ function BKOKanbanCol({s,clientes,dragId,setDragId,dispatch,onSelect,profile,ses
           </div>
           <div style={{flex:1,overflowY:'auto',minHeight:40,paddingRight:2,scrollbarWidth:'thin',scrollbarColor:'rgba(0,0,0,.1) transparent'}}>
             {sl.map(c=>(
-              <KCard key={c.id} c={c} onSelect={onSelect} dispatch={dispatch} profile={profile} session={session} setDragId={setDragId} funis={funis}/>
+              <KCard key={c.id} c={c} onSelect={onSelect} dispatch={dispatch} profile={profile} session={session} setDragId={setDragId} funis={funis} setMotivoModal={setMotivoModal}/>
             ))}
             {sl.length===0&&<div style={{textAlign:'center',padding:'16px 0',fontSize:10,color:'var(--text-faint)'}}>Solte aqui</div>}
           </div>
@@ -537,6 +652,8 @@ function BKOPipeline({clientes,profile,session,dispatch,onSelect,filtroEstagio,s
   const [funilSel,setFunilSel]=useState(null);
   const [funilSearch,setFunilSearch]=useState('');
   const [funilOpen,setFunilOpen]=useState(false);
+  // ── Modal motivo de perda ──
+  const [motivoModal,setMotivoModal]=useState(null); // { cid, origem: 'drag'|'menu'|'painel' }
   const funilRef=useRef(null);
   const colsRef=useRef(null);
 
@@ -739,9 +856,21 @@ function BKOPipeline({clientes,profile,session,dispatch,onSelect,filtroEstagio,s
             <BKOKanbanCol key={s.id} s={s} clientes={filtered} dragId={dragId} setDragId={setDragId}
               dispatch={dispatch} onSelect={onSelect} profile={profile} session={session}
               highlight={filtroEstagio===s.id} funis={funisComContagem}
-              collapsed={collapsedCols.has(s.id)} onToggleCollapse={()=>toggleCol(s.id)}/>
+              collapsed={collapsedCols.has(s.id)} onToggleCollapse={()=>toggleCol(s.id)} setMotivoModal={setMotivoModal}/>
           ))}
         </div>
+      )}
+
+      {/* ── Modal motivo de perda ── */}
+      {motivoModal&&(
+        <MotivoPerdaModal
+          onConfirm={(motivo,obs)=>{
+            dispatch({type:'MOVE',cid:motivoModal.cid,st:'perdido',user:profile?.nome||'Usuário',motivo,obs});
+            if(motivoModal.setMenuOpen) motivoModal.setMenuOpen(false);
+            setMotivoModal(null);
+          }}
+          onCancel={()=>setMotivoModal(null)}
+        />
       )}
     </div>
   );
@@ -937,10 +1066,11 @@ function NovoClienteModal({profile,dispatch,clientes,onClose}){
       if(existe){setCpfAviso(true);setForm(f=>({...f,cpfCliente:val,nomeCliente:existe.nomeCliente||f.nomeCliente,telefone:existe.telefone||f.telefone}));}
       else setCpfAviso(false);
     } else setCpfAviso(false);
+    // ✅ Removido alert() nativo — o aviso amarelo no modal já é suficiente
   };
   const save=()=>{
     if(!form.nomeCliente.trim()||!form.cpfCliente.trim()){alert('Nome e CPF são obrigatórios.');return;}
-    if(cpfAviso){alert('Este CPF já está cadastrado. Verifique os dados antes de continuar.');return;}
+    // ✅ CPF duplicado: apenas avisa, não bloqueia — usuário pode cadastrar mesmo assim
     const id=gid();
     dispatch({type:'ADD',c:{...form,id,criado_por_nome:profile?.nome,criado_por_role:profile?.role},user:profile?.nome||'Usuário'});
   };
@@ -1033,6 +1163,12 @@ function BKOCadastrar({profile,session,funis=[],setFunis}){
   const [msg,setMsg]=useState(null);
   const [confirmDelete,setConfirmDelete]=useState(null);
   const isComercial=profile?.role==='comercial';
+  const SUPERVISORES_AVISOS=[
+    'edson@starbank.tec.br',
+    'vera.marques@starbank.tec.br',
+    'maria.cerqueira@starbank.tec.br',
+  ];
+  const podePublicarAvisos=isComercial||SUPERVISORES_AVISOS.includes(session?.user?.email);
 
   const load=useCallback(async()=>{setLoading(true);const {data}=await supabase.from('allowed_users').select('*').eq('modulo','bko').order('nome');setUsuarios(data||[]);setLoading(false);},[]);
   useEffect(()=>{load();},[load]);
@@ -1111,6 +1247,9 @@ function BKOCadastrar({profile,session,funis=[],setFunis}){
 
   return(
     <div style={{padding:'28px 32px'}}>
+      {/* ── Avisos no topo ── */}
+      {podePublicarAvisos&&<AvisosSection profile={profile} session={session}/>}
+
       <div className="fu" style={{display:'flex',justifyContent:'space-between',alignItems:'flex-end',marginBottom:22}}>
         <div><div className="section-title">Cadastrar</div><div className="section-sub">Usuários do módulo BKO</div></div>
         <button className="btn" style={{background:B_MID,color:'#fff',boxShadow:`0 3px 12px ${B_GLOW}`}} onClick={()=>{setForm({nome:'',email:'',senha:'',role:'corban_bko',supervisor_id:''});setMsg(null);setShowModal(true);}}>+ Adicionar usuário</button>
@@ -1236,6 +1375,8 @@ function BKOCadastrar({profile,session,funis=[],setFunis}){
           </div>
         </div>
       )}
+       {/* Avisos movidos para o topo do BKOCadastrar */}
+
       {isComercial&&(
         <div style={{marginTop:32,paddingTop:28,borderTop:'1px solid var(--border)'}}>
           <div style={{marginBottom:18}}>
@@ -1363,6 +1504,7 @@ export function BKOApp({profile,session,signOut,onAlterarSenha,userModules,onSwi
   const auditQueueRef=useRef([]);
   const [showAS,setShowAS]=useState(false);
   const [filtroEstagio,setFiltroEstagio]=useState(null);
+  const [avisoAtual,setAvisoAtual]=useState(null); // aviso popup
   const [origemFiltro,setOrigemFiltro]=useState(null);
   const [supervisorTeam,setSupervisorTeam]=useState([]);
   const setView=useCallback(v=>{
@@ -1402,6 +1544,50 @@ export function BKOApp({profile,session,signOut,onAlterarSenha,userModules,onSwi
     }).subscribe();
     return()=>supabase.removeChannel(ch);
   },[]);
+
+  // ── Avisos: buscar pendentes + realtime ──
+  useEffect(()=>{
+    if(!session||!profile) return;
+    const userId=session.user.id;
+    const role=profile?.role;
+
+    const carregarAvisos=async()=>{
+      const {data}=await supabase.from('bko_avisos')
+        .select('*')
+        .eq('ativo',true)
+        .or(`destinatario.eq.todos,destinatario.eq.${role},destinatario.eq.${userId}`)
+        .order('created_at',{ascending:false})
+        .limit(1);
+      if(!data||data.length===0) return;
+      const aviso=data[0];
+      // Verificar se já foi visto
+      const {data:visto}=await supabase.from('bko_avisos_vistos')
+        .select('aviso_id').eq('aviso_id',aviso.id).eq('user_id',userId).maybeSingle();
+      if(!visto) setAvisoAtual(aviso);
+    };
+    carregarAvisos();
+
+    // Realtime — novo aviso publicado
+    const ch=supabase.channel('bko_avisos_rt')
+      .on('postgres_changes',{event:'INSERT',schema:'public',table:'bko_avisos'},async payload=>{
+        const aviso=payload.new;
+        const dest=aviso.destinatario;
+        if(dest==='todos'||dest===role||dest===userId){
+          setAvisoAtual(aviso);
+        }
+      }).subscribe();
+    return()=>supabase.removeChannel(ch);
+  },[session,profile?.role]);
+
+  const fecharAviso=async()=>{
+    if(!avisoAtual) return;
+    // upsert evita erro de conflito se já existir o registro
+    await supabase.from('bko_avisos_vistos').upsert(
+      {aviso_id:avisoAtual.id, user_id:session.user.id},
+      {onConflict:'aviso_id,user_id', ignoreDuplicates:true}
+    );
+    setAvisoAtual(null);
+  };
 
   useEffect(()=>{
     if(!session) return;
@@ -1512,6 +1698,7 @@ export function BKOApp({profile,session,signOut,onAlterarSenha,userModules,onSwi
         {newOpen&&<NovoClienteModal profile={profile} dispatch={auditedDispatch} clientes={clientes} onClose={()=>dispatch({type:'TNEW'})}/>}
       </div>
       {showAS&&<AlterarSenha onClose={()=>setShowAS(false)}/>}
+      {avisoAtual&&<AvisoPopup aviso={avisoAtual} onFechar={fecharAviso}/>}
       <BKOSearch
         clientes={clientes}
         open={searchOpen}
@@ -1519,5 +1706,191 @@ export function BKOApp({profile,session,signOut,onAlterarSenha,userModules,onSwi
         onSelect={id=>{dispatch({type:'SEL',id});setSearchOpen(false);}}
       />
     </>
+  );
+}// ─── AVISOS SECTION (componente para BKOCadastrar) ───────────────────────────
+function AvisosSection({ profile, session }) {
+  const [titulo,    setTitulo]    = useState('Aviso');
+  const [mensagem,  setMensagem]  = useState('');
+  const [destGrupo, setDestGrupo] = useState('todos');
+  const [destPessoa,setDestPessoa]= useState('');
+  const [pessoas,   setPessoas]   = useState([]);
+  const [saving,    setSaving]    = useState(false);
+  const [msg,       setMsg]       = useState(null);
+  const [avisos,    setAvisos]    = useState([]);
+
+  useEffect(()=>{
+    supabase.from('bko_avisos').select('*').eq('ativo',true).order('created_at',{ascending:false}).limit(20)
+      .then(({data})=>setAvisos(data||[]));
+  },[]);
+
+  // Busca pessoas do grupo selecionado
+  useEffect(()=>{
+    const grupos=['corban_bko','bko','startec'];
+    if(!grupos.includes(destGrupo)){ setPessoas([]); setDestPessoa(''); return; }
+    supabase.from('profiles').select('id,nome,email').eq('modulo','bko').eq('role',destGrupo).order('nome')
+      .then(({data})=>{ setPessoas(data||[]); setDestPessoa(''); });
+  },[destGrupo]);
+
+  const destinatarioFinal = destPessoa || destGrupo;
+
+  const publicar = async () => {
+    if (!mensagem.trim()) { setMsg({t:'error',text:'A mensagem não pode estar vazia.'}); return; }
+    setSaving(true); setMsg(null);
+    const {data,error} = await supabase.from('bko_avisos').insert({
+      titulo:     titulo.trim()||'Aviso',
+      mensagem:   mensagem.trim(),
+      destinatario: destinatarioFinal,
+      criado_por_id:   session?.user?.id,
+      criado_por_nome: profile?.nome||'Comercial',
+    }).select().single();
+    setSaving(false);
+    if (error) { setMsg({t:'error',text:error.message}); return; }
+    setAvisos(prev=>[data,...prev]);
+    setMensagem(''); setTitulo('Aviso'); setDestGrupo('todos'); setDestPessoa('');
+    setMsg({t:'success',text:'Aviso publicado! Os destinatários verão o pop-up em tempo real.'});
+    setTimeout(()=>setMsg(null),4000);
+  };
+
+  const desativar = async (id) => {
+    await supabase.from('bko_avisos').update({ativo:false}).eq('id',id);
+    setAvisos(prev=>prev.filter(a=>a.id!==id));
+  };
+
+  const DEST_LABELS = {todos:'Todos',corban_bko:'Corban',bko:'BKO',startec:'Startec'};
+
+  return (
+    <div style={{marginBottom:32,paddingBottom:32,borderBottom:'1px solid var(--border)'}}>
+      <div style={{marginBottom:18}}>
+        <div className="section-title" style={{fontSize:16}}>Avisos</div>
+        <div className="section-sub">Publique um aviso — aparece como pop-up para os destinatários em tempo real</div>
+      </div>
+
+      {msg&&(
+        <div style={{padding:'9px 14px',borderRadius:9,marginBottom:14,background:msg.t==='success'?'var(--success-dim)':'var(--danger-dim)',border:`1px solid ${msg.t==='success'?'rgba(61,155,107,.2)':'rgba(192,65,58,.2)'}`,fontSize:12,color:msg.t==='success'?'var(--success)':'var(--danger)'}}>
+          {msg.text}
+        </div>
+      )}
+
+      <div style={{background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:12,padding:'18px 20px',marginBottom:16}}>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:12}}>
+          <div>
+            <label style={{display:'block',fontSize:10,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:5}}>Título</label>
+            <input className="inp" value={titulo} onChange={e=>setTitulo(e.target.value)} placeholder="Ex: Atualização importante"/>
+          </div>
+          <div>
+            <label style={{display:'block',fontSize:10,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:5}}>Destinatário</label>
+            <select className="sel" value={destGrupo} onChange={e=>setDestGrupo(e.target.value)}>
+              <option value="todos">Todos</option>
+              <option value="corban_bko">Corban — selecionar pessoa</option>
+              <option value="bko">BKO — selecionar pessoa</option>
+              <option value="startec">Startec — selecionar pessoa</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Select de pessoa específica */}
+        {pessoas.length>0&&(
+          <div style={{marginBottom:12,padding:'12px 14px',background:'rgba(59,91,219,.04)',borderRadius:8,border:'1px solid rgba(59,91,219,.12)'}}>
+            <label style={{display:'block',fontSize:10,fontWeight:700,color:'#3B5BDB',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:6}}>
+              Pessoa específica
+              <span style={{fontWeight:400,color:'var(--text-muted)',textTransform:'none',letterSpacing:0,marginLeft:6}}>
+                (ou deixe para enviar para todo o grupo)
+              </span>
+            </label>
+            <select className="sel" value={destPessoa} onChange={e=>setDestPessoa(e.target.value)}>
+              <option value="">— Todos do grupo ({pessoas.length} {DEST_LABELS[destGrupo]}) —</option>
+              {pessoas.map(p=>(
+                <option key={p.id} value={p.id}>{p.nome} · {p.email}</option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        <div style={{marginBottom:14}}>
+          <label style={{display:'block',fontSize:10,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:5}}>Mensagem *</label>
+          <textarea className="inp" value={mensagem} onChange={e=>setMensagem(e.target.value)}
+            placeholder="Digite a mensagem do aviso…"
+            style={{resize:'vertical',minHeight:80,lineHeight:1.6}}/>
+        </div>
+
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+          <div style={{fontSize:11,color:'var(--text-muted)'}}>
+            Enviando para:{' '}
+            <strong style={{color:'var(--text-primary)'}}>
+              {destPessoa
+                ? (pessoas.find(p=>p.id===destPessoa)?.nome||'Pessoa específica')
+                : destGrupo==='todos'
+                  ? 'Todos os usuários'
+                  : `Todos os ${DEST_LABELS[destGrupo]||destGrupo} (${pessoas.length})`
+              }
+            </strong>
+          </div>
+          <button className="btn" style={{background:'#3B5BDB',color:'#fff',boxShadow:'0 3px 12px rgba(59,91,219,.28)'}} onClick={publicar} disabled={saving}>
+            {saving?'Publicando…':'📢 Publicar aviso'}
+          </button>
+        </div>
+      </div>
+
+      {/* Avisos ativos */}
+      {avisos.length>0&&(
+        <div>
+          <div style={{fontSize:11,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.08em',marginBottom:10}}>Avisos ativos</div>
+          <div style={{display:'flex',flexDirection:'column',gap:8}}>
+            {avisos.map(a=>(
+              <div key={a.id} style={{display:'flex',alignItems:'flex-start',gap:12,padding:'12px 16px',background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:10}}>
+                <span style={{fontSize:16,flexShrink:0}}>📢</span>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{display:'flex',gap:8,alignItems:'center',marginBottom:3}}>
+                    <span style={{fontSize:13,fontWeight:600,color:'var(--text-primary)'}}>{a.titulo}</span>
+                    <span style={{fontSize:10,padding:'1px 7px',borderRadius:99,background:'rgba(59,91,219,.1)',color:'#3B5BDB',fontWeight:700}}>
+                      {DEST_LABELS[a.destinatario]||'Pessoa específica'}
+                    </span>
+                  </div>
+                  <div style={{fontSize:12,color:'var(--text-secondary)',lineHeight:1.5,marginBottom:4}}>{a.mensagem}</div>
+                  <div style={{fontSize:10,color:'var(--text-faint)'}}>
+                    {new Date(a.created_at).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'})}
+                  </div>
+                </div>
+                <button onClick={()=>desativar(a.id)} style={{padding:'4px 10px',borderRadius:6,background:'var(--danger-dim)',color:'var(--danger)',border:'none',fontSize:11,fontWeight:600,cursor:'pointer',flexShrink:0}}>Desativar</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+// ─── AVISO POPUP ─────────────────────────────────────────────────────────────
+function AvisoPopup({ aviso, onFechar }) {
+  return (
+    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.55)', backdropFilter:'blur(4px)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:9999, padding:20 }}>
+      <div style={{ background:'var(--bg-card)', border:'1px solid var(--border)', borderRadius:18, padding:'32px 32px 28px', width:'100%', maxWidth:460, boxShadow:'0 24px 64px rgba(0,0,0,.25)', animation:'slideUp .3s ease' }}>
+        {/* Topo */}
+        <div style={{ display:'flex', alignItems:'flex-start', gap:14, marginBottom:20 }}>
+          <div style={{ width:40, height:40, borderRadius:12, background:'rgba(59,91,219,.12)', border:'1px solid rgba(59,91,219,.2)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:20, flexShrink:0 }}>📢</div>
+          <div style={{ flex:1 }}>
+            <div style={{ fontSize:16, fontWeight:700, color:'var(--text-primary)', fontFamily:'var(--font-display)', marginBottom:3 }}>{aviso.titulo}</div>
+            <div style={{ fontSize:11, color:'var(--text-muted)' }}>
+              De: <strong>{aviso.criado_por_nome}</strong> · {new Date(aviso.created_at).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'})}
+            </div>
+          </div>
+        </div>
+
+        {/* Mensagem */}
+        <div style={{ background:'rgba(59,91,219,.05)', border:'1px solid rgba(59,91,219,.1)', borderRadius:10, padding:'14px 16px', fontSize:14, color:'var(--text-primary)', lineHeight:1.65, marginBottom:24, whiteSpace:'pre-wrap' }}>
+          {aviso.mensagem}
+        </div>
+
+        {/* Botão */}
+        <button onClick={onFechar}
+          style={{ width:'100%', padding:'11px 0', borderRadius:10, background:'#3B5BDB', color:'#fff', fontSize:14, fontWeight:600, cursor:'pointer', border:'none', fontFamily:'var(--font)', letterSpacing:'-.01em', boxShadow:'0 4px 14px rgba(59,91,219,.3)', transition:'all .15s' }}
+          onMouseEnter={e=>e.currentTarget.style.background='#2f4cbf'}
+          onMouseLeave={e=>e.currentTarget.style.background='#3B5BDB'}>
+          Entendi ✓
+        </button>
+      </div>
+    </div>
   );
 }
