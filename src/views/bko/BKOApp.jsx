@@ -640,7 +640,7 @@ function BKOFunilMeses({funil,clientes,onSelect,dispatch,profile}){
                   <span style={{fontSize:9,color:'var(--text-faint)'}}>{fmtD(c.dataEntrada)}</span>
                   <button onClick={e=>{e.stopPropagation();dispatch({type:'REMOVE_FUNIL',cid:c.id,user:profile?.nome||'Usuário'});}}
                     style={{fontSize:9,padding:'1px 6px',borderRadius:5,background:'rgba(0,0,0,.05)',border:'1px solid var(--border)',color:'var(--text-muted)',cursor:'pointer'}}
-                    title="Remover do funil">Voltar ao pipeline</button>
+                    title="Remover do funil">← pipeline</button>
                 </div>
               </div>
             ))}
@@ -672,7 +672,9 @@ function BKOPipeline({clientes,profile,session,dispatch,onSelect,filtroEstagio,s
   const [pipelineAtivo,setPipelineAtivo]=useState(null); // pipeline CRM selecionado
 
   useEffect(()=>{
-    supabase.from('bko_pipelines').select('*').eq('ativo',true).order('ordem')
+    supabase.from('bko_pipelines')
+      .select('*, bko_pipeline_estagios(*)')
+      .eq('ativo',true).order('ordem')
       .then(({data})=>setCrmPipelines(data||[]));
   },[]);
   // ─────────────────────────────────────────────────────────────────────────
@@ -729,7 +731,7 @@ function BKOPipeline({clientes,profile,session,dispatch,onSelect,filtroEstagio,s
         <div>
           {tituloAtual
             ?<>
-               <div style={{fontSize:11,color:'var(--text-muted)',marginBottom:2,cursor:'pointer'}} onClick={()=>{setPipelineAtivo(null);setFunilSel(null);setFunilSearch('');}}>Voltar ao Pipeline</div>
+               <div style={{fontSize:11,color:'var(--text-muted)',marginBottom:2,cursor:'pointer'}} onClick={()=>{setPipelineAtivo(null);setFunilSel(null);setFunilSearch('');}}>← Pipeline</div>
                <div className="section-title" style={{color:pipelineAtivo?.cor||funilSel?.cor}}>{tituloAtual}</div>
                {pipelineAtivo
                  ?<div className="section-sub">{pipelineAtivo.descricao||''}</div>
@@ -804,7 +806,7 @@ function BKOPipeline({clientes,profile,session,dispatch,onSelect,filtroEstagio,s
                   background:pipelineAtivo?`${pipelineAtivo.cor}10`:funilSel?`${funilSel.cor}10`:'var(--bg-card)',
                   color:pipelineAtivo?pipelineAtivo.cor:funilSel?funilSel.cor:'var(--text-secondary)',
                   fontSize:12,fontWeight:600,cursor:'pointer',fontFamily:'var(--font)',whiteSpace:'nowrap'}}>
-                 Funis de Venda
+                <span style={{fontSize:13}}>⬡</span> Funis de Venda
                 {pipelineAtivo&&<span style={{marginLeft:4,padding:'1px 7px',borderRadius:99,background:`${pipelineAtivo.cor}20`,fontSize:11}}>{pipelineAtivo.icone} {pipelineAtivo.nome}</span>}
                 {!pipelineAtivo&&funilSel&&<span style={{marginLeft:4,padding:'1px 7px',borderRadius:99,background:`${funilSel.cor}20`,fontSize:11}}>📦 {funilSel.nome}</span>}
               </button>
@@ -817,7 +819,7 @@ function BKOPipeline({clientes,profile,session,dispatch,onSelect,filtroEstagio,s
                     <button onClick={()=>{setPipelineAtivo(null);setFunilSel(null);setFunilSearch('');setFunilOpen(false);}}
                       style={{display:'flex',alignItems:'center',gap:8,width:'100%',padding:'10px 14px',background:'none',border:'none',borderBottom:'1px solid var(--border)',cursor:'pointer',fontFamily:'var(--font)',fontSize:12,color:'var(--text-secondary)'}}
                       onMouseEnter={e=>e.currentTarget.style.background='rgba(0,0,0,.04)'}
-                      onMouseLeave={e=>e.currentTarget.style.background='none'}>Voltar ao Pipeline (todos)</button>
+                      onMouseLeave={e=>e.currentTarget.style.background='none'}>← Pipeline (todos)</button>
                   )}
 
                   {/* ── Seção: Pipelines CRM ── */}
@@ -827,7 +829,15 @@ function BKOPipeline({clientes,profile,session,dispatch,onSelect,filtroEstagio,s
                         borderBottom:'1px solid var(--border)',background:'rgba(0,0,0,.02)'}}>
                         Pipelines CRM
                       </div>
-                      {crmPipelines.map(p=>(
+                      {crmPipelines.filter(p=>{
+                        // Verificar acesso: todos, por role ou por user_id
+                        if(p.acesso_todos!==false) return true;
+                        const userRole=profile?.role;
+                        const userId=session?.user?.id;
+                        const temRole=(p.roles_acesso||[]).includes(userRole);
+                        const temUser=(p.usuarios_acesso||[]).includes(userId);
+                        return temRole||temUser;
+                      }).map(p=>(
                         <button key={p.id} onClick={()=>{setPipelineAtivo(p);setFunilSel(null);setFiltroEstagio(null);setFunilOpen(false);}}
                           style={{display:'flex',alignItems:'center',gap:10,width:'100%',padding:'10px 14px',
                             background:pipelineAtivo?.id===p.id?`${p.cor}08`:'none',
@@ -1290,7 +1300,7 @@ function BKOCadastrar({profile,session,funis=[],setFunis}){
       {podePublicarAvisos&&<AvisosSection profile={profile} session={session}/>}
 
       <div className="fu" style={{display:'flex',justifyContent:'space-between',alignItems:'flex-end',marginBottom:22}}>
-        <div><div className="section-title">Usuários</div><div className="section-sub">Usuários de todos os perfils StarFlow</div></div>
+        <div><div className="section-title">Cadastrar</div><div className="section-sub">Usuários do módulo BKO</div></div>
         <button className="btn" style={{background:B_MID,color:'#fff',boxShadow:`0 3px 12px ${B_GLOW}`}} onClick={()=>{setForm({nome:'',email:'',senha:'',role:'corban_bko',supervisor_id:''});setMsg(null);setShowModal(true);}}>+ Adicionar usuário</button>
       </div>
       {msg&&(
@@ -1904,7 +1914,7 @@ function AvisosSection({ profile, session }) {
 }
 
 
-// AVISO POPUP
+// ─── AVISO POPUP ─────────────────────────────────────────────────────────────
 function AvisoPopup({ aviso, onFechar }) {
   return (
     <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.55)', backdropFilter:'blur(4px)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:9999, padding:20 }}>

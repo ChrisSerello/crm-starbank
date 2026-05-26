@@ -516,6 +516,170 @@ function ModalNovoPipeline({ onSave, onClose }) {
   );
 }
 
+// ── Modal: Configurar acesso do pipeline ─────────────────────────────────────
+const ROLES_LABELS = [
+  { id:'comercial',  label:'Comercial' },
+  { id:'corban_bko', label:'Corban'    },
+  { id:'bko',        label:'BKO'       },
+  { id:'startec',    label:'Startec'   },
+];
+
+function ModalAcessoPipeline({ pipeline, onSave, onClose }) {
+  const [acessoTodos, setAcessoTodos]   = useState(pipeline.acesso_todos !== false);
+  const [rolesAcesso, setRolesAcesso]   = useState(pipeline.roles_acesso  || []);
+  const [usersAcesso, setUsersAcesso]   = useState(pipeline.usuarios_acesso || []);
+  const [pessoas,     setPessoas]       = useState([]);
+  const [busca,       setBusca]         = useState('');
+  const [saving,      setSaving]        = useState(false);
+
+  useEffect(() => {
+    supabase.from('profiles')
+      .select('id, nome, email, role')
+      .eq('modulo', 'bko')
+      .order('nome')
+      .then(({ data }) => setPessoas(data || []));
+  }, []);
+
+  const toggleRole = (roleId) => {
+    setRolesAcesso(prev =>
+      prev.includes(roleId) ? prev.filter(r => r !== roleId) : [...prev, roleId]
+    );
+  };
+
+  const toggleUser = (userId) => {
+    setUsersAcesso(prev =>
+      prev.includes(userId) ? prev.filter(u => u !== userId) : [...prev, userId]
+    );
+  };
+
+  const pessoasFiltradas = pessoas.filter(p =>
+    p.nome?.toLowerCase().includes(busca.toLowerCase()) ||
+    p.email?.toLowerCase().includes(busca.toLowerCase())
+  );
+
+  const handleSalvar = async () => {
+    setSaving(true);
+    await onSave({ acesso_todos: acessoTodos, roles_acesso: rolesAcesso, usuarios_acesso: usersAcesso });
+    setSaving(false);
+  };
+
+  const totalComAcesso = acessoTodos ? 'Todos' :
+    [
+      ...ROLES_LABELS.filter(r => rolesAcesso.includes(r.id)).map(r => r.label),
+      ...pessoas.filter(p => usersAcesso.includes(p.id)).map(p => p.nome?.split(' ')[0]),
+    ].join(', ') || 'Ninguém';
+
+  return (
+    <div className="mbk" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="mbox" style={{ maxWidth:480 }}>
+
+        {/* Cabeçalho */}
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20 }}>
+          <div>
+            <div style={{ fontFamily:'var(--font-display)', fontSize:16, fontWeight:600, color:'var(--text-primary)' }}>
+              Controle de acesso
+            </div>
+            <div style={{ fontSize:11, color:'var(--text-muted)', marginTop:2 }}>
+              {pipeline.icone} {pipeline.nome} · Visível para: <strong>{totalComAcesso}</strong>
+            </div>
+          </div>
+          <button onClick={onClose} style={{ background:'rgba(0,0,0,.06)', border:'1px solid var(--border)', borderRadius:8, cursor:'pointer', width:28, height:28, display:'flex', alignItems:'center', justifyContent:'center', fontSize:15, color:'var(--text-muted)' }}>×</button>
+        </div>
+
+        {/* Toggle: todos */}
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 14px', background:'var(--bg-surface)', border:'1px solid var(--border)', borderRadius:9, marginBottom:16, cursor:'pointer' }}
+          onClick={() => setAcessoTodos(v => !v)}>
+          <div>
+            <div style={{ fontSize:13, fontWeight:600, color:'var(--text-primary)' }}>Visível para todos</div>
+            <div style={{ fontSize:11, color:'var(--text-muted)', marginTop:1 }}>Qualquer usuário logado pode ver este funil</div>
+          </div>
+          <div style={{ width:34, height:18, borderRadius:99, background:acessoTodos?'#4A7C59':'rgba(0,0,0,.14)', display:'flex', alignItems:'center', padding:'2px 3px', transition:'background .2s', flexShrink:0 }}>
+            <div style={{ width:12, height:12, borderRadius:'50%', background:'#fff', transform:acessoTodos?'translateX(16px)':'translateX(0)', transition:'transform .2s', boxShadow:'0 1px 3px rgba(0,0,0,.2)' }}/>
+          </div>
+        </div>
+
+        {/* Seção de restrição — só aparece quando acesso_todos = false */}
+        {!acessoTodos && (
+          <div>
+            {/* Por perfil */}
+            <div style={{ marginBottom:16 }}>
+              <div style={{ fontSize:10, fontWeight:700, color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.08em', marginBottom:8 }}>Por perfil</div>
+              <div style={{ display:'flex', gap:7, flexWrap:'wrap' }}>
+                {ROLES_LABELS.map(r => {
+                  const ativo = rolesAcesso.includes(r.id);
+                  return (
+                    <button key={r.id} onClick={() => toggleRole(r.id)}
+                      style={{ padding:'6px 14px', borderRadius:99, fontSize:12, fontWeight:600, cursor:'pointer', transition:'all .15s', fontFamily:'var(--font)',
+                        background: ativo ? '#3B5BDB' : 'var(--bg-surface)',
+                        color:      ativo ? '#fff'    : 'var(--text-muted)',
+                        border:     ativo ? '1px solid #3B5BDB' : '1px solid var(--border)' }}>
+                      {ativo ? '✓ ' : ''}{r.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Por pessoa */}
+            <div style={{ marginBottom:16 }}>
+              <div style={{ fontSize:10, fontWeight:700, color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.08em', marginBottom:8 }}>
+                Por pessoa
+                {usersAcesso.length > 0 && <span style={{ fontWeight:400, textTransform:'none', letterSpacing:0, marginLeft:6, color:'#3B5BDB' }}>{usersAcesso.length} selecionada{usersAcesso.length !== 1 ? 's' : ''}</span>}
+              </div>
+              <input className="inp" value={busca} onChange={e => setBusca(e.target.value)}
+                placeholder="Buscar por nome ou e-mail…" style={{ marginBottom:8, fontSize:12 }}/>
+              <div style={{ maxHeight:200, overflowY:'auto', border:'1px solid var(--border)', borderRadius:8, background:'var(--bg-card)' }}>
+                {pessoasFiltradas.length === 0 ? (
+                  <div style={{ padding:'14px', fontSize:12, color:'var(--text-muted)', textAlign:'center' }}>Nenhuma pessoa encontrada</div>
+                ) : pessoasFiltradas.map((p, i) => {
+                  const selecionado = usersAcesso.includes(p.id);
+                  return (
+                    <div key={p.id} onClick={() => toggleUser(p.id)}
+                      style={{ display:'flex', alignItems:'center', gap:10, padding:'9px 12px',
+                        borderBottom: i < pessoasFiltradas.length-1 ? '1px solid var(--border-subtle,rgba(0,0,0,.05))' : 'none',
+                        cursor:'pointer', background: selecionado ? 'rgba(59,91,219,.05)' : 'transparent', transition:'background .1s' }}
+                      onMouseEnter={e => { if (!selecionado) e.currentTarget.style.background='var(--bg-surface)'; }}
+                      onMouseLeave={e => { if (!selecionado) e.currentTarget.style.background='transparent'; }}>
+                      {/* Checkbox */}
+                      <div style={{ width:16, height:16, borderRadius:4, border:`1.5px solid ${selecionado?'#3B5BDB':'var(--border-mid)'}`, background:selecionado?'#3B5BDB':'transparent', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, transition:'all .15s' }}>
+                        {selecionado && <span style={{ fontSize:9, color:'#fff', fontWeight:700 }}>✓</span>}
+                      </div>
+                      {/* Avatar */}
+                      <div style={{ width:26, height:26, borderRadius:'50%', background:'#3B5BDB', display:'flex', alignItems:'center', justifyContent:'center', fontSize:9.5, fontWeight:700, color:'#fff', flexShrink:0 }}>
+                        {p.nome?.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase()}
+                      </div>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontSize:13, fontWeight:500, color:'var(--text-primary)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.nome}</div>
+                        <div style={{ fontSize:10, color:'var(--text-muted)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                          {p.email} · {ROLES_LABELS.find(r=>r.id===p.role)?.label || p.role}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Aviso se nada selecionado */}
+            {rolesAcesso.length === 0 && usersAcesso.length === 0 && (
+              <div style={{ padding:'9px 12px', borderRadius:8, background:'rgba(245,158,11,.08)', border:'1px solid rgba(245,158,11,.2)', fontSize:12, color:'#B45309', marginBottom:12 }}>
+                ⚠ Nenhum perfil ou pessoa selecionado — o funil ficará invisível para todos.
+              </div>
+            )}
+          </div>
+        )}
+
+        <div style={{ display:'flex', gap:8, justifyContent:'flex-end', marginTop:8 }}>
+          <button className="btn btn-ghost" onClick={onClose}>Cancelar</button>
+          <button className="btn" style={{ background:'#3B5BDB', color:'#fff' }} onClick={handleSalvar} disabled={saving}>
+            {saving ? 'Salvando…' : 'Salvar acesso'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Componente principal ──────────────────────────────────────────────────────
 export function BKOConfigurarPipeline({ profile, session, funis, setFunis, onVoltar }) {
   const [estagios,      setEstagios]      = useState([]);
@@ -528,6 +692,7 @@ export function BKOConfigurarPipeline({ profile, session, funis, setFunis, onVol
   const [editCrmEstagio,    setEditCrmEstagio]     = useState(null); // {estagio, pipeline}
   const [novoEstagioPipeline, setNovoEstagioPipeline] = useState(null); // pipeline onde criar
   const [modalNovoPipeline, setModalNovoPipeline]  = useState(false);
+  const [modalAcesso,       setModalAcesso]        = useState(null); // pipeline
   const [modalFunil,        setModalFunil]          = useState(false);
   const crmDragItem = useRef(null);
   const crmDragOver = useRef(null);
@@ -583,6 +748,20 @@ export function BKOConfigurarPipeline({ profile, session, funis, setFunis, onVol
     const { error } = await supabase.from('bko_pipelines').update({ ativo:novoAtivo }).eq('id', pipeline.id);
     if (error) { setMsg({t:'error',text:error.message}); return; }
     setCrmPipelines(prev=>prev.map(x=>x.id===pipeline.id?{...x,ativo:novoAtivo}:x));
+  };
+
+  // ── Salvar acesso do pipeline ──
+  const handleSalvarAcesso = async ({ acesso_todos, roles_acesso, usuarios_acesso }) => {
+    const { error } = await supabase.from('bko_pipelines')
+      .update({ acesso_todos, roles_acesso, usuarios_acesso })
+      .eq('id', modalAcesso.id);
+    if (error) { setMsg({t:'error', text: error.message}); return; }
+    setCrmPipelines(prev => prev.map(p =>
+      p.id === modalAcesso.id ? { ...p, acesso_todos, roles_acesso, usuarios_acesso } : p
+    ));
+    setModalAcesso(null);
+    setMsg({t:'success', text:'Acesso atualizado!'});
+    setTimeout(() => setMsg(null), 2500);
   };
 
   // ── Criar novo pipeline CRM ──
@@ -774,7 +953,7 @@ export function BKOConfigurarPipeline({ profile, session, funis, setFunis, onVol
           style={{ display:'flex', alignItems:'center', gap:5, fontSize:12, color:'var(--text-muted)', background:'none', border:'none', cursor:'pointer', padding:0, marginBottom:12, fontFamily:'var(--font)' }}
           onMouseEnter={e=>e.currentTarget.style.color='var(--text-primary)'}
           onMouseLeave={e=>e.currentTarget.style.color='var(--text-muted)'}>
-          Voltar ao Pipeline
+          ← Pipeline
         </button>
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-end' }}>
           <div>
@@ -860,12 +1039,27 @@ export function BKOConfigurarPipeline({ profile, session, funis, setFunis, onVol
                       {estagiosCrm.filter(s=>s.ativo).length} de {estagiosCrm.length} estágios ativos
                     </div>
                   </div>
-                  <button onClick={()=>setEditCrmPipeline(p)}
-                    style={{ display:'flex', alignItems:'center', gap:6, padding:'7px 14px', borderRadius:8, background:'var(--bg-card)', border:'1px solid var(--border)', fontSize:12, fontWeight:600, color:'var(--text-secondary)', cursor:'pointer', fontFamily:'var(--font)', transition:'all .15s' }}
-                    onMouseEnter={e=>{ e.currentTarget.style.borderColor='#3B5BDB'; e.currentTarget.style.color='#3B5BDB'; }}
-                    onMouseLeave={e=>{ e.currentTarget.style.borderColor='var(--border)'; e.currentTarget.style.color='var(--text-secondary)'; }}>
-                    ⚙ Configurar
-                  </button>
+                  <div style={{ display:'flex', gap:7 }}>
+                    {/* Badge de acesso */}
+                    <div style={{ display:'flex', alignItems:'center', gap:5, padding:'5px 10px', borderRadius:7,
+                      background: p.acesso_todos !== false ? 'rgba(34,197,94,.08)' : 'rgba(59,91,219,.08)',
+                      border: p.acesso_todos !== false ? '1px solid rgba(34,197,94,.2)' : '1px solid rgba(59,91,219,.2)',
+                      fontSize:11, color: p.acesso_todos !== false ? '#15803D' : '#3B5BDB', fontWeight:500 }}>
+                      {p.acesso_todos !== false ? '🌐 Todos' : `🔒 ${(p.roles_acesso||[]).length + (p.usuarios_acesso||[]).length} com acesso`}
+                    </div>
+                    <button onClick={()=>setModalAcesso(p)}
+                      style={{ display:'flex', alignItems:'center', gap:5, padding:'7px 12px', borderRadius:8, background:'var(--bg-card)', border:'1px solid var(--border)', fontSize:12, fontWeight:600, color:'var(--text-secondary)', cursor:'pointer', fontFamily:'var(--font)', transition:'all .15s' }}
+                      onMouseEnter={e=>{ e.currentTarget.style.borderColor='#3B5BDB'; e.currentTarget.style.color='#3B5BDB'; }}
+                      onMouseLeave={e=>{ e.currentTarget.style.borderColor='var(--border)'; e.currentTarget.style.color='var(--text-secondary)'; }}>
+                      🔐 Acesso
+                    </button>
+                    <button onClick={()=>setEditCrmPipeline(p)}
+                      style={{ display:'flex', alignItems:'center', gap:5, padding:'7px 12px', borderRadius:8, background:'var(--bg-card)', border:'1px solid var(--border)', fontSize:12, fontWeight:600, color:'var(--text-secondary)', cursor:'pointer', fontFamily:'var(--font)', transition:'all .15s' }}
+                      onMouseEnter={e=>{ e.currentTarget.style.borderColor='#3B5BDB'; e.currentTarget.style.color='#3B5BDB'; }}
+                      onMouseLeave={e=>{ e.currentTarget.style.borderColor='var(--border)'; e.currentTarget.style.color='var(--text-secondary)'; }}>
+                      ⚙ Configurar
+                    </button>
+                  </div>
                 </div>
 
                 {/* Timeline dos estágios deste pipeline */}
@@ -1023,6 +1217,7 @@ export function BKOConfigurarPipeline({ profile, session, funis, setFunis, onVol
       )}
 
       {modalNovoPipeline    && <ModalNovoPipeline onSave={handleCriarPipeline} onClose={()=>setModalNovoPipeline(false)}/>}
+      {modalAcesso          && <ModalAcessoPipeline pipeline={modalAcesso} onSave={handleSalvarAcesso} onClose={()=>setModalAcesso(null)}/>}
       {modalRenomear        && <ModalRenomear estagio={modalRenomear} onSave={handleRenomear} onClose={()=>setModalRenomear(null)}/>}
       {editCrmPipeline      && <ModalEditarCrmPipeline pipeline={editCrmPipeline} onSave={handleSalvarCrmPipeline} onClose={()=>setEditCrmPipeline(null)}/>}
       {editCrmEstagio       && <ModalRenomearCrmEstagio estagio={editCrmEstagio.estagio} onSave={handleSalvarCrmEstagio} onClose={()=>setEditCrmEstagio(null)}/>}
