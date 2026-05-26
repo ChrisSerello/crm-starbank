@@ -55,13 +55,70 @@ const BKO_STAGES = [
 const ROLE_COLOR = { comercial:'#3B5BDB', corban_bko:'#0EA5E9', bko:'#7C3AED', startec:'#059669', supervisor_startec:'#0D9488' };
 const ROLE_LABEL = { comercial:'Comercial', corban_bko:'Corban', bko:'BKO', startec:'Startec', supervisor_startec:'Supervisor' };
 
+
+// ─── MOTIVO DA PERDA (reutilizado do BKOApp) ─────────────────────────────────
+const MOTIVOS_PERDA_DETAIL = [
+  'Taxa alta',
+  'Sem margem disponível',
+  'Cliente não atendeu',
+  'Cliente desistiu',
+  'Concorrente mais vantajoso',
+  'Documentação incompleta',
+  'Reprovado na análise',
+  'Outro',
+];
+
+function MotivoPerdaModal({ onConfirm, onCancel }) {
+  const [motivo, setMotivo] = React.useState('');
+  const [obs,    setObs]    = React.useState('');
+  const [erro,   setErro]   = React.useState(false);
+
+  const confirmar = () => {
+    if (!motivo) { setErro(true); return; }
+    onConfirm(motivo, obs.trim());
+  };
+
+  return (
+    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.5)', backdropFilter:'blur(6px)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:2000, padding:20 }}>
+      <div style={{ background:'var(--bg-card)', border:'1px solid var(--border)', borderRadius:14, padding:'28px 28px 24px', width:'100%', maxWidth:400, boxShadow:'0 24px 64px rgba(0,0,0,.2)' }}>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:18 }}>
+          <div>
+            <div style={{ fontFamily:'var(--font-display)', fontSize:16, fontWeight:600, color:'var(--text-primary)', marginBottom:3 }}>Mover para Perdidos</div>
+            <div style={{ fontSize:12, color:'var(--text-muted)' }}>Informe o motivo para registrar no histórico</div>
+          </div>
+          <button onClick={onCancel} style={{ background:'rgba(0,0,0,.06)', border:'1px solid var(--border)', borderRadius:7, cursor:'pointer', width:26, height:26, display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, color:'var(--text-muted)', flexShrink:0 }}>×</button>
+        </div>
+        <div style={{ marginBottom:12 }}>
+          <label style={{ display:'block', fontSize:10, fontWeight:700, color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.07em', marginBottom:6 }}>Motivo *</label>
+          <select style={{ width:'100%', padding:'8px 10px', border:`1px solid ${erro?'var(--danger)':'var(--border)'}`, borderRadius:7, fontSize:13, color:'var(--text-primary)', background:'var(--bg-card)', outline:'none', fontFamily:'var(--font)' }}
+            value={motivo} onChange={e=>{ setMotivo(e.target.value); setErro(false); }}>
+            <option value="">— Selecione um motivo —</option>
+            {MOTIVOS_PERDA_DETAIL.map(m=><option key={m} value={m}>{m}</option>)}
+          </select>
+          {erro && <div style={{ fontSize:11, color:'var(--danger)', marginTop:4 }}>⚠ Selecione um motivo</div>}
+        </div>
+        <div style={{ marginBottom:20 }}>
+          <label style={{ display:'block', fontSize:10, fontWeight:700, color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.07em', marginBottom:6 }}>Observação (opcional)</label>
+          <textarea style={{ width:'100%', padding:'8px 10px', border:'1px solid var(--border)', borderRadius:7, fontSize:13, color:'var(--text-primary)', background:'var(--bg-card)', outline:'none', resize:'vertical', minHeight:64, fontFamily:'var(--font)', lineHeight:1.5 }}
+            value={obs} onChange={e=>setObs(e.target.value)} placeholder="Detalhe se necessário…"/>
+        </div>
+        <div style={{ display:'flex', gap:8, justifyContent:'flex-end' }}>
+          <button onClick={onCancel} style={{ padding:'7px 14px', borderRadius:8, background:'var(--bg-surface)', border:'1px solid var(--border)', fontSize:13, cursor:'pointer', fontFamily:'var(--font)' }}>Cancelar</button>
+          <button onClick={confirmar} style={{ padding:'7px 14px', borderRadius:8, background:'var(--danger)', color:'#fff', border:'none', fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:'var(--font)' }}>Confirmar perda</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
   const [tab, setTab]         = useState('info');
   const [es, setEs]           = useState(cliente.estagio);
-  // CORREÇÃO: flag que indica se o USUÁRIO intencionalmente mudou o dropdown de estágio.
+  // ✅ CORREÇÃO: flag que indica se o USUÁRIO intencionalmente mudou o dropdown de estágio.
   // Se false, salvarInfo usa cliente.estagio (valor atual, pode ter mudado por realtime)
   // em vez de es (valor capturado no momento que o painel abriu).
   const [esUserChanged, setEsUserChanged] = useState(false);
+  const [motivoPerdaModal, setMotivoPerdaModal] = useState(false);
   const [ed, setEd]           = useState(cliente.documentoStatus || 'Não solicitado');
   const [saldo, setSaldo]     = useState(cliente.saldoDevedor || '');
   const [prefeituraEdit, setPrefeituraEdit] = useState(cliente.prefeitura || '');
@@ -112,7 +169,6 @@ export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
     'edson@starbank.tec.br',
     'vera.marques@starbank.tec.br',
     'maria.cerqueira@starbank.tec.br',
-    'elisangela.pereira@starbank.tec.br',
   ];
   const isSupervisorBko = SUPERVISORES_BKO.includes(session?.user?.email);
   const bkoTravado = isBko && temResponsavel && !euSouResponsavel && !isSupervisorBko;
@@ -252,17 +308,23 @@ export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
     setAtribStartecMsg({ t:'success', text:`Atribuído a ${opSel?.nome||'ninguém'}!` });
   };
 
-  //  CORREÇÃO PRINCIPAL — causa dos "clientes mudando de esteira sozinhos"
+  // ✅ CORREÇÃO PRINCIPAL — causa dos "clientes mudando de esteira sozinhos"
   // esUserChanged = false → usuário não tocou no dropdown → usa cliente.estagio (atual, pós-realtime)
   // esUserChanged = true  → usuário escolheu um novo estágio → usa es e dispara MOVE
   //
-  //  CORREÇÃO SECUNDÁRIA — atividade do MOVE sendo apagada pelo UPD subsequente
+  // ✅ CORREÇÃO SECUNDÁRIA — atividade do MOVE sendo apagada pelo UPD subsequente
   // O reducer UPD faz {...c, ...a.c}. Se a.c incluir activities (snapshot stale do cliente),
   // sobrescreve o array que o MOVE acabou de atualizar. Solução: omitir activities do UPD
   // quando MOVE já foi disparado — o reducer preserva automaticamente o que o MOVE escreveu.
   const salvarInfo = () => {
     const estagioFinal = esUserChanged ? es : cliente.estagio;
     if (esUserChanged && es !== cliente.estagio) {
+      // Interceptar movimento para Perdidos — exige motivo
+      if (es === 'perdido') {
+        setMotivoPerdaModal(true);
+        setSalvando(false);
+        return;
+      }
       dispatch({ type:'MOVE', cid:cliente.id, st:es, user:profile?.nome||'Usuário' });
       // ✅ Desestrutura activities fora do payload — não sobrescreve o que MOVE acabou de adicionar
       const { activities: _ignored, ...clienteSemActivities } = cliente;
@@ -310,8 +372,22 @@ export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
 
   const stg = BKO_STAGES.find(s => s.id === cliente.estagio);
 
+  // Confirmar perda com motivo vindo do painel lateral
+  const confirmarPerdaComMotivo = (motivo, obs) => {
+    dispatch({ type:'MOVE', cid:cliente.id, st:'perdido', user:profile?.nome||'Usuário', motivo, obs });
+    setMotivoPerdaModal(false);
+    setEsUserChanged(false);
+  };
+
   return (
     <div className="spanel">
+      {/* Modal motivo da perda — painel lateral */}
+      {motivoPerdaModal && (
+        <MotivoPerdaModal
+          onConfirm={confirmarPerdaComMotivo}
+          onCancel={()=>{ setMotivoPerdaModal(false); setEs(cliente.estagio); setEsUserChanged(false); }}
+        />
+      )}
       {/* Cabeçalho */}
       <div style={{ padding:'16px 20px 12px', borderBottom:'1px solid var(--border)', background:'var(--bg-card)', flexShrink:0 }}>
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:10 }}>
@@ -465,7 +541,7 @@ export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
           </div>
         )}
 
-        {/*ABA BKO*/}
+        {/* ══ ABA: BKO ══ */}
         {tab==='bko'&&(
           <div>
             <div style={{marginBottom:16,padding:14,background:'rgba(124,58,237,.06)',borderRadius:10,border:'1px solid rgba(124,58,237,.2)'}}>
@@ -475,9 +551,8 @@ export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
                   <div style={{fontSize:12,color:'var(--text-primary)',fontWeight:600,marginBottom:6}}>
                     {cliente.responsavel_bko_nome}
                     {euSouResponsavel&&<span style={{fontSize:9,marginLeft:6,padding:'1px 6px',borderRadius:99,background:'rgba(124,58,237,.1)',color:'#7C3AED',fontWeight:700}}>Você</span>}
-                    {isSupervisorBko&&!euSouResponsavel&&<span style={{fontSize:9,marginLeft:6,padding:'1px 6px',borderRadius:99,background:'rgba(249,115,22,.1)',color:'#F97316',fontWeight:700}}>Supervisora</span>}
                   </div>
-                  {(euSouResponsavel||isSupervisorBko)?(
+                  {euSouResponsavel?(
                     <button onClick={liberarResponsabilidade} disabled={salvandoResp} style={{padding:'6px 12px',borderRadius:7,background:'var(--danger-dim)',color:'var(--danger)',border:'none',fontSize:11,fontWeight:600,cursor:'pointer'}}>
                       Liberar responsabilidade
                     </button>

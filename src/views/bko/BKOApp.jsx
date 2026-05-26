@@ -8,6 +8,7 @@ import { BKOSearch } from './BKOSearch';
 import { BKOGestaoCorbans } from './BKOGestaoCorbans';
 import ReactDOM from 'react-dom';
 import { BKOPipelines } from './BKOPipelines';
+import { BKOConfigurarPipeline } from './BKOConfigurarPipeline';
 
 const fmtDH=(ts)=>{
   if(!ts) return '—';
@@ -639,7 +640,7 @@ function BKOFunilMeses({funil,clientes,onSelect,dispatch,profile}){
                   <span style={{fontSize:9,color:'var(--text-faint)'}}>{fmtD(c.dataEntrada)}</span>
                   <button onClick={e=>{e.stopPropagation();dispatch({type:'REMOVE_FUNIL',cid:c.id,user:profile?.nome||'Usuário'});}}
                     style={{fontSize:9,padding:'1px 6px',borderRadius:5,background:'rgba(0,0,0,.05)',border:'1px solid var(--border)',color:'var(--text-muted)',cursor:'pointer'}}
-                    title="Remover do funil">← pipeline</button>
+                    title="Remover do funil">Voltar ao pipeline</button>
                 </div>
               </div>
             ))}
@@ -651,7 +652,7 @@ function BKOFunilMeses({funil,clientes,onSelect,dispatch,profile}){
 }
 
 // ─── PIPELINE ────────────────────────────────────────────────────────────────
-function BKOPipeline({clientes,profile,session,dispatch,onSelect,filtroEstagio,setFiltroEstagio,funis,origemFiltro,setOrigemFiltro,supervisorTeam,allTeams}){
+function BKOPipeline({clientes,profile,session,dispatch,onSelect,filtroEstagio,setFiltroEstagio,funis,origemFiltro,setOrigemFiltro,supervisorTeam,allTeams,onConfigurar}){
   const [dragId,setDragId]=useState(null);
   const [search,setSearch]=useState('');
   const [collapsedCols,setCollapsedCols]=useState(new Set());
@@ -659,6 +660,8 @@ function BKOPipeline({clientes,profile,session,dispatch,onSelect,filtroEstagio,s
   const [funilSel,setFunilSel]=useState(null);
   const [funilSearch,setFunilSearch]=useState('');
   const [funilOpen,setFunilOpen]=useState(false);
+  const [menuOpen,setMenuOpen]=useState(false);         // menu ⋯ do pipeline
+  const menuRef=useRef(null);
   // ── Modal motivo de perda ──
   const [motivoModal,setMotivoModal]=useState(null); // { cid, origem: 'drag'|'menu'|'painel' }
   const funilRef=useRef(null);
@@ -684,6 +687,14 @@ function BKOPipeline({clientes,profile,session,dispatch,onSelect,filtroEstagio,s
     document.addEventListener('mousedown',h);
     return()=>document.removeEventListener('mousedown',h);
   },[funilOpen]);
+
+  // Fechar menu ⋯ ao clicar fora
+  useEffect(()=>{
+    if(!menuOpen) return;
+    const h=(e)=>{if(menuRef.current&&!menuRef.current.contains(e.target))setMenuOpen(false);};
+    document.addEventListener('mousedown',h);
+    return()=>document.removeEventListener('mousedown',h);
+  },[menuOpen]);
 
   const isSupervisorP=profile?.is_supervisor===true;
   const clientesVisiveis=useMemo(()=>{
@@ -718,7 +729,7 @@ function BKOPipeline({clientes,profile,session,dispatch,onSelect,filtroEstagio,s
         <div>
           {tituloAtual
             ?<>
-               <div style={{fontSize:11,color:'var(--text-muted)',marginBottom:2,cursor:'pointer'}} onClick={()=>{setPipelineAtivo(null);setFunilSel(null);setFunilSearch('');}}>← Pipeline</div>
+               <div style={{fontSize:11,color:'var(--text-muted)',marginBottom:2,cursor:'pointer'}} onClick={()=>{setPipelineAtivo(null);setFunilSel(null);setFunilSearch('');}}>Voltar ao Pipeline</div>
                <div className="section-title" style={{color:pipelineAtivo?.cor||funilSel?.cor}}>{tituloAtual}</div>
                {pipelineAtivo
                  ?<div className="section-sub">{pipelineAtivo.descricao||''}</div>
@@ -765,6 +776,26 @@ function BKOPipeline({clientes,profile,session,dispatch,onSelect,filtroEstagio,s
           )}
 
           {/* ── DROPDOWN UNIFICADO: Pipelines CRM + Funis de Arquivo ── */}
+          {/* ── Botão ⋯ configurar pipeline ── */}
+          {(profile?.role==='comercial'||['edson@starbank.tec.br','vera.marques@starbank.tec.br','maria.cerqueira@starbank.tec.br','elisangela.pereira@starbank.tec.br'].includes(session?.user?.email))&&(
+            <div ref={menuRef} style={{position:'relative'}}>
+              <button onClick={()=>setMenuOpen(v=>!v)} title="Configurar Pipeline"
+                style={{display:'flex',alignItems:'center',justifyContent:'center',width:34,height:34,borderRadius:8,background:'var(--bg-card)',border:'1px solid var(--border)',cursor:'pointer',fontSize:16,color:'var(--text-muted)',transition:'all .15s'}}
+                onMouseEnter={e=>{e.currentTarget.style.background='var(--bg-surface)';e.currentTarget.style.color='var(--text-primary)';}}
+                onMouseLeave={e=>{e.currentTarget.style.background='var(--bg-card)';e.currentTarget.style.color='var(--text-muted)';}}>⋯</button>
+              {menuOpen&&(
+                <div style={{position:'absolute',right:0,top:'calc(100% + 6px)',background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:10,boxShadow:'0 8px 24px rgba(0,0,0,.12)',zIndex:200,overflow:'hidden',minWidth:195}}>
+                  <button onMouseDown={()=>{setMenuOpen(false);if(typeof onConfigurar==='function')onConfigurar();}}
+                    style={{display:'flex',alignItems:'center',gap:9,width:'100%',padding:'10px 14px',background:'none',border:'none',cursor:'pointer',fontSize:13,color:'var(--text-primary)',fontFamily:'var(--font)',textAlign:'left'}}
+                    onMouseEnter={e=>e.currentTarget.style.background='var(--bg-surface)'}
+                    onMouseLeave={e=>e.currentTarget.style.background='none'}>
+                    ⚙ Configurar Pipeline
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
           {temDropdown&&(
             <div ref={funilRef} style={{position:'relative'}}>
               <button onClick={()=>setFunilOpen(v=>!v)}
@@ -773,7 +804,7 @@ function BKOPipeline({clientes,profile,session,dispatch,onSelect,filtroEstagio,s
                   background:pipelineAtivo?`${pipelineAtivo.cor}10`:funilSel?`${funilSel.cor}10`:'var(--bg-card)',
                   color:pipelineAtivo?pipelineAtivo.cor:funilSel?funilSel.cor:'var(--text-secondary)',
                   fontSize:12,fontWeight:600,cursor:'pointer',fontFamily:'var(--font)',whiteSpace:'nowrap'}}>
-                <span style={{fontSize:13}}>⬡</span> Funis de Venda
+                 Funis de Venda
                 {pipelineAtivo&&<span style={{marginLeft:4,padding:'1px 7px',borderRadius:99,background:`${pipelineAtivo.cor}20`,fontSize:11}}>{pipelineAtivo.icone} {pipelineAtivo.nome}</span>}
                 {!pipelineAtivo&&funilSel&&<span style={{marginLeft:4,padding:'1px 7px',borderRadius:99,background:`${funilSel.cor}20`,fontSize:11}}>📦 {funilSel.nome}</span>}
               </button>
@@ -786,7 +817,7 @@ function BKOPipeline({clientes,profile,session,dispatch,onSelect,filtroEstagio,s
                     <button onClick={()=>{setPipelineAtivo(null);setFunilSel(null);setFunilSearch('');setFunilOpen(false);}}
                       style={{display:'flex',alignItems:'center',gap:8,width:'100%',padding:'10px 14px',background:'none',border:'none',borderBottom:'1px solid var(--border)',cursor:'pointer',fontFamily:'var(--font)',fontSize:12,color:'var(--text-secondary)'}}
                       onMouseEnter={e=>e.currentTarget.style.background='rgba(0,0,0,.04)'}
-                      onMouseLeave={e=>e.currentTarget.style.background='none'}>← Pipeline (todos)</button>
+                      onMouseLeave={e=>e.currentTarget.style.background='none'}>Voltar ao Pipeline (todos)</button>
                   )}
 
                   {/* ── Seção: Pipelines CRM ── */}
@@ -1259,7 +1290,7 @@ function BKOCadastrar({profile,session,funis=[],setFunis}){
       {podePublicarAvisos&&<AvisosSection profile={profile} session={session}/>}
 
       <div className="fu" style={{display:'flex',justifyContent:'space-between',alignItems:'flex-end',marginBottom:22}}>
-        <div><div className="section-title">Cadastrar</div><div className="section-sub">Usuários do módulo BKO</div></div>
+        <div><div className="section-title">Usuários</div><div className="section-sub">Usuários de todos os perfils StarFlow</div></div>
         <button className="btn" style={{background:B_MID,color:'#fff',boxShadow:`0 3px 12px ${B_GLOW}`}} onClick={()=>{setForm({nome:'',email:'',senha:'',role:'corban_bko',supervisor_id:''});setMsg(null);setShowModal(true);}}>+ Adicionar usuário</button>
       </div>
       {msg&&(
@@ -1512,7 +1543,8 @@ export function BKOApp({profile,session,signOut,onAlterarSenha,userModules,onSwi
   const auditQueueRef=useRef([]);
   const [showAS,setShowAS]=useState(false);
   const [filtroEstagio,setFiltroEstagio]=useState(null);
-  const [avisoAtual,setAvisoAtual]=useState(null); // aviso popup
+  const [avisoAtual,setAvisoAtual]=useState(null);
+  const [viewConfigurar,setViewConfigurar]=useState(false); // aviso popup
   const [origemFiltro,setOrigemFiltro]=useState(null);
   const [supervisorTeam,setSupervisorTeam]=useState([]);
   const setView=useCallback(v=>{
@@ -1697,7 +1729,8 @@ export function BKOApp({profile,session,signOut,onAlterarSenha,userModules,onSwi
         />
         <main style={{flex:1,minWidth:0,height:'100%',display:'flex',flexDirection:'column',overflow:view==='pipeline'?'hidden':'auto',paddingRight:selected?490:0,transition:'padding-right .3s cubic-bezier(.4,0,.2,1)'}}>
           {view==='dashboard' && <BKODashboard clientes={clientes} setView={v=>{setView(v);}} setFiltroEstagio={setFiltroEstagio} profile={profile} origemFiltro={origemFiltro} setOrigemFiltro={setOrigemFiltro} supervisorTeam={supervisorTeam} allTeams={allTeams}/>}
-          {view==='pipeline'  && <BKOPipeline  clientes={clientes} profile={profile} session={session} dispatch={auditedDispatch} onSelect={id=>dispatch({type:'SEL',id})} filtroEstagio={filtroEstagio} setFiltroEstagio={setFiltroEstagio} funis={funis} origemFiltro={origemFiltro} setOrigemFiltro={setOrigemFiltro} supervisorTeam={supervisorTeam} allTeams={allTeams}/>}
+          {view==='pipeline'  && !viewConfigurar && <BKOPipeline  clientes={clientes} profile={profile} session={session} dispatch={auditedDispatch} onSelect={id=>dispatch({type:'SEL',id})} filtroEstagio={filtroEstagio} setFiltroEstagio={setFiltroEstagio} funis={funis} origemFiltro={origemFiltro} setOrigemFiltro={setOrigemFiltro} supervisorTeam={supervisorTeam} allTeams={allTeams} onConfigurar={()=>setViewConfigurar(true)}/> }
+          {view==='pipeline' && viewConfigurar && <BKOConfigurarPipeline profile={profile} session={session} funis={funis} setFunis={setFunis} onVoltar={()=>setViewConfigurar(false)}/>}
           {view==='clientes'  && <BKOClientes  clientes={clientes} profile={profile} onSelect={id=>dispatch({type:'SEL',id})} onNew={()=>dispatch({type:'TNEW'})} origemFiltro={origemFiltro} setOrigemFiltro={setOrigemFiltro} supervisorTeam={supervisorTeam} allTeams={allTeams}/>}
           {view==='cadastrar' && <BKOCadastrar profile={profile} session={session} funis={funis} setFunis={setFunis}/>}
           {view==='auditoria' && <BKOAuditoria/>}
@@ -1871,7 +1904,7 @@ function AvisosSection({ profile, session }) {
 }
 
 
-// ─── AVISO POPUP ─────────────────────────────────────────────────────────────
+// AVISO POPUP
 function AvisoPopup({ aviso, onFechar }) {
   return (
     <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.55)', backdropFilter:'blur(4px)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:9999, padding:20 }}>
