@@ -169,6 +169,7 @@ export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
     'edson@starbank.tec.br',
     'vera.marques@starbank.tec.br',
     'maria.cerqueira@starbank.tec.br',
+    'elisangela.pereira@starbank.tec.br',
   ];
   const isSupervisorBko = SUPERVISORES_BKO.includes(session?.user?.email);
   const bkoTravado = isBko && temResponsavel && !euSouResponsavel && !isSupervisorBko;
@@ -552,7 +553,7 @@ export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
                     {cliente.responsavel_bko_nome}
                     {euSouResponsavel&&<span style={{fontSize:9,marginLeft:6,padding:'1px 6px',borderRadius:99,background:'rgba(124,58,237,.1)',color:'#7C3AED',fontWeight:700}}>Você</span>}
                   </div>
-                  {euSouResponsavel?(
+                  {(euSouResponsavel||isSupervisorBko)?(
                     <button onClick={liberarResponsabilidade} disabled={salvandoResp} style={{padding:'6px 12px',borderRadius:7,background:'var(--danger-dim)',color:'var(--danger)',border:'none',fontSize:11,fontWeight:600,cursor:'pointer'}}>
                       Liberar responsabilidade
                     </button>
