@@ -318,7 +318,20 @@ function filtrarClientesSupervisor(clientes, origemFiltro, allTeams){
 
 function BKODashboard({clientes,setView,setFiltroEstagio,profile,origemFiltro,setOrigemFiltro,supervisorTeam,allTeams}){
   const isComercial=profile?.role==='comercial';
+  const isBkoPipeline=profile?.role==='bko';
   const isSupervisor=profile?.is_supervisor===true;
+  const podeVerInsights=isComercial||isBkoPipeline;
+
+  // Mapa de CPFs duplicados — key=cpf, value=count
+  const cpfDuplicados=useMemo(()=>{
+    const counts={};
+    clientes.forEach(c=>{ if(c.cpfCliente){ counts[c.cpfCliente]=(counts[c.cpfCliente]||0)+1; } });
+    // Retorna só os que aparecem mais de uma vez
+    const dup={};
+    Object.entries(counts).forEach(([cpf,n])=>{ if(n>1) dup[cpf]=n; });
+    return dup;
+  },[clientes]);
+
   const clientesFiltrados=useMemo(()=>{
     if(profile?.role==='startec'||profile?.role==='corban_bko')
       return clientes.filter(c=>c.atribuido_a_id===profile?.id||c.criado_por_id===profile?.id);
@@ -328,6 +341,13 @@ function BKODashboard({clientes,setView,setFiltroEstagio,profile,origemFiltro,se
     }
     return clientes;
   },[clientes,profile,origemFiltro,supervisorTeam,allTeams]);
+
+  // // Aplica filtro de duplicados se ativo (só para comercial e BKO)
+  // const clientesParaExibir=useMemo(()=>{
+  //   if(!filtroDuplicados||!podeVerInsights) return clientesFiltrados;
+  //   return clientesFiltrados.filter(c=>cpfDuplicados[c.cpfCliente]);
+  // },[clientesFiltrados,filtroDuplicados,cpfDuplicados,podeVerInsights]);
+
   const counts=useMemo(()=>{const m={};BKO_STAGES.forEach(s=>{m[s.id]=clientesFiltrados.filter(c=>c.estagio===s.id&&!c.funil_id).length;});return m;},[clientesFiltrados]);
   const handleCard=(stageId)=>{setFiltroEstagio(stageId);setView('pipeline');};
   const recent=useMemo(()=>clientesFiltrados.flatMap(c=>(c.activities||[]).map(a=>({...a,clienteName:c.nomeCliente}))).sort((a,b)=>(b.date||'').localeCompare(a.date||'')).slice(0,8),[clientesFiltrados]);
@@ -469,7 +489,7 @@ function MotivoPerdaModal({ onConfirm, onCancel }) {
 }
 
 // ─── KCARD ───────────────────────────────────────────────────────────────────
-function KCard({c,onSelect,dispatch,profile,session,setDragId,funis=[],setMotivoModal}){
+function KCard({c,onSelect,dispatch,profile,session,setDragId,funis=[],setMotivoModal,cpfDuplicados={},podeVerInsights=false}){
   const [menuOpen,setMenuOpen]=useState(false);
   const [menuPos,setMenuPos]=useState({top:0,left:0});
   const btnRef=useRef(null);
@@ -496,10 +516,34 @@ function KCard({c,onSelect,dispatch,profile,session,setDragId,funis=[],setMotivo
     setMenuOpen(false);
   };
 
+  // A: badge duplicado
+  const qtdDup = podeVerInsights && c.cpfCliente ? (cpfDuplicados[c.cpfCliente]||0) : 0;
+  const isDup  = qtdDup > 1;
+
+  // D: dias sem movimentação baseado em ultimoContato
+  const diasParado = (() => {
+    const ref = c.ultimoContato || c.dataEntrada;
+    if (!ref) return null;
+    const d = new Date(ref);
+    if (isNaN(d)) return null;
+    return Math.floor((Date.now() - d.getTime()) / 86400000);
+  })();
+  const alertaParado = podeVerInsights && diasParado !== null && diasParado >= 7
+    ? diasParado >= 15 ? 'red' : 'yellow'
+    : null;
+
   return(
     <>
-      <div className="kcard" style={{position:'relative',opacity:c.funil_id?0.55:1}} draggable={!checarTravaBKO(c,profile,session).travado} onDragStart={()=>{if(!checarTravaBKO(c,profile,session).travado)setDragId(c.id);}} onClick={(e)=>{if(!e.defaultPrevented)onSelect(c.id);}}>
-        <div style={{fontSize:12,fontWeight:600,color:'var(--text-primary)',marginBottom:4,paddingRight:20}}>{c.nomeCliente}</div>
+      <div className="kcard" style={{position:'relative',opacity:c.funil_id?0.55:1,
+        borderLeft: alertaParado==='red' ? '3px solid #EF4444' : alertaParado==='yellow' ? '3px solid #F59E0B' : undefined,
+      }} draggable={!checarTravaBKO(c,profile,session).travado} onDragStart={()=>{if(!checarTravaBKO(c,profile,session).travado)setDragId(c.id);}} onClick={(e)=>{if(!e.defaultPrevented)onSelect(c.id);}}>
+        {/* A: Badge duplicado */}
+        {isDup&&podeVerInsights&&(
+          <div style={{position:'absolute',top:6,left:6,display:'flex',alignItems:'center',gap:3,padding:'1px 6px',borderRadius:99,background:'rgba(249,115,22,.12)',border:'1px solid rgba(249,115,22,.3)',fontSize:9,fontWeight:700,color:'#F97316',zIndex:1}}>
+            ⚠ {qtdDup}×
+          </div>
+        )}
+        <div style={{fontSize:12,fontWeight:600,color:'var(--text-primary)',marginBottom:4,paddingRight:20,paddingLeft:isDup&&podeVerInsights?36:0}}>{c.nomeCliente}</div>
         <div style={{fontSize:10,color:'var(--text-muted)',marginBottom:c.prefeitura?3:5}}>{c.cpfCliente||'—'}</div>
         {c.prefeitura&&<div style={{fontSize:9,color:'var(--text-muted)',marginBottom:4}}>🏛 {c.prefeitura}</div>}
         {c.saldoDevedor&&<div style={{fontSize:10,fontWeight:700,color:'#10B981',marginBottom:4}}>💰 {c.saldoDevedor}</div>}
@@ -510,6 +554,13 @@ function KCard({c,onSelect,dispatch,profile,session,setDragId,funis=[],setMotivo
         </div>
         {c.created_at&&<div style={{marginTop:3,fontSize:9,color:'var(--text-faint)'}}>🕐 {fmtDH(c.created_at)}</div>}
         {c.criado_por_nome&&<div style={{marginTop:5,paddingTop:5,borderTop:'1px solid var(--border)',fontSize:9,color:'var(--text-muted)'}}>{c.criado_por_nome}</div>}
+        {/* D: Indicador de tempo parado */}
+        {alertaParado&&podeVerInsights&&(
+          <div style={{marginTop:4,display:'flex',alignItems:'center',gap:4,fontSize:9,fontWeight:700,color:alertaParado==='red'?'#EF4444':'#F59E0B'}}>
+            <span>{alertaParado==='red'?'🔴':'🟡'}</span>
+            {diasParado}d sem movimentação
+          </div>
+        )}
         <button ref={btnRef} onClick={openMenu}
           style={{position:'absolute',top:6,right:6,background:'rgba(0,0,0,.06)',border:'none',borderRadius:5,cursor:'pointer',width:20,height:20,display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,color:'var(--text-muted)',lineHeight:1,padding:0}}>⋯</button>
       </div>
@@ -558,7 +609,7 @@ function KCard({c,onSelect,dispatch,profile,session,setDragId,funis=[],setMotivo
 }
 
 // ─── KANBAN COL ──────────────────────────────────────────────────────────────
-function BKOKanbanCol({s,clientes,dragId,setDragId,dispatch,onSelect,profile,session,highlight,funis,collapsed,onToggleCollapse,setMotivoModal}){
+function BKOKanbanCol({s,clientes,dragId,setDragId,dispatch,onSelect,profile,session,highlight,funis,collapsed,onToggleCollapse,setMotivoModal,cpfDuplicados,podeVerInsights}){
   const [over,setOver]=useState(false);
   const sl=clientes.filter(c=>c.estagio===s.id&&!c.funil_id);
   return(
@@ -585,7 +636,7 @@ function BKOKanbanCol({s,clientes,dragId,setDragId,dispatch,onSelect,profile,ses
           </div>
           <div style={{flex:1,overflowY:'auto',minHeight:40,paddingRight:2,scrollbarWidth:'thin',scrollbarColor:'rgba(0,0,0,.1) transparent'}}>
             {sl.map(c=>(
-              <KCard key={c.id} c={c} onSelect={onSelect} dispatch={dispatch} profile={profile} session={session} setDragId={setDragId} funis={funis} setMotivoModal={setMotivoModal}/>
+              <KCard key={c.id} c={c} onSelect={onSelect} dispatch={dispatch} profile={profile} session={session} setDragId={setDragId} funis={funis} setMotivoModal={setMotivoModal} cpfDuplicados={cpfDuplicados} podeVerInsights={podeVerInsights}/>
             ))}
             {sl.length===0&&<div style={{textAlign:'center',padding:'16px 0',fontSize:10,color:'var(--text-faint)'}}>Solte aqui</div>}
           </div>
@@ -662,6 +713,7 @@ function BKOPipeline({clientes,profile,session,dispatch,onSelect,filtroEstagio,s
   const [funilOpen,setFunilOpen]=useState(false);
   const [menuOpen,setMenuOpen]=useState(false);         // menu ⋯ do pipeline
   const menuRef=useRef(null);
+  const [filtroDuplicados,setFiltroDuplicados]=useState(false); // C: filtro duplicados
   // ── Modal motivo de perda ──
   const [motivoModal,setMotivoModal]=useState(null); // { cid, origem: 'drag'|'menu'|'painel' }
   const funilRef=useRef(null);
@@ -709,14 +761,31 @@ function BKOPipeline({clientes,profile,session,dispatch,onSelect,filtroEstagio,s
     return clientes;
   },[clientes,profile,origemFiltro,supervisorTeam,isSupervisorP,allTeams]);
 
-  const pipelineClientes=clientesVisiveis.filter(c=>!c.funil_id);
-  const filtered=search.trim()
-    ?pipelineClientes.filter(c=>c.nomeCliente?.toLowerCase().includes(search.toLowerCase())||c.cpfCliente?.includes(search))
-    :pipelineClientes;
-  const funisComContagem=useMemo(()=>funis.map(f=>({...f,count:clientes.filter(c=>c.funil_id===f.id).length})),[funis,clientes]);
+  const funisComContagem = useMemo(() => funis.map(f => ({...f, count:clientes.filter(c=>c.funil_id===f.id).length})), [funis, clientes]);
 
-  // Tem algo no dropdown? (pipelines CRM + funis de arquivo)
-  const temDropdown = crmPipelines.length>0 || funisComContagem.length>0;
+  const podeVerInsights = profile?.role === 'comercial' || profile?.role === 'bko';
+
+  const cpfDuplicados = useMemo(() => {
+    const counts = {};
+    clientesVisiveis.forEach(c => { if (c.cpfCliente) counts[c.cpfCliente] = (counts[c.cpfCliente] || 0) + 1; });
+    const dup = {};
+    Object.entries(counts).forEach(([cpf, n]) => { if (n > 1) dup[cpf] = n; });
+    return dup;
+  }, [clientesVisiveis]);
+  
+  const pipelineClientes = clientesVisiveis.filter(c => !c.funil_id);
+
+  // filteredBase ANTES de filtered
+  const filteredBase = search.trim()
+    ? pipelineClientes.filter(c => c.nomeCliente?.toLowerCase().includes(search.toLowerCase()) || c.cpfCliente?.includes(search))
+    : pipelineClientes;
+
+  // filtered usa filteredBase, podeVerInsights e cpfDuplicados — todos já declarados acima
+  const filtered = filtroDuplicados && podeVerInsights
+    ? filteredBase.filter(c => cpfDuplicados[c.cpfCliente])
+    : filteredBase;
+
+  const temDropdown = crmPipelines.length > 0 || funisComContagem.length > 0;
 
   // Texto do breadcrumb
   const tituloAtual = pipelineAtivo
@@ -764,11 +833,20 @@ function BKOPipeline({clientes,profile,session,dispatch,onSelect,filtroEstagio,s
               <button onClick={()=>setFiltroEstagio(null)} style={{background:'none',border:'none',cursor:'pointer',color:B_MID,fontSize:13,lineHeight:1,padding:0}}>×</button>
             </div>
           )}
+          {/* Busca — div fechado corretamente */}
           {!tituloAtual&&(
             <div style={{position:'relative',width:220}}>
               <span style={{position:'absolute',left:10,top:'50%',transform:'translateY(-50%)',color:'var(--text-faint)',fontSize:12}}>⌕</span>
               <input className="inp" style={{paddingLeft:30,height:34,fontSize:12}} placeholder="Buscar cliente…" value={search} onChange={e=>setSearch(e.target.value)}/>
             </div>
+          )}
+          {/* C: Botão filtro duplicados — irmão separado, fora do div de busca */}
+          {!tituloAtual&&podeVerInsights&&Object.keys(cpfDuplicados).length>0&&(
+            <button onClick={()=>setFiltroDuplicados(v=>!v)}
+              style={{display:'flex',alignItems:'center',gap:5,padding:'0 12px',height:34,borderRadius:8,border:`1px solid ${filtroDuplicados?'rgba(249,115,22,.5)':'var(--border)'}`,background:filtroDuplicados?'rgba(249,115,22,.1)':'var(--bg-card)',color:filtroDuplicados?'#F97316':'var(--text-muted)',fontSize:12,fontWeight:600,cursor:'pointer',transition:'all .15s',whiteSpace:'nowrap',fontFamily:'var(--font)'}}>
+              <span style={{fontSize:13}}>⚠</span>
+              {filtroDuplicados?'Todos os clientes':`${Object.keys(cpfDuplicados).length} CPF${Object.keys(cpfDuplicados).length!==1?'s':''} duplicado${Object.keys(cpfDuplicados).length!==1?'s':''}`}
+            </button>
           )}
           {funilSel&&!pipelineAtivo&&(
             <div style={{position:'relative',width:220}}>
@@ -904,7 +982,7 @@ function BKOPipeline({clientes,profile,session,dispatch,onSelect,filtroEstagio,s
             <BKOKanbanCol key={s.id} s={s} clientes={filtered} dragId={dragId} setDragId={setDragId}
               dispatch={dispatch} onSelect={onSelect} profile={profile} session={session}
               highlight={filtroEstagio===s.id} funis={funisComContagem}
-              collapsed={collapsedCols.has(s.id)} onToggleCollapse={()=>toggleCol(s.id)} setMotivoModal={setMotivoModal}/>
+              collapsed={collapsedCols.has(s.id)} onToggleCollapse={()=>toggleCol(s.id)} setMotivoModal={setMotivoModal} cpfDuplicados={cpfDuplicados} podeVerInsights={podeVerInsights}/>
           ))}
         </div>
       )}
@@ -1914,7 +1992,7 @@ function AvisosSection({ profile, session }) {
 }
 
 
-// AVISO POPUP
+// ─── AVISO POPUP ─────────────────────────────────────────────────────────────
 function AvisoPopup({ aviso, onFechar }) {
   return (
     <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.55)', backdropFilter:'blur(4px)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:9999, padding:20 }}>
