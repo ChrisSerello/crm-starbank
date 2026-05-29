@@ -1,18 +1,6 @@
 /**
  * BKODetail — painel lateral de detalhes do cliente BKO
- *
- * CORREÇÃO CRÍTICA nesta versão:
- * - salvarInfo: adicionado flag esUserChanged para só disparar MOVE quando o usuário
- *   explicitamente alterou o dropdown de estágio.
- *   Antes, se outro usuário movia o cliente via realtime enquanto o painel estava aberto,
- *   salvar qualquer outra coisa (documento, observação, etc.) revertia o estágio para o
- *   valor capturado no momento em que o painel foi aberto. Isso causava os "clientes
- *   mudando de esteira sozinhos" relatados pelo time.
- *
- * Outras correções mantidas:
- * - Estados separados para atribuição: atribCorbanId e atribStartecId
- * - useEffect de operadoresStartec inclui isComercial na dependency array
- * - Botão de atribuição Startec chama salvarAtribuicaoStartec (função correta)
+ * ✨ v2: Resumo automático via Gemini AI
  */
 
 import { useState, useEffect, useRef } from 'react';
@@ -55,29 +43,16 @@ const BKO_STAGES = [
 const ROLE_COLOR = { comercial:'#3B5BDB', corban_bko:'#0EA5E9', bko:'#7C3AED', startec:'#059669', supervisor_startec:'#0D9488' };
 const ROLE_LABEL = { comercial:'Comercial', corban_bko:'Corban', bko:'BKO', startec:'Startec', supervisor_startec:'Supervisor' };
 
-
-// ─── MOTIVO DA PERDA (reutilizado do BKOApp) ─────────────────────────────────
 const MOTIVOS_PERDA_DETAIL = [
-  'Taxa alta',
-  'Sem margem disponível',
-  'Cliente não atendeu',
-  'Cliente desistiu',
-  'Concorrente mais vantajoso',
-  'Documentação incompleta',
-  'Reprovado na análise',
-  'Outro',
+  'Taxa alta','Sem margem disponível','Cliente não atendeu','Cliente desistiu',
+  'Concorrente mais vantajoso','Documentação incompleta','Reprovado na análise','Outro',
 ];
 
 function MotivoPerdaModal({ onConfirm, onCancel }) {
   const [motivo, setMotivo] = React.useState('');
   const [obs,    setObs]    = React.useState('');
   const [erro,   setErro]   = React.useState(false);
-
-  const confirmar = () => {
-    if (!motivo) { setErro(true); return; }
-    onConfirm(motivo, obs.trim());
-  };
-
+  const confirmar = () => { if (!motivo) { setErro(true); return; } onConfirm(motivo, obs.trim()); };
   return (
     <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,.5)', backdropFilter:'blur(6px)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:2000, padding:20 }}>
       <div style={{ background:'var(--bg-card)', border:'1px solid var(--border)', borderRadius:14, padding:'28px 28px 24px', width:'100%', maxWidth:400, boxShadow:'0 24px 64px rgba(0,0,0,.2)' }}>
@@ -114,9 +89,6 @@ function MotivoPerdaModal({ onConfirm, onCancel }) {
 export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
   const [tab, setTab]         = useState('info');
   const [es, setEs]           = useState(cliente.estagio);
-  // ✅ CORREÇÃO: flag que indica se o USUÁRIO intencionalmente mudou o dropdown de estágio.
-  // Se false, salvarInfo usa cliente.estagio (valor atual, pode ter mudado por realtime)
-  // em vez de es (valor capturado no momento que o painel abriu).
   const [esUserChanged, setEsUserChanged] = useState(false);
   const [motivoPerdaModal, setMotivoPerdaModal] = useState(false);
   const [ed, setEd]           = useState(cliente.documentoStatus || 'Não solicitado');
@@ -126,27 +98,116 @@ export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
   const [uploading, setUploading] = useState(false);
   const [uploadMsg, setUploadMsg] = useState(null);
 
-  // ── Atribuição Corban — estado separado ──
+  // ── Atribuição Corban ──
   const [corbans, setCorbans]             = useState([]);
   const [atribCorbanId, setAtribCorbanId] = useState(cliente.atribuido_a_id || '');
   const [atribuindo, setAtribuindo]       = useState(false);
   const [atribMsg, setAtribMsg]           = useState(null);
 
-  // ── Atribuição Startec — estado separado ──
+  // ── Atribuição Startec ──
   const [operadoresStartec, setOperadoresStartec] = useState([]);
   const [atribStartecId, setAtribStartecId]       = useState(cliente.atribuido_a_id || '');
   const [atribuindoStartec, setAtribuindoStartec] = useState(false);
   const [atribStartecMsg, setAtribStartecMsg]     = useState(null);
 
-  const [respMsg, setRespMsg]           = useState(null);
-  const [salvandoResp, setSalvandoResp] = useState(false);
+  const [respMsg, setRespMsg]             = useState(null);
+  const [salvandoResp, setSalvandoResp]   = useState(false);
   const [salvandoSaldo, setSalvandoSaldo] = useState(false);
   const [saldoMsg, setSaldoMsg]           = useState(null);
-  const [novaObs, setNovaObs] = useState('');
-  const [chatMsgs, setChatMsgs]     = useState([]);
-  const [chatInput, setChatInput]   = useState('');
-  const [chatLoading, setChatLoading] = useState(false);
+  const [novaObs, setNovaObs]             = useState('');
+  const [chatMsgs, setChatMsgs]           = useState([]);
+  const [chatInput, setChatInput]         = useState('');
+  const [chatLoading, setChatLoading]     = useState(false);
   const chatEndRef = useRef(null);
+
+  // ── ✨ IA: Resumo automático ──────────────────────────────────────────────
+  const [iaResumo,  setIaResumo]  = useState(null);
+  const [iaLoading, setIaLoading] = useState(false);
+  const [iaErro,    setIaErro]    = useState(null);
+
+  const gerarResumo = async () => {
+    setIaLoading(true);
+    setIaErro(null);
+    setIaResumo(null);
+
+    try {
+      const stgLabel = BKO_STAGES.find(s => s.id === cliente.estagio)?.label || cliente.estagio;
+      const diasSemContato = (() => {
+        const ref = cliente.ultimoContato || cliente.dataEntrada;
+        if (!ref) return null;
+        const d = new Date(ref);
+        if (isNaN(d)) return null;
+        return Math.floor((Date.now() - d.getTime()) / 86400000);
+      })();
+
+      const obsLog = cliente.observacoesBkoLog || [];
+      const ultimasObs = obsLog.length > 0
+        ? obsLog.slice(-15).map(o => {
+            const dataObs = o.dataHora
+              ? new Date(o.dataHora).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit' })
+              : o.data || '';
+            return `[${o.autor_nome} (${ROLE_LABEL[o.autor_role]||o.autor_role}) - ${dataObs}]: ${o.texto}`;
+          }).join('\n')
+        : (cliente.observacoesBko || 'Nenhuma observação registrada.');
+
+      const ultimasAtividades = (cliente.activities || []).slice(-8).map(a =>
+        `${a.date} - ${a.user}: ${a.text}`
+      ).join('\n') || 'Nenhuma atividade registrada.';
+
+      const prompt = `Você é um assistente de backoffice financeiro especializado em crédito consignado.
+Analise TODOS os dados abaixo, incluindo o conteúdo completo das observações, e gere um resumo executivo CURTO em português brasileiro (máximo 4 linhas).
+O resumo deve responder: onde o cliente está, há quanto tempo, o que está pendente e qual é o próximo passo recomendado.
+Se houver informações de saldo, produto, matrícula ou proposta nas observações, USE essas informações no resumo.
+Seja direto e objetivo. Não use markdown, não use asteriscos, não use listas — escreva em texto corrido.
+
+DADOS DO CLIENTE:
+- Nome: ${cliente.nomeCliente}
+- CPF: ${cliente.cpfCliente || '—'}
+- Prefeitura/Órgão: ${cliente.prefeitura || '—'}
+- Estágio atual: ${stgLabel}
+- Saldo devedor (campo): ${cliente.saldoDevedor || 'não preenchido no campo'}
+- Atribuído a: ${cliente.atribuido_a_nome || 'não atribuído'}
+- Responsável BKO: ${cliente.responsavel_bko_nome || 'sem responsável'}
+- Dias sem movimentação: ${diasSemContato !== null ? diasSemContato + ' dias' : 'não calculado'}
+- Status documento: ${cliente.documentoStatus || '—'}
+
+OBSERVAÇÕES COMPLETAS (leia com atenção — podem conter saldo, produto, proposta):
+${ultimasObs}
+
+ATIVIDADES RECENTES:
+${ultimasAtividades}`;
+
+      const GROQ_KEY = import.meta.env.VITE_GROQ_API_KEY;
+      const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${GROQ_KEY}`,
+        },
+        body: JSON.stringify({
+          model: 'llama-3.3-70b-versatile',
+          messages: [{ role: 'user', content: prompt }],
+          max_tokens: 300,
+          temperature: 0.3,
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error?.message || `Erro ${res.status}`);
+      }
+
+      const data = await res.json();
+      const texto = data?.choices?.[0]?.message?.content;
+      if (!texto) throw new Error('Resposta vazia da IA.');
+      setIaResumo(texto.trim());
+    } catch (e) {
+      setIaErro(e.message || 'Erro ao gerar resumo.');
+    } finally {
+      setIaLoading(false);
+    }
+  };
+  // ─────────────────────────────────────────────────────────────────────────
 
   const r                   = profile?.role;
   const isBko               = r === 'bko';
@@ -166,10 +227,8 @@ export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
   const temResponsavel   = !!cliente.responsavel_bko_id;
 
   const SUPERVISORES_BKO = [
-    'edson@starbank.tec.br',
-    'vera.marques@starbank.tec.br',
-    'maria.cerqueira@starbank.tec.br',
-    'elisangela.pereira@starbank.tec.br',
+    'edson@starbank.tec.br','vera.marques@starbank.tec.br',
+    'maria.cerqueira@starbank.tec.br','elisangela.pereira@starbank.tec.br',
   ];
   const isSupervisorBko = SUPERVISORES_BKO.includes(session?.user?.email);
   const bkoTravado = isBko && temResponsavel && !euSouResponsavel && !isSupervisorBko;
@@ -309,25 +368,11 @@ export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
     setAtribStartecMsg({ t:'success', text:`Atribuído a ${opSel?.nome||'ninguém'}!` });
   };
 
-  // ✅ CORREÇÃO PRINCIPAL — causa dos "clientes mudando de esteira sozinhos"
-  // esUserChanged = false → usuário não tocou no dropdown → usa cliente.estagio (atual, pós-realtime)
-  // esUserChanged = true  → usuário escolheu um novo estágio → usa es e dispara MOVE
-  //
-  // ✅ CORREÇÃO SECUNDÁRIA — atividade do MOVE sendo apagada pelo UPD subsequente
-  // O reducer UPD faz {...c, ...a.c}. Se a.c incluir activities (snapshot stale do cliente),
-  // sobrescreve o array que o MOVE acabou de atualizar. Solução: omitir activities do UPD
-  // quando MOVE já foi disparado — o reducer preserva automaticamente o que o MOVE escreveu.
   const salvarInfo = () => {
     const estagioFinal = esUserChanged ? es : cliente.estagio;
     if (esUserChanged && es !== cliente.estagio) {
-      // Interceptar movimento para Perdidos — exige motivo
-      if (es === 'perdido') {
-        setMotivoPerdaModal(true);
-        setSalvando(false);
-        return;
-      }
+      if (es === 'perdido') { setMotivoPerdaModal(true); return; }
       dispatch({ type:'MOVE', cid:cliente.id, st:es, user:profile?.nome||'Usuário' });
-      // ✅ Desestrutura activities fora do payload — não sobrescreve o que MOVE acabou de adicionar
       const { activities: _ignored, ...clienteSemActivities } = cliente;
       dispatch({ type:'UPD', c:{ ...clienteSemActivities, estagio:estagioFinal, documentoStatus:ed, saldoDevedor:saldo, documentos:docs, prefeitura:prefeituraEdit } });
     } else {
@@ -373,7 +418,6 @@ export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
 
   const stg = BKO_STAGES.find(s => s.id === cliente.estagio);
 
-  // Confirmar perda com motivo vindo do painel lateral
   const confirmarPerdaComMotivo = (motivo, obs) => {
     dispatch({ type:'MOVE', cid:cliente.id, st:'perdido', user:profile?.nome||'Usuário', motivo, obs });
     setMotivoPerdaModal(false);
@@ -382,14 +426,14 @@ export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
 
   return (
     <div className="spanel">
-      {/* Modal motivo da perda — painel lateral */}
       {motivoPerdaModal && (
         <MotivoPerdaModal
           onConfirm={confirmarPerdaComMotivo}
           onCancel={()=>{ setMotivoPerdaModal(false); setEs(cliente.estagio); setEsUserChanged(false); }}
         />
       )}
-      {/* Cabeçalho */}
+
+      {/* ── Cabeçalho ── */}
       <div style={{ padding:'16px 20px 12px', borderBottom:'1px solid var(--border)', background:'var(--bg-card)', flexShrink:0 }}>
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', gap:10 }}>
           <div style={{ flex:1, minWidth:0 }}>
@@ -405,12 +449,69 @@ export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
               {cliente.saldoDevedor&&<span style={{fontSize:10,padding:'2px 8px',borderRadius:99,background:'rgba(16,185,129,.1)',color:'#10B981',fontWeight:700}}>💰 {cliente.saldoDevedor}</span>}
             </div>
           </div>
+
+          {/* ── Botões do cabeçalho ── */}
           <div style={{display:'flex',gap:6,alignItems:'center'}}>
+            {/* ✨ Botão Resumo IA */}
+            <button
+              onClick={gerarResumo}
+              disabled={iaLoading}
+              title="Resumo automático com IA"
+              style={{
+                background: iaResumo ? 'rgba(99,102,241,.12)' : 'rgba(0,0,0,.06)',
+                border: `1px solid ${iaResumo ? 'rgba(99,102,241,.3)' : 'var(--border)'}`,
+                borderRadius:7, cursor: iaLoading ? 'wait' : 'pointer',
+                padding:'0 10px', height:28, display:'flex', alignItems:'center',
+                gap:5, fontSize:11, fontWeight:600,
+                color: iaResumo ? '#6366F1' : 'var(--text-muted)',
+                transition:'all .15s', flexShrink:0,
+              }}>
+              <span style={{fontSize:12}}>{iaLoading ? '⏳' : '✨'}</span>
+              {iaLoading ? 'Analisando…' : 'Resumo IA'}
+            </button>
+
             <button onClick={()=>podeEditar?setEditando(v=>!v):null} title={podeEditar?'Editar dados do cliente':'Sem permissão para editar'}
               style={{background:editando?'rgba(59,91,219,.1)':'rgba(0,0,0,.06)',border:`1px solid ${editando?'rgba(59,91,219,.3)':'var(--border)'}`,borderRadius:7,cursor:podeEditar?'pointer':'not-allowed',width:28,height:28,display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,color:editando?'#3B5BDB':podeEditar?'var(--text-muted)':'var(--border)',opacity:podeEditar?1:0.5,transition:'all .15s'}}>✎</button>
             <button onClick={onClose} style={{background:'rgba(0,0,0,.06)',border:'1px solid var(--border)',borderRadius:7,cursor:'pointer',width:28,height:28,display:'flex',alignItems:'center',justifyContent:'center',fontSize:16,color:'var(--text-muted)'}}>×</button>
           </div>
         </div>
+
+        {/* ✨ Card do Resumo IA */}
+        {(iaResumo || iaErro) && (
+          <div style={{
+            marginTop:12,
+            padding:'10px 14px',
+            borderRadius:9,
+            background: iaErro ? 'var(--danger-dim)' : 'rgba(99,102,241,.07)',
+            border: `1px solid ${iaErro ? 'rgba(192,65,58,.2)' : 'rgba(99,102,241,.2)'}`,
+            position:'relative',
+          }}>
+            {/* cabeçalho do card */}
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:6}}>
+              <div style={{display:'flex',alignItems:'center',gap:6}}>
+                <span style={{fontSize:12}}>✨</span>
+                <span style={{fontSize:10,fontWeight:700,color: iaErro ? 'var(--danger)' : '#6366F1',textTransform:'uppercase',letterSpacing:'.06em'}}>
+                  Resumo IA
+                </span>
+              </div>
+              <div style={{display:'flex',gap:6,alignItems:'center'}}>
+                {iaResumo && (
+                  <button onClick={gerarResumo} disabled={iaLoading} title="Gerar novo resumo"
+                    style={{fontSize:10,color:'#6366F1',background:'none',border:'none',cursor:'pointer',padding:'1px 6px',borderRadius:4,opacity:iaLoading?0.5:1}}>
+                    ↺ Atualizar
+                  </button>
+                )}
+                <button onClick={()=>{ setIaResumo(null); setIaErro(null); }}
+                  style={{fontSize:13,color:'var(--text-muted)',background:'none',border:'none',cursor:'pointer',lineHeight:1,padding:'1px 4px'}}>×</button>
+              </div>
+            </div>
+            {/* conteúdo */}
+            {iaErro
+              ? <div style={{fontSize:12,color:'var(--danger)'}}>{iaErro}</div>
+              : <div style={{fontSize:12,color:'var(--text-primary)',lineHeight:1.6}}>{iaResumo}</div>
+            }
+          </div>
+        )}
       </div>
 
       {bkoTravado&&(
@@ -520,7 +621,6 @@ export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
             <div style={{borderTop:'1px solid var(--border)',paddingTop:14}}>
               <div className="eyebrow" style={{marginBottom:10}}>Atualizar status</div>
               <label style={{fontSize:11,color:'var(--text-muted)',display:'block',marginBottom:5}}>Estágio</label>
-              {/* ✅ onChange seta esUserChanged=true — indica intenção explícita do usuário */}
               <select className="sel" value={es}
                 onChange={e=>{ setEs(e.target.value); setEsUserChanged(true); }}
                 disabled={bkoTravado}
