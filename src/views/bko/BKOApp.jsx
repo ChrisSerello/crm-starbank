@@ -1136,7 +1136,7 @@ function BKOClientes({clientes,profile,onSelect,onNew,origemFiltro,setOrigemFilt
             onMouseLeave={e=>{e.currentTarget.style.background='rgba(16,185,129,.1)';}}>
             ↓ Exportar
           </button>
-          <button className="btn" style={{background:B_MID,color:'#fff',boxShadow:`0 3px 14px ${B_GLOW}`}} onClick={onNew}>+ Novo Cliente</button>
+          {!isFR && <button className="btn" style={{background:B_MID,color:'#fff',boxShadow:`0 3px 14px ${B_GLOW}`}} onClick={onNew}>+ Novo Cliente</button>}
         </div>
       </div>
       <div className="fu1" style={{display:'flex',gap:8,marginBottom:14,flexWrap:'wrap'}}>
