@@ -10,6 +10,11 @@ import ReactDOM from 'react-dom';
 import { BKOPipelines } from './BKOPipelines';
 import { BKOConfigurarPipeline } from './BKOConfigurarPipeline';
 
+const FR_GROUP_EMAILS = [
+  'fernando@finmatchbr.com',
+  'roberto.mmedaglia@gmail.com',
+];
+
 const fmtDH=(ts)=>{
   if(!ts) return '—';
   try{
@@ -153,7 +158,7 @@ function ModuleSwitcherBKO({ userModules, profile, onSwitch, collapsed }){
   );
 }
 
-// ── SIDEBAR — sem item 'pipelines' separado ──────────────────────────────────
+// ── SIDEBAR — sem item 'pipelines' separado
 function BKOSidebar({view,setView,profile,onLogout,onAlterarSenha,onSearch,collapsed,setCollapsed,userModules,onSwitchModule,session}){
   const r=profile?.role;
   const SUPERVISORES_CADASTRAR=[
@@ -163,7 +168,11 @@ function BKOSidebar({view,setView,profile,onLogout,onAlterarSenha,onSearch,colla
     'elisangela.pereira@starbank.tec.br',
   ];
   const isSupervisorComAcesso=SUPERVISORES_CADASTRAR.includes(session?.user?.email);
-  const items=[
+  const isFRUser = FR_GROUP_EMAILS.includes(session?.user?.email?.toLowerCase());
+  const items=isFRUser?[
+    {id:'pipeline',icon:'⊞',label:'Pipeline'},
+    {id:'clientes',icon:'≡',label:'Clientes'},
+  ]:[
     {id:'dashboard',icon:'◈',label:'Dashboard'},
     {id:'pipeline', icon:'⊞',label:'Pipeline'},
     {id:'clientes', icon:'≡',label:'Clientes'},
@@ -1043,7 +1052,8 @@ function exportarExcel(dados, nomeArquivo='clientes_bko'){
   }
 }
 
-function BKOClientes({clientes,profile,onSelect,onNew,origemFiltro,setOrigemFiltro,supervisorTeam,allTeams}){
+function BKOClientes({clientes,profile,onSelect,onNew,origemFiltro,setOrigemFiltro,supervisorTeam,allTeams,isFR,session}){
+  const [estagiosFR, setEstagiosFR] = useState([]);
   const [search,setSearch]=useState('');
   const [estagio,setEstagio]=useState('');
   const [prefeitura,setPrefeitura]=useState('');
@@ -1055,6 +1065,26 @@ function BKOClientes({clientes,profile,onSelect,onNew,origemFiltro,setOrigemFilt
   const prefeituras=useMemo(()=>[...new Set(clientes.map(c=>c.prefeitura).filter(Boolean))].sort(),[clientes]);
   const criadoresList=useMemo(()=>[...new Set(clientes.map(c=>c.criado_por_nome).filter(Boolean))].sort(),[clientes]);
   const atribuidosList=useMemo(()=>[...new Set(clientes.map(c=>c.atribuido_a_nome).filter(Boolean))].sort(),[clientes]);
+
+  useEffect(() => {
+    if (!isFR) return;
+    supabase.from('bko_pipelines')
+      .select('id')
+      .eq('acesso_todos', false)
+      .contains('usuarios_acesso', [session?.user?.id])
+      .single()
+      .then(({ data: pipeline }) => {
+        if (!pipeline) return;
+        supabase.from('bko_pipeline_estagios')
+          .select('*')
+          .eq('pipeline_id', pipeline.id)
+          .eq('ativo', true)
+          .order('ordem')
+          .then(({ data }) => setEstagiosFR(data || []));
+      });
+  }, [isFR, session?.user?.id]);
+
+  const stagesParaFiltro = isFR ? estagiosFR : BKO_STAGES;
 
   const isSupervisorC=profile?.is_supervisor===true;
   const clientesBase=useMemo(()=>{
@@ -1116,7 +1146,7 @@ function BKOClientes({clientes,profile,onSelect,onNew,origemFiltro,setOrigemFilt
         </div>
         <select className="sel" style={{width:160}} value={estagio} onChange={e=>{setEstagio(e.target.value);setPage(1);}}>
           <option value="">Todos os estágios</option>
-          {BKO_STAGES.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}
+          {stagesParaFiltro.map(s=><option key={s.id} value={s.id}>{isFR ? s.nome : s.label}</option>)}
         </select>
         <select className="sel" style={{width:160}} value={prefeitura} onChange={e=>{setPrefeitura(e.target.value);setPage(1);}}>
           <option value="">Todas as prefeituras</option>
@@ -1610,6 +1640,7 @@ function BKOAuditoria(){
 // ─── APP ROOT ─────────────────────────────────────────────────────────────────
 export function BKOApp({profile,session,signOut,onAlterarSenha,userModules,onSwitchModule}){
   const [s,dispatch]=useReducer(R,INIT);
+  const isFR = FR_GROUP_EMAILS.includes(session?.user?.email?.toLowerCase());
   const {clientes,view,sel,newOpen}=s;
   const [ready,setReady]=useState(false);
   const [funis,setFunis]=useState([]);
@@ -1719,6 +1750,10 @@ export function BKOApp({profile,session,signOut,onAlterarSenha,userModules,onSwi
 
   useEffect(()=>{
     if(!session) return;
+    if(isFR){
+      dispatch({type:'VIEW', v:'pipeline'});
+      setReady(true); 
+      return; } // add essa linha
     supabase.from('bko_clientes').select('*').order('created_at',{ascending:false}).limit(500)
       .then(({data,error})=>{
         if(error){console.error('BKO load error:',error);setReady(true);return;}
@@ -1817,9 +1852,24 @@ export function BKOApp({profile,session,signOut,onAlterarSenha,userModules,onSwi
         />
         <main style={{flex:1,minWidth:0,height:'100%',display:'flex',flexDirection:'column',overflow:view==='pipeline'?'hidden':'auto',paddingRight:selected?490:0,transition:'padding-right .3s cubic-bezier(.4,0,.2,1)'}}>
           {view==='dashboard' && <BKODashboard clientes={clientes} setView={v=>{setView(v);}} setFiltroEstagio={setFiltroEstagio} profile={profile} origemFiltro={origemFiltro} setOrigemFiltro={setOrigemFiltro} supervisorTeam={supervisorTeam} allTeams={allTeams}/>}
-          {view==='pipeline'  && !viewConfigurar && <BKOPipeline  clientes={clientes} profile={profile} session={session} dispatch={auditedDispatch} onSelect={id=>dispatch({type:'SEL',id})} filtroEstagio={filtroEstagio} setFiltroEstagio={setFiltroEstagio} funis={funis} origemFiltro={origemFiltro} setOrigemFiltro={setOrigemFiltro} supervisorTeam={supervisorTeam} allTeams={allTeams} onConfigurar={()=>setViewConfigurar(true)}/> }
+          {view==='pipeline' && !viewConfigurar && (
+            isFR
+              ? <BKOPipelines profile={profile} session={session} />
+              : <BKOPipeline clientes={clientes} profile={profile} session={session}
+                  dispatch={auditedDispatch}
+                  onSelect={id=>dispatch({type:'SEL',id})}
+                  filtroEstagio={filtroEstagio}
+                  setFiltroEstagio={setFiltroEstagio}
+                  funis={funis}
+                  origemFiltro={origemFiltro}
+                  setOrigemFiltro={setOrigemFiltro}
+                  supervisorTeam={supervisorTeam}
+                  allTeams={allTeams}
+                  onConfigurar={()=>setViewConfigurar(true)}
+                />
+          )}
           {view==='pipeline' && viewConfigurar && <BKOConfigurarPipeline profile={profile} session={session} funis={funis} setFunis={setFunis} onVoltar={()=>setViewConfigurar(false)}/>}
-          {view==='clientes'  && <BKOClientes  clientes={clientes} profile={profile} onSelect={id=>dispatch({type:'SEL',id})} onNew={()=>dispatch({type:'TNEW'})} origemFiltro={origemFiltro} setOrigemFiltro={setOrigemFiltro} supervisorTeam={supervisorTeam} allTeams={allTeams}/>}
+          {view==='clientes' && <BKOClientes clientes={clientes} profile={profile} isFR={isFR} session={session} onSelect={id=>dispatch({type:'SEL',id})} onNew={()=>dispatch({type:'TNEW'})} origemFiltro={origemFiltro} setOrigemFiltro={setOrigemFiltro} supervisorTeam={supervisorTeam} allTeams={allTeams}/>}
           {view==='cadastrar' && <BKOCadastrar profile={profile} session={session} funis={funis} setFunis={setFunis}/>}
           {view==='auditoria' && <BKOAuditoria/>}
           {view==='gestao_corban' && <BKOGestaoCorbans profile={profile}/>}

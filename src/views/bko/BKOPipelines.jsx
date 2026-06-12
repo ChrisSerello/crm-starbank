@@ -388,10 +388,20 @@ export function BKOPipelines({ profile, session, pipelineInicial = null }) {
       setLoading(false);
       return;
     }
+    const userId = session?.user?.id;
     supabase.from('bko_pipelines').select('*').eq('ativo', true).order('ordem')
       .then(({ data }) => {
-        setPipelines(data || []);
-        if (data?.length > 0) setPipelineSel(data[0]);
+        const visiveis = (data || []).filter(p =>
+          p.acesso_todos === true ||
+          (p.acesso_todos === false && (
+            (p.usuarios_acesso || []).includes(userId) ||
+            (p.roles_acesso || []).includes(profile?.role)
+          ))
+        );
+        const restritos = visiveis.filter(p => p.acesso_todos === false);
+        const final = restritos.length > 0 ? restritos : visiveis;
+        setPipelines(final);
+        setPipelineSel(final[0]);
         setLoading(false);
       });
   }, [pipelineInicial?.id]);
@@ -497,7 +507,7 @@ export function BKOPipelines({ profile, session, pipelineInicial = null }) {
         </div>
 
         {/* Tabs de pipeline — ocultas quando chamado via dropdown (pipelineInicial) */}
-        {!pipelineInicial && <div style={{ display:'flex', gap:2, overflowX:'auto', scrollbarWidth:'none' }}>
+        {!pipelineInicial && pipelines.length > 1 && <div style={{ display:'flex', gap:2, overflowX:'auto', scrollbarWidth:'none' }}>
           {pipelines.map(p => (
             <button key={p.id} onClick={() => { setPipelineSel(p); setSearch(''); setSelId(null); }}
               style={{ padding:'8px 16px', fontSize:12, fontWeight:pipelineSel?.id===p.id?700:400, cursor:'pointer', border:'none', borderBottom:pipelineSel?.id===p.id?`2px solid ${p.cor}`:'2px solid transparent', background:'transparent', color:pipelineSel?.id===p.id?p.cor:'var(--text-muted)', whiteSpace:'nowrap', fontFamily:'var(--font)', transition:'all .15s', borderRadius:0 }}>
