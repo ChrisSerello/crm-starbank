@@ -15,6 +15,14 @@ const FR_GROUP_EMAILS = [
   'roberto.mmedaglia@gmail.com',
 ];
 
+const LEGADO_AUTORIZADO_EMAILS = [
+  'brunno@starbank.tec.br',
+  'edson@starbank.tec.br',
+  'vera.marques@starbank.tec.br',
+  'maria.cerqueira@starbank.tec.br',
+  'elisangela.pereira@starbank.tec.br',
+];
+
 const fmtDH=(ts)=>{
   if(!ts) return '—';
   try{
@@ -44,18 +52,18 @@ const B_TEXT  = '#A5B4FC';
 const ROLE_LABELS = { comercial:'Comercial', corban_bko:'Corban', bko:'BKO', startec:'Startec' };
 const ROLE_COLORS = { comercial:'#3B5BDB', corban_bko:'#0EA5E9', bko:'#7C3AED', startec:'#059669' };
 
-const BKO_STAGES = [
-  { id:'clientes_novos',       label:'Clientes Novos - Corban',              color:'#3B5BDB', bg:'rgba(59,91,219,.1)'  },
-  { id:'saldo_andamento',      label:'BKO - Saldo Devedor',                  color:'#7C3AED', bg:'rgba(124,58,237,.1)' },
-  { id:'pendencia_BKO',        label:'Pendência Análise BKO',                color:'#8e14b6', bg:'rgba(249,115,22,.1)' },
-  { id:'pendencia_financeiro', label:'Pendência Análise Financeira',          color:'#F97316', bg:'rgba(249,115,22,.1)' },
-  { id:'em_negociacao',        label:'Em negociação (Saldo Informado) - Corban', color:'#0EA5E9', bg:'rgba(14,165,233,.1)' },
-  { id:'abertura_conta',       label:'Abertura de conta - Interno',           color:'#10B981', bg:'rgba(16,185,129,.1)' },
-  { id:'digitar_proposta',     label:'Pronto para Digitar - Corban',          color:'#F59E0B', bg:'rgba(245,158,11,.1)' },
-  { id:'banksoft',             label:'Banksoft - Tratativas',                 color:'#EF4444', bg:'rgba(239,68,68,.1)'  },
-  { id:'integrado',            label:'Finalizado - Interno',                  color:'#22C55E', bg:'rgba(34,197,94,.1)'  },
-  { id:'perdido',              label:'Perdidos',                              color:'#EF4444', bg:'rgba(239,68,68,.1)'  },
-];
+// const BKO_STAGES = [
+//   { id:'clientes_novos',       label:'Clientes Novos - Corban',              color:'#3B5BDB', bg:'rgba(59,91,219,.1)'  },
+//   { id:'saldo_andamento',      label:'BKO - Saldo Devedor',                  color:'#7C3AED', bg:'rgba(124,58,237,.1)' },
+//   { id:'pendencia_BKO',        label:'Pendência Análise BKO',                color:'#8e14b6', bg:'rgba(249,115,22,.1)' },
+//   { id:'pendencia_financeiro', label:'Pendência Análise Financeira',          color:'#F97316', bg:'rgba(249,115,22,.1)' },
+//   { id:'em_negociacao',        label:'Em negociação (Saldo Informado) - Corban', color:'#0EA5E9', bg:'rgba(14,165,233,.1)' },
+//   { id:'abertura_conta',       label:'Abertura de conta - Interno',           color:'#10B981', bg:'rgba(16,185,129,.1)' },
+//   { id:'digitar_proposta',     label:'Pronto para Digitar - Corban',          color:'#F59E0B', bg:'rgba(245,158,11,.1)' },
+//   { id:'banksoft',             label:'Banksoft - Tratativas',                 color:'#EF4444', bg:'rgba(239,68,68,.1)'  },
+//   { id:'integrado',            label:'Finalizado - Interno',                  color:'#22C55E', bg:'rgba(34,197,94,.1)'  },
+//   { id:'perdido',              label:'Perdidos',                              color:'#EF4444', bg:'rgba(239,68,68,.1)'  },
+// ];
 
 const COLUNAS_TRAVA_BKO = ['saldo_andamento', 'pendencia_BKO'];
 const SUPERVISORES_BKO_EMAILS = [
@@ -93,7 +101,7 @@ function R(s,{type:t,...a}){
     case'SEL':        return{...s,sel:a.id};
     case'CLOSE':      return{...s,sel:null};
     case'TNEW':       return{...s,newOpen:!s.newOpen};
-    case'MOVE':       return{...s,clientes:s.clientes.map(c=>c.id!==a.cid?c:{...c,estagio:a.st,ultimoContato:TODAY,activities:[...(c.activities||[]),{id:gid(),type:'stage_change',date:TODAY,user:a.user,text:`Movido para "${BKO_STAGES.find(s=>s.id===a.st)?.label}"${a.motivo?` · Motivo: ${a.motivo}`:''}${a.obs?` · ${a.obs}`:''}`}]})};
+    case'MOVE':       return{...s,clientes:s.clientes.map(c=>c.id!==a.cid?c:{...c,estagio:a.st,ultimoContato:TODAY,activities:[...(c.activities||[]),{id:gid(),type:'stage_change',date:TODAY,user:a.user,text:`Movido para "${a.st}"${a.motivo?` · Motivo: ${a.motivo}`:''}${a.obs?` · ${a.obs}`:''}`}]})};
     case'MOVE_FUNIL': return{...s,clientes:s.clientes.map(c=>c.id!==a.cid?c:{...c,funil_id:a.funil_id,funil_mes:a.funil_mes,funil_nome:a.funil_nome,ultimoContato:TODAY,activities:[...(c.activities||[]),{id:gid(),type:'stage_change',date:TODAY,user:a.user,text:`Arquivado no funil "${a.funil_nome}" · ${a.funil_mes_label}`}]})};
     case'REMOVE_FUNIL':return{...s,clientes:s.clientes.map(c=>c.id!==a.cid?c:{...c,funil_id:null,funil_mes:null,funil_nome:null,ultimoContato:TODAY,activities:[...(c.activities||[]),{id:gid(),type:'stage_change',date:TODAY,user:a.user,text:'Retornou ao pipeline'}]})};
     case'UPD':        return{...s,clientes:s.clientes.map(c=>c.id!==a.c.id?c:{...c,...a.c})};
@@ -169,6 +177,7 @@ function BKOSidebar({view,setView,profile,onLogout,onAlterarSenha,onSearch,colla
   ];
   const isSupervisorComAcesso=SUPERVISORES_CADASTRAR.includes(session?.user?.email);
   const isFRUser = FR_GROUP_EMAILS.includes(session?.user?.email?.toLowerCase());
+
   const items=isFRUser?[
     {id:'pipeline',icon:'⊞',label:'Pipeline'},
     {id:'clientes',icon:'≡',label:'Clientes'},
@@ -325,7 +334,7 @@ function filtrarClientesSupervisor(clientes, origemFiltro, allTeams){
   return clientes;
 }
 
-function BKODashboard({clientes,setView,setFiltroEstagio,profile,origemFiltro,setOrigemFiltro,supervisorTeam,allTeams}){
+function BKODashboard({clientes,setView,setFiltroEstagio,profile,origemFiltro,setOrigemFiltro,supervisorTeam,allTeams,stages}){
   const isComercial=profile?.role==='comercial';
   const isBkoPipeline=profile?.role==='bko';
   const isSupervisor=profile?.is_supervisor===true;
@@ -357,7 +366,7 @@ function BKODashboard({clientes,setView,setFiltroEstagio,profile,origemFiltro,se
   //   return clientesFiltrados.filter(c=>cpfDuplicados[c.cpfCliente]);
   // },[clientesFiltrados,filtroDuplicados,cpfDuplicados,podeVerInsights]);
 
-  const counts=useMemo(()=>{const m={};BKO_STAGES.forEach(s=>{m[s.id]=clientesFiltrados.filter(c=>c.estagio===s.id&&!c.funil_id).length;});return m;},[clientesFiltrados]);
+  const counts=useMemo(()=>{const m={};stages.forEach(s=>{m[s.id]=clientesFiltrados.filter(c=>c.estagio===s.id&&!c.funil_id).length;});return m;},[clientesFiltrados,stages]);
   const handleCard=(stageId)=>{setFiltroEstagio(stageId);setView('pipeline');};
   const recent=useMemo(()=>clientesFiltrados.flatMap(c=>(c.activities||[]).map(a=>({...a,clienteName:c.nomeCliente}))).sort((a,b)=>(b.date||'').localeCompare(a.date||'')).slice(0,8),[clientesFiltrados]);
   return(
@@ -383,14 +392,12 @@ function BKODashboard({clientes,setView,setFiltroEstagio,profile,origemFiltro,se
         )}
       </div>
       <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:12}}>
-        {BKO_STAGES.slice(0,4).map(s=>(
-          <StatCard key={s.id} label={s.label} value={counts[s.id]||0} color={s.color}
-            icon={s.id==='clientes_novos'?'👤':s.id==='saldo_andamento'?'💰':s.id==='pendencia_financeiro'?'⏳':'⟳'}
-            onClick={()=>handleCard(s.id)}/>
+        {stages.slice(0,4).map(s=>(
+          <StatCard key={s.id} label={s.label} value={counts[s.id]||0} color={s.color} icon={'◈'} onClick={()=>handleCard(s.id)}/>
         ))}
       </div>
       <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:12,marginBottom:20}}>
-        {BKO_STAGES.slice(4).map(s=>(
+        {stages.slice(4).map(s=>(
           <StatCard key={s.id} label={s.label} value={counts[s.id]||0} color={s.color}
             icon={s.id==='abertura_conta'?'🏦':s.id==='digitar_proposta'?'📝':s.id==='integrado'?'✓':'✕'}
             onClick={()=>handleCard(s.id)}/>
@@ -399,7 +406,7 @@ function BKODashboard({clientes,setView,setFiltroEstagio,profile,origemFiltro,se
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}>
         <div className="card fu1" style={{padding:'18px 20px'}}>
           <div className="eyebrow" style={{marginBottom:14}}>Pipeline por estágio</div>
-          {BKO_STAGES.map(s=>(
+          {stages.map(s=>(
             <div key={s.id} style={{display:'flex',alignItems:'center',gap:10,marginBottom:8,cursor:'pointer'}} onClick={()=>handleCard(s.id)}>
               <div style={{width:7,height:7,borderRadius:'50%',background:s.color,flexShrink:0}}/>
               <div style={{flex:1,fontSize:12,color:'var(--text-secondary)'}}>{s.label}</div>
@@ -498,7 +505,7 @@ function MotivoPerdaModal({ onConfirm, onCancel }) {
 }
 
 // ─── KCARD ───────────────────────────────────────────────────────────────────
-function KCard({c,onSelect,dispatch,profile,session,setDragId,funis=[],setMotivoModal,cpfDuplicados={},podeVerInsights=false}){
+function KCard({c,onSelect,dispatch,profile,session,setDragId,funis=[],setMotivoModal,cpfDuplicados={},podeVerInsights=false,stages=[]}){
   const [menuOpen,setMenuOpen]=useState(false);
   const [menuPos,setMenuPos]=useState({top:0,left:0});
   const btnRef=useRef(null);
@@ -581,7 +588,7 @@ function KCard({c,onSelect,dispatch,profile,session,setDragId,funis=[],setMotivo
             <div style={{padding:'10px 14px',fontSize:11,color:'#F97316',background:'rgba(249,115,22,.06)'}}>
               🔒 Movimentação travada — responsável: <strong>{trava.motivo}</strong>
             </div>
-          ):BKO_STAGES.filter(st=>st.id!==c.estagio).map(st=>(
+          ):stages.filter(st=>st.id!==c.estagio).map(st=>(
             <button key={st.id}
               onMouseDown={e=>{e.stopPropagation();if(st.id==='perdido'){setMotivoModal({cid:c.id,setMenuOpen});}else{dispatch({type:'MOVE',cid:c.id,st:st.id,user:profile?.nome||'Usuário'});setMenuOpen(false);}}}
               style={{display:'flex',alignItems:'center',gap:8,width:'100%',padding:'7px 12px',background:'none',border:'none',cursor:'pointer',textAlign:'left',fontSize:12,color:'var(--text-primary)',fontFamily:'var(--font)',transition:'background .1s'}}
@@ -618,7 +625,7 @@ function KCard({c,onSelect,dispatch,profile,session,setDragId,funis=[],setMotivo
 }
 
 // ─── KANBAN COL ──────────────────────────────────────────────────────────────
-function BKOKanbanCol({s,clientes,dragId,setDragId,dispatch,onSelect,profile,session,highlight,funis,collapsed,onToggleCollapse,setMotivoModal,cpfDuplicados,podeVerInsights}){
+function BKOKanbanCol({s,clientes,dragId,setDragId,dispatch,onSelect,profile,session,highlight,funis,collapsed,onToggleCollapse,setMotivoModal,cpfDuplicados,podeVerInsights,stages}){
   const [over,setOver]=useState(false);
   const sl=clientes.filter(c=>c.estagio===s.id&&!c.funil_id);
   return(
@@ -645,7 +652,7 @@ function BKOKanbanCol({s,clientes,dragId,setDragId,dispatch,onSelect,profile,ses
           </div>
           <div style={{flex:1,overflowY:'auto',minHeight:40,paddingRight:2,scrollbarWidth:'thin',scrollbarColor:'rgba(0,0,0,.1) transparent'}}>
             {sl.map(c=>(
-              <KCard key={c.id} c={c} onSelect={onSelect} dispatch={dispatch} profile={profile} session={session} setDragId={setDragId} funis={funis} setMotivoModal={setMotivoModal} cpfDuplicados={cpfDuplicados} podeVerInsights={podeVerInsights}/>
+              <KCard key={c.id} c={c} onSelect={onSelect} dispatch={dispatch} profile={profile} session={session} setDragId={setDragId} funis={funis} setMotivoModal={setMotivoModal} cpfDuplicados={cpfDuplicados} podeVerInsights={podeVerInsights} stages={stages}/>
             ))}
             {sl.length===0&&<div style={{textAlign:'center',padding:'16px 0',fontSize:10,color:'var(--text-faint)'}}>Solte aqui</div>}
           </div>
@@ -711,8 +718,8 @@ function BKOFunilMeses({funil,clientes,onSelect,dispatch,profile}){
   );
 }
 
-// ─── PIPELINE ────────────────────────────────────────────────────────────────
-function BKOPipeline({clientes,profile,session,dispatch,onSelect,filtroEstagio,setFiltroEstagio,funis,origemFiltro,setOrigemFiltro,supervisorTeam,allTeams,onConfigurar}){
+// PIPELINE
+function BKOPipeline({clientes,profile,session,dispatch,onSelect,filtroEstagio,setFiltroEstagio,funis,origemFiltro,setOrigemFiltro,supervisorTeam,allTeams,onConfigurar,stages}){
   const [dragId,setDragId]=useState(null);
   const [search,setSearch]=useState('');
   const [collapsedCols,setCollapsedCols]=useState(new Set());
@@ -741,7 +748,7 @@ function BKOPipeline({clientes,profile,session,dispatch,onSelect,filtroEstagio,s
   // ─────────────────────────────────────────────────────────────────────────
 
   useEffect(()=>{
-    if(filtroEstagio&&colsRef.current){const idx=BKO_STAGES.findIndex(s=>s.id===filtroEstagio);if(idx>-1)colsRef.current.scrollLeft=idx*215;}
+    if(filtroEstagio&&colsRef.current){const idx=stages.findIndex(s=>s.id===filtroEstagio);if(idx>-1)colsRef.current.scrollLeft=idx*215;}
   },[filtroEstagio]);
 
   useEffect(()=>{
@@ -838,7 +845,7 @@ function BKOPipeline({clientes,profile,session,dispatch,onSelect,filtroEstagio,s
           )}
           {!tituloAtual&&filtroEstagio&&(
             <div style={{display:'flex',alignItems:'center',gap:6,padding:'5px 12px',borderRadius:99,background:B_LIGHT,border:`1px solid ${B_MID}30`,fontSize:11,color:B_MID,fontWeight:600}}>
-              {BKO_STAGES.find(s=>s.id===filtroEstagio)?.label}
+              {stages.find(s=>s.id===filtroEstagio)?.label}
               <button onClick={()=>setFiltroEstagio(null)} style={{background:'none',border:'none',cursor:'pointer',color:B_MID,fontSize:13,lineHeight:1,padding:0}}>×</button>
             </div>
           )}
@@ -986,12 +993,12 @@ function BKOPipeline({clientes,profile,session,dispatch,onSelect,filtroEstagio,s
 
       {/* 3. Kanban principal (padrão) */}
       {!pipelineAtivo&&!funilSel&&(
-        <div ref={colsRef} style={{display:'flex',gap:7,overflowX:'auto',overflowY:'hidden',padding:'0 20px 16px',flex:1,minHeight:0,alignItems:'stretch',scrollbarWidth:'thin',scrollbarColor:`${BKO_STAGES[0]?.color}40 transparent`}}>
-          {BKO_STAGES.map(s=>(
+        <div ref={colsRef} style={{display:'flex',gap:7,overflowX:'auto',overflowY:'hidden',padding:'0 20px 16px',flex:1,minHeight:0,alignItems:'stretch',scrollbarWidth:'thin',scrollbarColor:`${stages[0]?.color}40 transparent`}}>
+          {stages.map(s=>(
             <BKOKanbanCol key={s.id} s={s} clientes={filtered} dragId={dragId} setDragId={setDragId}
               dispatch={dispatch} onSelect={onSelect} profile={profile} session={session}
               highlight={filtroEstagio===s.id} funis={funisComContagem}
-              collapsed={collapsedCols.has(s.id)} onToggleCollapse={()=>toggleCol(s.id)} setMotivoModal={setMotivoModal} cpfDuplicados={cpfDuplicados} podeVerInsights={podeVerInsights}/>
+              collapsed={collapsedCols.has(s.id)} onToggleCollapse={()=>toggleCol(s.id)} setMotivoModal={setMotivoModal} cpfDuplicados={cpfDuplicados} podeVerInsights={podeVerInsights} stages={stages}/>
           ))}
         </div>
       )}
@@ -1012,14 +1019,14 @@ function BKOPipeline({clientes,profile,session,dispatch,onSelect,filtroEstagio,s
 }
 
 // ─── CLIENTES ────────────────────────────────────────────────────────────────
-function exportarExcel(dados, nomeArquivo='clientes_bko'){
+function exportarExcel(dados, stages, nomeArquivo='clientes_bko'){
   try{
     const rows = dados.map(c=>({
       'Nome': c.nomeCliente||'',
       'CPF': c.cpfCliente||'',
       'Telefone': c.telefone||'',
       'Prefeitura/Órgão': c.prefeitura||'',
-      'Estágio': (()=>{const s=BKO_STAGES.find(x=>x.id===c.estagio);return s?s.label:c.estagio||'';})(),
+      'Estágio': (()=>{const s=stages.find(x=>x.id===c.estagio);return s?s.label:c.estagio||'';})(),
       'Status Documento': c.documentoStatus||'',
       'Saldo Devedor': c.saldoDevedor||'',
       'Criado por': c.criado_por_nome||'',
@@ -1052,7 +1059,7 @@ function exportarExcel(dados, nomeArquivo='clientes_bko'){
   }
 }
 
-function BKOClientes({clientes,profile,onSelect,onNew,origemFiltro,setOrigemFiltro,supervisorTeam,allTeams,isFR,session}){
+function BKOClientes({clientes,profile,onSelect,onNew,origemFiltro,setOrigemFiltro,supervisorTeam,allTeams,isFR,session,stages}){
   const [estagiosFR, setEstagiosFR] = useState([]);
   const [search,setSearch]=useState('');
   const [estagio,setEstagio]=useState('');
@@ -1084,7 +1091,7 @@ function BKOClientes({clientes,profile,onSelect,onNew,origemFiltro,setOrigemFilt
       });
   }, [isFR, session?.user?.id]);
 
-  const stagesParaFiltro = isFR ? estagiosFR : BKO_STAGES;
+  const stagesParaFiltro = isFR ? estagiosFR : stages;
 
   const isSupervisorC=profile?.is_supervisor===true;
   const clientesBase=useMemo(()=>{
@@ -1108,7 +1115,7 @@ function BKOClientes({clientes,profile,onSelect,onNew,origemFiltro,setOrigemFilt
 
   const totalPages=Math.max(1,Math.ceil(filtered.length/PER));
   const paged=filtered.slice((page-1)*PER,page*PER);
-  const stgStyle=(id)=>{const s=BKO_STAGES.find(x=>x.id===id);return s?{background:s.bg,color:s.color,borderRadius:99,padding:'2px 8px',fontSize:10,fontWeight:700}:{};};
+  const stgStyle=(id)=>{const s=stages.find(x=>x.id===id);return s?{background:s.bg,color:s.color,borderRadius:99,padding:'2px 8px',fontSize:10,fontWeight:700}:{};};
   const hasFilter=search||estagio||prefeitura||criadoPor||atribuidoA;
 
   return(
@@ -1130,7 +1137,7 @@ function BKOClientes({clientes,profile,onSelect,onNew,origemFiltro,setOrigemFilt
               ))}
             </div>
           )}
-          <button onClick={()=>exportarExcel(filtered)} title="Exportar lista atual para CSV"
+          <button onClick={()=>exportarExcel(filtered, stages)} title="Exportar lista atual para CSV"
             style={{display:'flex',alignItems:'center',gap:5,padding:'6px 12px',borderRadius:8,fontSize:12,fontWeight:600,cursor:'pointer',background:'rgba(16,185,129,.1)',color:'#059669',border:'1px solid rgba(16,185,129,.25)',transition:'all .15s'}}
             onMouseEnter={e=>{e.currentTarget.style.background='rgba(16,185,129,.2)';}}
             onMouseLeave={e=>{e.currentTarget.style.background='rgba(16,185,129,.1)';}}>
@@ -1181,7 +1188,7 @@ function BKOClientes({clientes,profile,onSelect,onNew,origemFiltro,setOrigemFilt
                 <tr key={c.id} className="trow" onClick={()=>onSelect(c.id)}>
                   <td style={{padding:'11px 14px'}}><div style={{fontWeight:600}}>{c.nomeCliente}</div><div style={{fontSize:11,color:'var(--text-muted)',marginTop:1}}>{c.cpfCliente}</div></td>
                   <td style={{padding:'11px 14px',fontSize:12,color:'var(--text-secondary)'}}>{c.prefeitura||'—'}</td>
-                  <td style={{padding:'11px 14px'}}><span style={stgStyle(c.estagio)}>{BKO_STAGES.find(s=>s.id===c.estagio)?.label||c.estagio}</span></td>
+                  <td style={{padding:'11px 14px'}}><span style={stgStyle(c.estagio)}>{stages.find(s=>s.id===c.estagio)?.label||c.estagio}</span></td>
                   <td style={{padding:'11px 14px'}}><span style={{fontSize:11,fontWeight:600,color:c.documentoStatus==='Aprovado'?'var(--success)':c.documentoStatus==='Não solicitado'?'var(--text-faint)':'var(--amber)'}}>{c.documentoStatus}</span></td>
                   <td style={{padding:'11px 14px',fontSize:12,fontWeight:600,color:'#10B981'}}>{c.saldoDevedor||'—'}</td>
                   <td style={{padding:'11px 14px',fontSize:12,color:'var(--text-secondary)'}}>{c.criado_por_nome||'—'}</td>
@@ -1210,7 +1217,7 @@ function BKOClientes({clientes,profile,onSelect,onNew,origemFiltro,setOrigemFilt
 }
 
 // ─── NOVO CLIENTE MODAL ───────────────────────────────────────────────────────
-function NovoClienteModal({profile,dispatch,clientes,onClose}){
+function NovoClienteModal({profile,dispatch,clientes,onClose,stages}){
   const [form,setForm]=useState(blankCliente());
   const [cpfAviso,setCpfAviso]=useState(false);
   const set=(k,v)=>setForm(f=>({...f,[k]:v}));
@@ -1258,7 +1265,7 @@ function NovoClienteModal({profile,dispatch,clientes,onClose}){
           <div style={{gridColumn:'1/-1'}}>
             <label style={{display:'block',fontSize:10,fontWeight:700,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.07em',marginBottom:5}}>Estágio inicial</label>
             <select className="sel" value={form.estagio} onChange={e=>set('estagio',e.target.value)}>
-              {BKO_STAGES.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}
+              {stages.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}
             </select>
           </div>
         </div>
@@ -1672,6 +1679,28 @@ export function BKOApp({profile,session,signOut,onAlterarSenha,userModules,onSwi
     else toggleSidebar(false);
   },[toggleSidebar]);
   const selected=clientes.find(c=>c.id===sel);
+  const funisVisiveis = useMemo(() => {
+    const isAutorizado = LEGADO_AUTORIZADO_EMAILS.includes(session?.user?.email?.toLowerCase());
+    if (isAutorizado) return funis;
+    return funis.filter(f => !(f.usuarios_acesso && f.usuarios_acesso.length > 0));
+  }, [funis, session?.user?.email]);
+
+  const [bkoStages, setBkoStages] = useState([]);
+  useEffect(() => {
+  supabase.from('bko_pipeline_estagios')
+    .select('id, nome, cor, ordem')
+    .eq('pipeline_id', '01981c9b-7715-454c-ae9e-7ae1e3a3ef14')
+    .eq('ativo', true)
+    .order('ordem')
+    .then(({ data }) => {
+      setBkoStages((data || []).map(s => ({
+        id: s.id,
+        label: s.nome,
+        color: s.cor,
+        bg: `${s.cor}1A`,
+      })));
+    });
+}, []);
 
   useEffect(()=>{
     const h=e=>{if((e.metaKey||e.ctrlKey)&&e.key==='k'){e.preventDefault();setSearchOpen(v=>!v);}};
@@ -1813,7 +1842,7 @@ export function BKOApp({profile,session,signOut,onAlterarSenha,userModules,onSwi
       if(error){console.error('BKO ADD error:',error);alert(`Erro: ${error.message}`);}
     }
     const auditMap={
-      MOVE:        ()=>({action:'Moveu cliente',       details:`→ "${BKO_STAGES.find(s=>s.id===action.st)?.label}"`,   clienteId:action.cid}),
+      MOVE:        ()=>({action:'Moveu cliente',       details:`→ "${action.st}"`,                                     clienteId:action.cid}),
       MOVE_FUNIL:  ()=>({action:'Arquivou no funil',   details:`→ "${action.funil_nome}" · ${action.funil_mes_label}`, clienteId:action.cid}),
       REMOVE_FUNIL:()=>({action:'Removeu do funil',    details:'Retornou ao pipeline',                                  clienteId:action.cid}),
       UPD:         ()=>({action:'Editou cliente',      details:'Campos atualizados',                                    clienteId:action.c?.id}),
@@ -1851,7 +1880,7 @@ export function BKOApp({profile,session,signOut,onAlterarSenha,userModules,onSwi
           session={session}
         />
         <main style={{flex:1,minWidth:0,height:'100%',display:'flex',flexDirection:'column',overflow:view==='pipeline'?'hidden':'auto',paddingRight:selected?490:0,transition:'padding-right .3s cubic-bezier(.4,0,.2,1)'}}>
-          {view==='dashboard' && <BKODashboard clientes={clientes} setView={v=>{setView(v);}} setFiltroEstagio={setFiltroEstagio} profile={profile} origemFiltro={origemFiltro} setOrigemFiltro={setOrigemFiltro} supervisorTeam={supervisorTeam} allTeams={allTeams}/>}
+          {view==='dashboard' && <BKODashboard clientes={clientes} setView={v=>{setView(v);}} setFiltroEstagio={setFiltroEstagio} profile={profile} origemFiltro={origemFiltro} setOrigemFiltro={setOrigemFiltro} supervisorTeam={supervisorTeam} allTeams={allTeams} stages={bkoStages}/>}
           {view==='pipeline' && !viewConfigurar && (
             isFR
               ? <BKOPipelines profile={profile} session={session} />
@@ -1860,22 +1889,23 @@ export function BKOApp({profile,session,signOut,onAlterarSenha,userModules,onSwi
                   onSelect={id=>dispatch({type:'SEL',id})}
                   filtroEstagio={filtroEstagio}
                   setFiltroEstagio={setFiltroEstagio}
-                  funis={funis}
+                  funis={funisVisiveis}
                   origemFiltro={origemFiltro}
                   setOrigemFiltro={setOrigemFiltro}
                   supervisorTeam={supervisorTeam}
                   allTeams={allTeams}
                   onConfigurar={()=>setViewConfigurar(true)}
+                  stages={bkoStages}
                 />
           )}
           {view==='pipeline' && viewConfigurar && <BKOConfigurarPipeline profile={profile} session={session} funis={funis} setFunis={setFunis} onVoltar={()=>setViewConfigurar(false)}/>}
-          {view==='clientes' && <BKOClientes clientes={clientes} profile={profile} isFR={isFR} session={session} onSelect={id=>dispatch({type:'SEL',id})} onNew={()=>dispatch({type:'TNEW'})} origemFiltro={origemFiltro} setOrigemFiltro={setOrigemFiltro} supervisorTeam={supervisorTeam} allTeams={allTeams}/>}
+          {view==='clientes' && <BKOClientes clientes={clientes} profile={profile} isFR={isFR} session={session} onSelect={id=>dispatch({type:'SEL',id})} onNew={()=>dispatch({type:'TNEW'})} origemFiltro={origemFiltro} setOrigemFiltro={setOrigemFiltro} supervisorTeam={supervisorTeam} allTeams={allTeams} stages={bkoStages}/>}
           {view==='cadastrar' && <BKOCadastrar profile={profile} session={session} funis={funis} setFunis={setFunis}/>}
           {view==='auditoria' && <BKOAuditoria/>}
           {view==='gestao_corban' && <BKOGestaoCorbans profile={profile}/>}
         </main>
         {selected&&<BKODetail key={selected.id} cliente={selected} profile={profile} session={session} dispatch={auditedDispatch} onClose={()=>dispatch({type:'CLOSE'})}/>}
-        {newOpen&&<NovoClienteModal profile={profile} dispatch={auditedDispatch} clientes={clientes} onClose={()=>dispatch({type:'TNEW'})}/>}
+        {newOpen&&<NovoClienteModal profile={profile} dispatch={auditedDispatch} clientes={clientes} onClose={()=>dispatch({type:'TNEW'})} stages={bkoStages}/>}
       </div>
       {showAS&&<AlterarSenha onClose={()=>setShowAS(false)}/>}
       {avisoAtual&&<AvisoPopup aviso={avisoAtual} onFechar={fecharAviso}/>}
