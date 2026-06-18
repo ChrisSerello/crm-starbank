@@ -185,7 +185,7 @@ function BKOSidebar({view,setView,profile,onLogout,onAlterarSenha,onSearch,colla
     {id:'dashboard',icon:'◈',label:'Dashboard'},
     {id:'pipeline', icon:'⊞',label:'Pipeline'},
     {id:'clientes', icon:'≡',label:'Clientes'},
-    ...(r==='comercial'||r==='corban_bko'||r==='startec'||isSupervisorComAcesso?[{id:'cadastrar',icon:'＋',label:'Cadastrar'}]:[]),
+    ...(r==='comercial'||r==='startec'||isSupervisorComAcesso?[{id:'cadastrar',icon:'＋',label:'Cadastrar'}]:[]),
     ...(r==='comercial'?[{id:'auditoria',icon:'🔍',label:'Auditoria'}]:[]),
     ...(profile?.acesso_gestao_corban?[{id:'gestao_corban',icon:'⬡',label:'Gestão Corban'}]:[]),
   ];
