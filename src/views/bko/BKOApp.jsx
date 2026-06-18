@@ -1826,20 +1826,36 @@ export function BKOApp({profile,session,signOut,onAlterarSenha,userModules,onSwi
     if(action.type==='ADD'&&(profile?.role==='startec'||profile?.role==='corban_bko')){
       action={...action,c:{...action.c,atribuido_a_id:session?.user?.id,atribuido_a_nome:profile?.nome}};
     }
-    dispatch(action);
-    if(!session||!profile) return;
+    if(!session||!profile){ dispatch(action); return; }
     if(action.type==='ADD'){
       const c=action.c;
       const autoAtrib=(profile.role==='startec'||profile.role==='corban_bko');
       const origemCliente=profile.role==='startec'?'startec':profile.role==='corban_bko'?'corban':'interno';
       const {error}=await supabase.from('bko_clientes').insert({
+        id:c.id,
+        data:{
+          nomeCliente:c.nomeCliente,
+          cpfCliente:c.cpfCliente,
+          telefone:c.telefone,
+          prefeitura:c.prefeitura,
+          documentoStatus:c.documentoStatus,
+          saldoDevedor:c.saldoDevedor,
+          dataEntrada:c.dataEntrada,
+          ultimoContato:c.ultimoContato,
+          activities:c.activities||[],
+          documentos:c.documentos||[],
+          id:c.id,
+        },
         estagio:c.estagio||'4163a7f8-df16-4f68-8192-a8aa6f94ce8d',
         criado_por_id:session.user.id,criado_por_nome:profile.nome,criado_por_role:profile.role,
         atribuido_a_id:autoAtrib?session.user.id:null,
         atribuido_a_nome:autoAtrib?profile.nome:null,
         origem:origemCliente,
       });
-      if(error){console.error('BKO ADD error:',error);alert(`Erro: ${error.message}`);}
+      if(error){console.error('BKO ADD error:',error);alert(`Erro: ${error.message}`);return;}
+      dispatch(action);
+    } else {
+      dispatch(action);
     }
     const auditMap={
       MOVE:        ()=>({action:'Moveu cliente',       details:`→ "${action.st}"`,                                     clienteId:action.cid}),
