@@ -86,7 +86,7 @@ function checarTravaBKO(cliente, profile, session) {
 
 const blankCliente = () => ({
   nomeCliente:'', cpfCliente:'', telefone:'', prefeitura:'',
-  estagio:'clientes_novos', documentoStatus:'Não solicitado',
+  estagio:'4163a7f8-df16-4f68-8192-a8aa6f94ce8d', documentoStatus:'Não solicitado',
   observacoesBko:'', saldoDevedor:'',
   activities:[], documentos:[],
   dataEntrada:TODAY, ultimoContato:TODAY,
@@ -1816,7 +1816,7 @@ export function BKOApp({profile,session,signOut,onAlterarSenha,userModules,onSwi
       syncQueueRef.current.clear();
       await Promise.all(toSync.map(async c=>{
         const {id,estagio,criado_por_id,criado_por_nome,criado_por_role,atribuido_a_id,atribuido_a_nome,responsavel_bko_id,responsavel_bko_nome,...data}=c;
-        const {error}=await supabase.from('bko_clientes').upsert({id,data:{...data,id},estagio:estagio||'clientes_novos',criado_por_id:criado_por_id||session.user.id,criado_por_nome:criado_por_nome||profile?.nome,criado_por_role:criado_por_role||profile?.role,atribuido_a_id:atribuido_a_id||null,atribuido_a_nome:atribuido_a_nome||null},{onConflict:'id'});
+        const {error}=await supabase.from('bko_clientes').upsert({id,data:{...data,id},estagio:estagio||'4163a7f8-df16-4f68-8192-a8aa6f94ce8d',criado_por_id:criado_por_id||session.user.id,criado_por_nome:criado_por_nome||profile?.nome,criado_por_role:criado_por_role||profile?.role,atribuido_a_id:atribuido_a_id||null,atribuido_a_nome:atribuido_a_nome||null},{onConflict:'id'});
         if(error) console.error('BKO sync error:',id,error.message);
       }));
     },600);
@@ -1833,7 +1833,7 @@ export function BKOApp({profile,session,signOut,onAlterarSenha,userModules,onSwi
       const autoAtrib=(profile.role==='startec'||profile.role==='corban_bko');
       const origemCliente=profile.role==='startec'?'startec':profile.role==='corban_bko'?'corban':'interno';
       const {error}=await supabase.from('bko_clientes').insert({
-        id:c.id,data:{...c},estagio:c.estagio||'clientes_novos',
+        estagio:c.estagio||'4163a7f8-df16-4f68-8192-a8aa6f94ce8d',
         criado_por_id:session.user.id,criado_por_nome:profile.nome,criado_por_role:profile.role,
         atribuido_a_id:autoAtrib?session.user.id:null,
         atribuido_a_nome:autoAtrib?profile.nome:null,

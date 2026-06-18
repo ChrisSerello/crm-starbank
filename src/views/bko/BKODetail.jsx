@@ -1,13 +1,11 @@
-/**
- * BKODetail — painel lateral de detalhes do cliente BKO
- * ✨ v2: Resumo automático via Gemini AI
- */
 
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../supabase';
 import { gid, TODAY, fmtD, sinceD } from '../../utils';
 import { DOC_STATUS } from '../../constants';
 import { Avatar, StageTag } from '../../components/shared';
+
+const PIPELINE_PRINCIPAL_ID = '01981c9b-7715-454c-ae9e-7ae1e3a3ef14';
 
 const fmtDH=(ts)=>{
   if(!ts) return '—';
@@ -27,18 +25,18 @@ const B_MID   = '#3B5BDB';
 const B_LIGHT = 'rgba(59,91,219,0.10)';
 const B_GLOW  = 'rgba(59,91,219,0.28)';
 
-const BKO_STAGES = [
-  { id:'clientes_novos',       label:'Clientes Novos - Corban',                  color:'#3B5BDB', bg:'rgba(59,91,219,.1)'  },
-  { id:'saldo_andamento',      label:'BKO - Saldo Devedor',                      color:'#7C3AED', bg:'rgba(124,58,237,.1)' },
-  { id:'pendencia_BKO',        label:'Pendência Análise BKO',                    color:'#8e14b6', bg:'rgba(249,115,22,.1)' },
-  { id:'pendencia_financeiro', label:'Pendência Análise Financeira',              color:'#F97316', bg:'rgba(249,115,22,.1)' },
-  { id:'em_negociacao',        label:'Em negociação (Saldo Informado) - Corban', color:'#0EA5E9', bg:'rgba(14,165,233,.1)' },
-  { id:'abertura_conta',       label:'Abertura de conta - Interno',               color:'#10B981', bg:'rgba(16,185,129,.1)' },
-  { id:'digitar_proposta',     label:'Pronto para Digitar - Corban',              color:'#F59E0B', bg:'rgba(245,158,11,.1)' },
-  { id:'banksoft',             label:'Banksoft - Tratativas',                     color:'#EF4444', bg:'rgba(239,68,68,.1)'  },
-  { id:'integrado',            label:'Finalizado - Interno',                      color:'#22C55E', bg:'rgba(34,197,94,.1)'  },
-  { id:'perdido',              label:'Perdidos',                                  color:'#EF4444', bg:'rgba(239,68,68,.1)'  },
-];
+// const BKO_STAGES = [
+//   { id:'clientes_novos',       label:'Clientes Novos - Corban',                  color:'#3B5BDB', bg:'rgba(59,91,219,.1)'  },
+//   { id:'saldo_andamento',      label:'BKO - Saldo Devedor',                      color:'#7C3AED', bg:'rgba(124,58,237,.1)' },
+//   { id:'pendencia_BKO',        label:'Pendência Análise BKO',                    color:'#8e14b6', bg:'rgba(249,115,22,.1)' },
+//   { id:'pendencia_financeiro', label:'Pendência Análise Financeira',              color:'#F97316', bg:'rgba(249,115,22,.1)' },
+//   { id:'em_negociacao',        label:'Em negociação (Saldo Informado) - Corban', color:'#0EA5E9', bg:'rgba(14,165,233,.1)' },
+//   { id:'abertura_conta',       label:'Abertura de conta - Interno',               color:'#10B981', bg:'rgba(16,185,129,.1)' },
+//   { id:'digitar_proposta',     label:'Pronto para Digitar - Corban',              color:'#F59E0B', bg:'rgba(245,158,11,.1)' },
+//   { id:'banksoft',             label:'Banksoft - Tratativas',                     color:'#EF4444', bg:'rgba(239,68,68,.1)'  },
+//   { id:'integrado',            label:'Finalizado - Interno',                      color:'#22C55E', bg:'rgba(34,197,94,.1)'  },
+//   { id:'perdido',              label:'Perdidos',                                  color:'#EF4444', bg:'rgba(239,68,68,.1)'  },
+// ];
 
 const ROLE_COLOR = { comercial:'#3B5BDB', corban_bko:'#0EA5E9', bko:'#7C3AED', startec:'#059669', supervisor_startec:'#0D9488' };
 const ROLE_LABEL = { comercial:'Comercial', corban_bko:'Corban', bko:'BKO', startec:'Startec', supervisor_startec:'Supervisor' };
@@ -87,6 +85,23 @@ function MotivoPerdaModal({ onConfirm, onCancel }) {
 }
 
 export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
+
+  const [bkoStages, setBkoStages] = useState([]);
+  useEffect(() => {
+    supabase.from('bko_pipeline_estagios')
+      .select('id, nome, cor, ordem')
+      .eq('pipeline_id', PIPELINE_PRINCIPAL_ID)
+      .eq('ativo', true)
+      .order('ordem')
+      .then(({ data }) => {
+        setBkoStages((data || []).map(s => ({
+          id: s.id,
+          label: s.nome,
+          color: s.cor,
+          bg: `${s.cor}1A`,
+        })));
+      });
+  }, []);
   const [tab, setTab]         = useState('info');
   const [es, setEs]           = useState(cliente.estagio);
   const [esUserChanged, setEsUserChanged] = useState(false);
@@ -131,7 +146,7 @@ export function BKODetail({ cliente, profile, session, dispatch, onClose }) {
     setIaResumo(null);
 
     try {
-      const stgLabel = BKO_STAGES.find(s => s.id === cliente.estagio)?.label || cliente.estagio;
+      const stgLabel = bkoStages.find(s => s.id === cliente.estagio)?.label || cliente.estagio;
       const diasSemContato = (() => {
         const ref = cliente.ultimoContato || cliente.dataEntrada;
         if (!ref) return null;
@@ -416,7 +431,7 @@ ${ultimasAtividades}`;
     if (data?.signedUrl) window.open(data.signedUrl, '_blank');
   };
 
-  const stg = BKO_STAGES.find(s => s.id === cliente.estagio);
+  const stg = bkoStages.find(s => s.id === cliente.estagio);
 
   const confirmarPerdaComMotivo = (motivo, obs) => {
     dispatch({ type:'MOVE', cid:cliente.id, st:'perdido', user:profile?.nome||'Usuário', motivo, obs });
@@ -625,7 +640,7 @@ ${ultimasAtividades}`;
                 onChange={e=>{ setEs(e.target.value); setEsUserChanged(true); }}
                 disabled={bkoTravado}
                 style={{marginBottom:10,opacity:bkoTravado?0.5:1,cursor:bkoTravado?'not-allowed':''}}>
-                {BKO_STAGES.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}
+                {bkoStages.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}
               </select>
               <label style={{fontSize:11,color:'var(--text-muted)',display:'block',marginBottom:5}}>Documento</label>
               <select className="sel" value={ed} onChange={e=>setEd(e.target.value)} style={{marginBottom:14}}>
